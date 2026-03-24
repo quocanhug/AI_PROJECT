@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Robot Pathfinder — Line Following Delivery Robot</title>
+  <meta name="description" content="AI-powered pathfinding visualization and ESP32 robot control dashboard. Implements BFS, DFS, UCS, A*, and Greedy Best-First Search algorithms.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="app-container">
+  <!-- ==================== HEADER ==================== -->
+  <header class="app-header">
+    <div class="app-logo">
+      <div class="icon">🤖</div>
+      <div>
+        <h1>AI Robot Pathfinder</h1>
+        <div class="subtitle">Line Following Delivery Robot — AI Search Algorithms</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <div class="ws-input-group">
+        <input type="text" id="wsUrl" placeholder="ws://192.168.4.1/ws" value="ws://192.168.4.1/ws">
+        <button class="btn btn-primary btn-sm" id="btnConnect">Connect</button>
+      </div>
+      <div class="connection-status" id="connStatus">
+        <span class="dot"></span>
+        <span id="connText">Disconnected</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== MAIN LAYOUT ==================== -->
+  <div class="main-layout">
+
+    <!-- ========== LEFT: CONTROLS ========== -->
+    <div class="controls-panel">
+
+      <!-- Map Settings -->
+      <div class="card" id="mapSettingsCard">
+        <div class="card-title"><span class="emoji">🗺️</span> Map Settings</div>
+        <div class="map-settings">
+          <div class="setting-row">
+            <label>Rows</label>
+            <input type="number" id="gridRows" value="8" min="3" max="20" style="width:60px">
+          </div>
+          <div class="setting-row">
+            <label>Columns</label>
+            <input type="number" id="gridCols" value="8" min="3" max="20" style="width:60px">
+          </div>
+          <div class="setting-row">
+            <button class="btn btn-primary btn-block" id="btnNewGrid">🔄 New Grid</button>
+          </div>
+        </div>
+        <div class="separator"></div>
+        <div class="btn-group" style="margin-top:8px">
+          <button class="btn btn-sm" id="btnSaveMap">💾 Save</button>
+          <button class="btn btn-sm" id="btnLoadMap">📂 Load</button>
+          <button class="btn btn-sm" id="btnRandomMaze">🎲 Maze</button>
+        </div>
+      </div>
+
+      <!-- Drawing Tools -->
+      <div class="card">
+        <div class="card-title"><span class="emoji">🖌️</span> Drawing Tools</div>
+        <div class="tool-buttons">
+          <button class="tool-btn active" data-tool="wall" id="toolWall">
+            <span class="tool-icon">⬛</span>Wall
+          </button>
+          <button class="tool-btn" data-tool="empty" id="toolEmpty">
+            <span class="tool-icon">⬜</span>Empty
+          </button>
+          <button class="tool-btn" data-tool="start" id="toolStart">
+            <span class="tool-icon">🟢</span>Start
+          </button>
+          <button class="tool-btn" data-tool="end" id="toolEnd">
+            <span class="tool-icon">🔴</span>End
+          </button>
+          <button class="tool-btn" data-tool="weight" id="toolWeight">
+            <span class="tool-icon">⚖️</span>Weight
+          </button>
+          <button class="tool-btn" data-tool="erase" id="toolErase">
+            <span class="tool-icon">🧹</span>Erase All
+          </button>
+        </div>
+        <div class="setting-row" id="weightRow" style="display:none;margin-top:8px">
+          <label>Weight (1-9):</label>
+          <input type="number" id="weightValue" value="3" min="1" max="9" style="width:60px">
+        </div>
+      </div>
+
+      <!-- Algorithm Selection -->
+      <div class="card">
+        <div class="card-title"><span class="emoji">🧠</span> Algorithm</div>
+        <div class="algo-list">
+          <div class="algo-item selected" data-algo="bfs">
+            <span class="algo-dot" style="background:var(--algo-bfs)"></span>
+            BFS <span class="algo-tag">Uninformed</span>
+          </div>
+          <div class="algo-item" data-algo="dfs">
+            <span class="algo-dot" style="background:var(--algo-dfs)"></span>
+            DFS <span class="algo-tag">Uninformed</span>
+          </div>
+          <div class="algo-item" data-algo="ucs">
+            <span class="algo-dot" style="background:var(--algo-ucs)"></span>
+            UCS <span class="algo-tag">Uninformed</span>
+          </div>
+          <div class="algo-item" data-algo="astar">
+            <span class="algo-dot" style="background:var(--algo-astar)"></span>
+            A* Search <span class="algo-tag">Informed</span>
+          </div>
+          <div class="algo-item" data-algo="greedy">
+            <span class="algo-dot" style="background:var(--algo-greedy)"></span>
+            Greedy BFS <span class="algo-tag">Informed</span>
+          </div>
+        </div>
+        <div class="heuristic-row">
+          <label>Heuristic:</label>
+          <select id="heuristicSel">
+            <option value="manhattan">Manhattan</option>
+            <option value="euclidean">Euclidean</option>
+          </select>
+        </div>
+        <div class="speed-control" style="margin-top:10px">
+          <label>Speed:</label>
+          <input type="range" id="animSpeed" min="1" max="100" value="50">
+          <span class="speed-value" id="speedLabel">50ms</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== CENTER: GRID + ACTIONS ========== -->
+    <div class="grid-section">
+      <!-- Action Bar -->
+      <div class="action-bar">
+        <button class="btn btn-primary" id="btnRun">▶ Run Algorithm</button>
+        <button class="btn btn-success" id="btnCompareAll">📊 Compare All</button>
+        <button class="btn btn-danger" id="btnStop">⏹ Stop</button>
+        <button class="btn" id="btnClearViz">🧹 Clear Visualization</button>
+        <button class="btn btn-success" id="btnSendRoute">📡 Send to Robot</button>
+      </div>
+
+      <!-- Canvas -->
+      <div class="canvas-wrapper">
+        <canvas id="gridCanvas" width="600" height="600"></canvas>
+      </div>
+
+      <!-- Legend -->
+      <div class="legend">
+        <div class="legend-item"><div class="legend-swatch" style="background:#0f172a"></div>Empty</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#1e293b;border-color:#334155"></div>Wall</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#22c55e"></div>Start</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#ef4444"></div>End</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#3b82f6"></div>Frontier</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#f59e0b"></div>Explored</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#22c55e"></div>Path</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#a78bfa"></div>Weighted</div>
+      </div>
+
+      <!-- Stats Bar -->
+      <div class="stats-bar">
+        <div class="stat-card">
+          <div class="stat-value" id="statNodes">0</div>
+          <div class="stat-label">Nodes Explored</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statFrontier">0</div>
+          <div class="stat-label">Frontier Size</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statPathLen">0</div>
+          <div class="stat-label">Path Length</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statPathCost">0</div>
+          <div class="stat-label">Path Cost</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statTime">0ms</div>
+          <div class="stat-label">Time</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== RIGHT: INFO PANEL ========== -->
+    <div class="info-panel">
+
+      <!-- Comparison Table -->
+      <div class="card">
+        <div class="card-title"><span class="emoji">📊</span> Algorithm Comparison</div>
+        <div style="overflow-x:auto">
+          <table class="comparison-table" id="comparisonTable">
+            <thead>
+              <tr>
+                <th>Algo</th>
+                <th>Nodes</th>
+                <th>Path</th>
+                <th>Cost</th>
+                <th>Time</th>
+                <th>Opt</th>
+              </tr>
+            </thead>
+            <tbody id="compTableBody">
+              <tr><td colspan="6" style="text-align:center;color:var(--text-muted)">Click "Compare All"</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Commands Preview -->
+      <div class="card">
+        <div class="card-title"><span class="emoji">📋</span> Route Commands</div>
+        <div class="commands-preview" id="commandsPreview">
+          <span style="color:var(--text-muted);font-size:0.78rem">Run algorithm to see commands</span>
+        </div>
+        <div style="margin-top:8px;font-size:0.72rem;color:var(--text-muted)">
+          <strong>F</strong>=Forward <strong>L</strong>=Left <strong>R</strong>=Right
+        </div>
+      </div>
+
+      <!-- Telemetry -->
+      <div class="card">
+        <div class="card-title"><span class="emoji">📡</span> Robot Telemetry</div>
+        <div class="telemetry-grid">
+          <div class="tele-item">
+            <div class="tele-label">State</div>
+            <div class="tele-value" id="teleState">IDLE</div>
+          </div>
+          <div class="tele-item">
+            <div class="tele-label">Step</div>
+            <div class="tele-value" id="teleStep">0/0</div>
+          </div>
+          <div class="tele-item">
+            <div class="tele-label">Speed L</div>
+            <div class="tele-value" id="teleSpeedL">0 m/s</div>
+          </div>
+          <div class="tele-item">
+            <div class="tele-label">Speed R</div>
+            <div class="tele-value" id="teleSpeedR">0 m/s</div>
+          </div>
+          <div class="tele-item">
+            <div class="tele-label">Distance</div>
+            <div class="tele-value" id="teleDist">0 cm</div>
+          </div>
+          <div class="tele-item">
+            <div class="tele-label">Obstacle</div>
+            <div class="tele-value" id="teleObs">-- cm</div>
+          </div>
+        </div>
+        <div style="margin-top:10px">
+          <div class="card-title" style="margin-bottom:6px"><span class="emoji">📏</span> Line Sensors</div>
+          <div class="sensor-viz">
+            <div class="sensor-dot" id="sL2" title="L2 (outer-left)"></div>
+            <div class="sensor-dot" id="sL1" title="L1 (left)"></div>
+            <div class="sensor-dot" id="sM" title="M (center)"></div>
+            <div class="sensor-dot" id="sR1" title="R1 (right)"></div>
+            <div class="sensor-dot" id="sR2" title="R2 (outer-right)"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Event Log -->
+      <div class="card">
+        <div class="card-title"><span class="emoji">📜</span> Event Log</div>
+        <div class="event-log" id="eventLog">
+          <div class="log-entry"><span class="log-time">--:--</span><span class="log-msg">System ready</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main-layout -->
+</div><!-- /app-container -->
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Hidden file input for map loading -->
+<input type="file" id="fileInput" accept=".json" style="display:none">
+
+<script src="algorithms.js"></script>
+<script>
+// ==================== GLOBAL STATE ====================
+const state = {
+  grid: [],
+  rows: 8,
+  cols: 8,
+  start: null,
+  end: null,
+  tool: 'wall',
+  weightVal: 3,
+  selectedAlgo: 'bfs',
+  heuristic: 'manhattan',
+  animSpeed: 50,
+  animRunning: false,
+  animTimer: null,
+  currentPath: null,
+  currentCommands: null,
+  ws: null,
+  wsConnected: false,
+  isDrawing: false,
+};
+
+// ==================== DOM REFERENCES ====================
+const canvas = document.getElementById('gridCanvas');
+const ctx = canvas.getContext('2d');
+const $ = id => document.getElementById(id);
+
+// ==================== GRID MANAGEMENT ====================
+function initGrid(rows, cols) {
+  state.rows = rows;
+  state.cols = cols;
+  state.grid = [];
+  for (let r = 0; r < rows; r++) {
+    state.grid.push(new Array(cols).fill(0));
+  }
+  state.start = { row: 0, col: 0 };
+  state.end = { row: rows - 1, col: cols - 1 };
+  state.currentPath = null;
+  state.currentCommands = null;
+  clearVisualization();
+  drawGrid();
+  updateCommandsPreview([]);
+  addLog('Grid created: ' + rows + '×' + cols, 'info');
+}
+
+// ==================== CANVAS DRAWING ====================
+let vizExplored = new Set();
+let vizFrontier = new Set();
+let vizPath = new Set();
+let vizNewObstacles = new Set();
+
+function getCellSize() {
+  const maxW = canvas.parentElement.clientWidth - 40;
+  const maxH = 560;
+  const cellW = Math.floor(maxW / state.cols);
+  const cellH = Math.floor(maxH / state.rows);
+  return Math.min(cellW, cellH, 70);
+}
+
+function resizeCanvas() {
+  const cs = getCellSize();
+  canvas.width = cs * state.cols;
+  canvas.height = cs * state.rows;
+}
+
+function drawGrid() {
+  resizeCanvas();
+  const cs = getCellSize();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  for (let r = 0; r < state.rows; r++) {
+    for (let c = 0; c < state.cols; c++) {
+      const x = c * cs;
+      const y = r * cs;
+      const k = r + ',' + c;
+      const val = state.grid[r][c];
+
+      // Background color
+      let bg = '#0f172a'; // empty
+      if (val === -1) bg = '#1e293b'; // wall
+      else if (val > 1) bg = `rgba(167, 139, 250, ${0.1 + val * 0.08})`; // weighted
+
+      // Visualization overlays
+      if (vizPath.has(k)) bg = '#22c55e';
+      else if (vizExplored.has(k)) bg = 'rgba(245, 158, 11, 0.45)';
+      else if (vizFrontier.has(k)) bg = 'rgba(59, 130, 246, 0.5)';
+      if (vizNewObstacles.has(k)) bg = '#ef4444';
+
+      // Start/End override
+      if (state.start && r === state.start.row && c === state.start.col) bg = '#22c55e';
+      if (state.end && r === state.end.row && c === state.end.col) bg = '#ef4444';
+
+      ctx.fillStyle = bg;
+      ctx.fillRect(x + 1, y + 1, cs - 2, cs - 2);
+
+      // Border
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, y + 0.5, cs - 1, cs - 1);
+
+      // Wall border
+      if (val === -1) {
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x + 1.5, y + 1.5, cs - 3, cs - 3);
+      }
+
+      // Weight text
+      if (val > 1 && !(state.start && r === state.start.row && c === state.start.col) &&
+          !(state.end && r === state.end.row && c === state.end.col)) {
+        ctx.fillStyle = '#a78bfa';
+        ctx.font = `bold ${Math.max(10, cs * 0.3)}px 'JetBrains Mono', monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(val, x + cs / 2, y + cs / 2);
+      }
+
+      // Start/End labels
+      if (state.start && r === state.start.row && c === state.start.col) {
+        ctx.fillStyle = '#fff';
+        ctx.font = `bold ${Math.max(10, cs * 0.35)}px 'Inter', sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('S', x + cs / 2, y + cs / 2);
+      }
+      if (state.end && r === state.end.row && c === state.end.col) {
+        ctx.fillStyle = '#fff';
+        ctx.font = `bold ${Math.max(10, cs * 0.35)}px 'Inter', sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('E', x + cs / 2, y + cs / 2);
+      }
+    }
+  }
+}
+
+function clearVisualization() {
+  vizExplored.clear();
+  vizFrontier.clear();
+  vizPath.clear();
+  vizNewObstacles.clear();
+  $('statNodes').textContent = '0';
+  $('statFrontier').textContent = '0';
+  $('statPathLen').textContent = '0';
+  $('statPathCost').textContent = '0';
+  $('statTime').textContent = '0ms';
+}
+
+// ==================== CANVAS INTERACTION ====================
+function getGridPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const cs = getCellSize();
+  const col = Math.floor((e.clientX - rect.left) / cs);
+  const row = Math.floor((e.clientY - rect.top) / cs);
+  if (row >= 0 && row < state.rows && col >= 0 && col < state.cols) {
+    return { row, col };
+  }
+  return null;
+}
+
+function applyTool(pos) {
+  if (!pos) return;
+  const { row, col } = pos;
+
+  switch (state.tool) {
+    case 'wall':
+      if (isSamePos(pos, state.start) || isSamePos(pos, state.end)) return;
+      state.grid[row][col] = -1;
+      break;
+    case 'empty':
+      state.grid[row][col] = 0;
+      break;
+    case 'start':
+      if (state.grid[row][col] === -1) state.grid[row][col] = 0;
+      state.start = { row, col };
+      break;
+    case 'end':
+      if (state.grid[row][col] === -1) state.grid[row][col] = 0;
+      state.end = { row, col };
+      break;
+    case 'weight':
+      if (isSamePos(pos, state.start) || isSamePos(pos, state.end)) return;
+      state.grid[row][col] = state.weightVal;
+      break;
+    case 'erase':
+      // Clear all walls and weights
+      for (let r = 0; r < state.rows; r++)
+        for (let c = 0; c < state.cols; c++)
+          state.grid[r][c] = 0;
+      state.start = { row: 0, col: 0 };
+      state.end = { row: state.rows - 1, col: state.cols - 1 };
+      addLog('Grid cleared', 'info');
+      break;
+  }
+  clearVisualization();
+  drawGrid();
+}
+
+function isSamePos(a, b) {
+  return a && b && a.row === b.row && a.col === b.col;
+}
+
+canvas.addEventListener('mousedown', e => {
+  state.isDrawing = true;
+  applyTool(getGridPos(e));
+});
+canvas.addEventListener('mousemove', e => {
+  if (state.isDrawing && (state.tool === 'wall' || state.tool === 'empty' || state.tool === 'weight')) {
+    applyTool(getGridPos(e));
+  }
+});
+canvas.addEventListener('mouseup', () => { state.isDrawing = false; });
+canvas.addEventListener('mouseleave', () => { state.isDrawing = false; });
+
+// ==================== TOOL SELECTION ====================
+document.querySelectorAll('.tool-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.tool = btn.dataset.tool;
+    $('weightRow').style.display = state.tool === 'weight' ? 'flex' : 'none';
+    if (state.tool === 'erase') {
+      applyTool({ row: 0, col: 0 }); // triggers erase all
+    }
+  });
+});
+
+$('weightValue').addEventListener('change', e => {
+  state.weightVal = parseInt(e.target.value) || 3;
+});
+
+// ==================== ALGORITHM SELECTION ====================
+document.querySelectorAll('.algo-item').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.algo-item').forEach(i => i.classList.remove('selected'));
+    item.classList.add('selected');
+    state.selectedAlgo = item.dataset.algo;
+  });
+});
+
+// ==================== SPEED CONTROL ====================
+$('animSpeed').addEventListener('input', e => {
+  state.animSpeed = parseInt(e.target.value);
+  $('speedLabel').textContent = (101 - state.animSpeed) + 'ms';
+});
+
+// ==================== RUN ALGORITHM ====================
+function getHeuristicFn() {
+  return state.heuristic === 'euclidean' ? euclideanDistance : manhattanDistance;
+}
+
+$('heuristicSel').addEventListener('change', e => {
+  state.heuristic = e.target.value;
+});
+
+function runSelectedAlgorithm() {
+  if (!state.start || !state.end) {
+    showToast('Set start and end points first!', 'danger');
+    return null;
+  }
+
+  const algo = state.selectedAlgo;
+  const hFn = getHeuristicFn();
+  let result;
+
+  switch (algo) {
+    case 'bfs': result = bfs(state.grid, state.start, state.end); break;
+    case 'dfs': result = dfs(state.grid, state.start, state.end); break;
+    case 'ucs': result = ucs(state.grid, state.start, state.end); break;
+    case 'astar': result = aStar(state.grid, state.start, state.end, hFn); break;
+    case 'greedy': result = greedy(state.grid, state.start, state.end, hFn); break;
+  }
+
+  return result;
+}
+
+$('btnRun').addEventListener('click', () => {
+  if (state.animRunning) return;
+  clearVisualization();
+  drawGrid();
+
+  const result = runSelectedAlgorithm();
+  if (!result) return;
+
+  if (!result.path) {
+    showToast('No path found!', 'danger');
+    addLog('No path found with ' + result.stats.algorithm, 'danger');
+    return;
+  }
+
+  // Generate commands
+  state.currentPath = result.path;
+  state.currentCommands = pathToCommands(result.path);
+  updateCommandsPreview(state.currentCommands);
+
+  addLog(result.stats.algorithm + ': found path (cost=' + result.stats.pathCost + ', nodes=' + result.stats.nodesExplored + ')', 'success');
+
+  // Animate
+  animateResult(result);
+});
+
+// ==================== ANIMATION ====================
+function animateResult(result) {
+  state.animRunning = true;
+  let step = 0;
+  const totalSteps = result.exploredHistory.length;
+  const delay = Math.max(5, 101 - state.animSpeed);
+
+  function tick() {
+    if (!state.animRunning || step >= totalSteps) {
+      // Final: draw path
+      if (result.path) {
+        vizPath.clear();
+        result.path.forEach(n => vizPath.add(n.row + ',' + n.col));
+      }
+      drawGrid();
+      state.animRunning = false;
+
+      // Update final stats
+      $('statNodes').textContent = result.stats.nodesExplored;
+      $('statFrontier').textContent = '0';
+      $('statPathLen').textContent = result.stats.pathLength;
+      $('statPathCost').textContent = result.stats.pathCost;
+      $('statTime').textContent = result.stats.timeMs + 'ms';
+      return;
+    }
+
+    const h = result.exploredHistory[step];
+    const fh = result.frontierHistory[step];
+
+    // Update explored
+    vizExplored.clear();
+    if (h.explored) {
+      h.explored.forEach(k => {
+        if (typeof k === 'string') vizExplored.add(k);
+        else vizExplored.add(k.row + ',' + k.col);
+      });
+    }
+
+    // Update frontier
+    vizFrontier.clear();
+    if (fh) {
+      fh.forEach(n => {
+        if (typeof n === 'string') vizFrontier.add(n);
+        else vizFrontier.add(n.row + ',' + n.col);
+      });
+    }
+
+    // Update stats
+    $('statNodes').textContent = step + 1;
+    $('statFrontier').textContent = fh ? fh.length : 0;
+
+    drawGrid();
+    step++;
+    state.animTimer = setTimeout(tick, delay);
+  }
+
+  tick();
+}
+
+$('btnStop').addEventListener('click', () => {
+  state.animRunning = false;
+  if (state.animTimer) clearTimeout(state.animTimer);
+  addLog('Animation stopped', 'warning');
+});
+
+$('btnClearViz').addEventListener('click', () => {
+  state.animRunning = false;
+  if (state.animTimer) clearTimeout(state.animTimer);
+  clearVisualization();
+  drawGrid();
+});
+
+// ==================== COMPARE ALL ====================
+$('btnCompareAll').addEventListener('click', () => {
+  if (!state.start || !state.end) {
+    showToast('Set start and end points first!', 'danger');
+    return;
+  }
+
+  const hFn = getHeuristicFn();
+  const results = runAllAlgorithms(state.grid, state.start, state.end, hFn);
+  const tbody = $('compTableBody');
+  tbody.innerHTML = '';
+
+  const algoColors = {
+    'BFS': 'var(--algo-bfs)',
+    'DFS': 'var(--algo-dfs)',
+    'UCS': 'var(--algo-ucs)',
+    'A*': 'var(--algo-astar)',
+    'Greedy': 'var(--algo-greedy)'
+  };
+
+  results.forEach(r => {
+    const s = r.stats;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="color:${algoColors[s.algorithm] || 'inherit'};font-weight:600">${s.algorithm}</td>
+      <td>${s.nodesExplored}</td>
+      <td>${s.pathLength}</td>
+      <td>${s.pathCost === Infinity ? '∞' : s.pathCost}</td>
+      <td>${s.timeMs}ms</td>
+      <td class="${s.optimal && s.pathCost !== Infinity ? 'optimal' : 'not-optimal'}">${s.pathCost === Infinity ? '—' : (s.optimal ? '✅' : '❌')}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  addLog('Comparison complete for all 5 algorithms', 'info');
+});
+
+// ==================== COMMANDS PREVIEW ====================
+function updateCommandsPreview(commands) {
+  const container = $('commandsPreview');
+  if (!commands || commands.length === 0) {
+    container.innerHTML = '<span style="color:var(--text-muted);font-size:0.78rem">Run algorithm to see commands</span>';
+    return;
+  }
+  container.innerHTML = commands.map(cmd =>
+    `<span class="cmd-badge cmd-${cmd}">${cmd}</span>`
+  ).join('');
+}
+
+// ==================== MAP SAVE/LOAD ====================
+$('btnSaveMap').addEventListener('click', () => {
+  const data = {
+    rows: state.rows,
+    cols: state.cols,
+    grid: state.grid,
+    start: state.start,
+    end: state.end
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'map_' + state.rows + 'x' + state.cols + '.json';
+  a.click();
+  addLog('Map saved', 'success');
+});
+
+$('btnLoadMap').addEventListener('click', () => {
+  $('fileInput').click();
+});
+
+$('fileInput').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      state.rows = data.rows;
+      state.cols = data.cols;
+      state.grid = data.grid;
+      state.start = data.start;
+      state.end = data.end;
+      $('gridRows').value = data.rows;
+      $('gridCols').value = data.cols;
+      clearVisualization();
+      drawGrid();
+      addLog('Map loaded: ' + data.rows + '×' + data.cols, 'success');
+    } catch (err) {
+      showToast('Invalid map file!', 'danger');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+// ==================== RANDOM MAZE ====================
+$('btnRandomMaze').addEventListener('click', () => {
+  const rows = state.rows;
+  const cols = state.cols;
+  // Reset grid
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      state.grid[r][c] = 0;
+    }
+  }
+  // Random walls (~30%)
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (isSamePos({ row: r, col: c }, state.start) || isSamePos({ row: r, col: c }, state.end)) continue;
+      if (Math.random() < 0.30) {
+        state.grid[r][c] = -1;
+      }
+    }
+  }
+  // Random weights on some empty cells
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (state.grid[r][c] === 0 && !isSamePos({ row: r, col: c }, state.start) && !isSamePos({ row: r, col: c }, state.end)) {
+        if (Math.random() < 0.15) {
+          state.grid[r][c] = Math.floor(Math.random() * 5) + 2; // weight 2-6
+        }
+      }
+    }
+  }
+  clearVisualization();
+  drawGrid();
+  addLog('Random maze generated', 'info');
+});
+
+// ==================== NEW GRID ====================
+$('btnNewGrid').addEventListener('click', () => {
+  const rows = parseInt($('gridRows').value) || 8;
+  const cols = parseInt($('gridCols').value) || 8;
+  initGrid(rows, cols);
+});
+
+// ==================== WEBSOCKET ====================
+$('btnConnect').addEventListener('click', () => {
+  if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+    state.ws.close();
+    return;
+  }
+  const url = $('wsUrl').value.trim();
+  if (!url) return;
+
+  try {
+    state.ws = new WebSocket(url);
+
+    state.ws.onopen = () => {
+      state.wsConnected = true;
+      $('connStatus').classList.add('connected');
+      $('connText').textContent = 'Connected';
+      $('btnConnect').textContent = 'Disconnect';
+      addLog('WebSocket connected to ' + url, 'success');
+      showToast('Connected to ESP32!', 'success');
+    };
+
+    state.ws.onclose = () => {
+      state.wsConnected = false;
+      $('connStatus').classList.remove('connected');
+      $('connText').textContent = 'Disconnected';
+      $('btnConnect').textContent = 'Connect';
+      addLog('WebSocket disconnected', 'warning');
+    };
+
+    state.ws.onerror = (err) => {
+      addLog('WebSocket error', 'danger');
+      showToast('Connection error!', 'danger');
+    };
+
+    state.ws.onmessage = (e) => {
+      handleWsMessage(e.data);
+    };
+
+  } catch (err) {
+    showToast('Invalid WebSocket URL', 'danger');
+  }
+});
+
+function handleWsMessage(data) {
+  try {
+    const msg = JSON.parse(data);
+    switch (msg.type) {
+      case 'TELEMETRY':
+        updateTelemetry(msg);
+        break;
+      case 'OBSTACLE_DETECTED':
+        handleObstacleDetected(msg);
+        break;
+      case 'ROUTE_ACK':
+        addLog('Robot acknowledged route', 'success');
+        showToast('Robot received route!', 'success');
+        break;
+      case 'COMPLETED':
+        addLog('Robot completed route!', 'success');
+        showToast('🎉 Route completed!', 'success');
+        $('teleState').textContent = 'DONE';
+        break;
+      default:
+        addLog('WS: ' + data, 'info');
+    }
+  } catch {
+    addLog('WS raw: ' + data, 'info');
+  }
+}
+
+// ==================== TELEMETRY ====================
+function updateTelemetry(msg) {
+  if (msg.state) $('teleState').textContent = msg.state;
+  if (msg.step !== undefined) $('teleStep').textContent = msg.step + '/' + (msg.total || '?');
+  if (msg.speedL !== undefined) $('teleSpeedL').textContent = msg.speedL.toFixed(2) + ' m/s';
+  if (msg.speedR !== undefined) $('teleSpeedR').textContent = msg.speedR.toFixed(2) + ' m/s';
+  if (msg.distance !== undefined) $('teleDist').textContent = msg.distance.toFixed(1) + ' cm';
+  if (msg.obstacle !== undefined) $('teleObs').textContent = msg.obstacle.toFixed(1) + ' cm';
+
+  // Line sensors
+  if (msg.sensors) {
+    const ids = ['sL2', 'sL1', 'sM', 'sR1', 'sR2'];
+    msg.sensors.forEach((val, i) => {
+      const el = $(ids[i]);
+      if (el) el.classList.toggle('on-line', !!val);
+    });
+  }
+}
+
+// ==================== DYNAMIC RE-ROUTING ====================
+function handleObstacleDetected(msg) {
+  const pos = msg.position;
+  const robotPos = msg.robot_position;
+
+  addLog(`⚠️ Obstacle at (${pos.row},${pos.col})! Distance: ${msg.distance_cm}cm`, 'danger');
+  showToast(`⚠️ Obstacle detected at (${pos.row},${pos.col})!`, 'danger');
+
+  // Mark obstacle on grid
+  if (pos.row >= 0 && pos.row < state.rows && pos.col >= 0 && pos.col < state.cols) {
+    state.grid[pos.row][pos.col] = -1;
+    vizNewObstacles.add(pos.row + ',' + pos.col);
+  }
+  drawGrid();
+
+  // Re-route from robot's current position
+  if (robotPos && state.end) {
+    addLog('Re-routing from (' + robotPos.row + ',' + robotPos.col + ')...', 'info');
+
+    // Run A* from robot position to end
+    const hFn = getHeuristicFn();
+    const result = aStar(state.grid, robotPos, state.end, hFn);
+
+    if (result.path) {
+      state.currentPath = result.path;
+      state.currentCommands = pathToCommands(result.path);
+      updateCommandsPreview(state.currentCommands);
+
+      // Send new route to robot
+      const routeMsg = {
+        type: 'ROUTE',
+        commands: state.currentCommands,
+        total_steps: state.currentCommands.length,
+        algorithm: 'A*',
+        rerouted: true
+      };
+
+      if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+        state.ws.send(JSON.stringify(routeMsg));
+        addLog('New route sent to robot (' + state.currentCommands.length + ' steps)', 'success');
+      }
+
+      // Animate new path
+      clearVisualization();
+      animateResult(result);
+    } else {
+      addLog('No alternative path found! Robot is stuck.', 'danger');
+      showToast('No path available! Robot stuck.', 'danger');
+    }
+  }
+}
+
+// ==================== SEND ROUTE ====================
+$('btnSendRoute').addEventListener('click', () => {
+  if (!state.currentCommands || state.currentCommands.length === 0) {
+    showToast('Run algorithm first!', 'danger');
+    return;
+  }
+
+  const routeMsg = {
+    type: 'ROUTE',
+    commands: state.currentCommands,
+    total_steps: state.currentCommands.length,
+    algorithm: state.selectedAlgo.toUpperCase(),
+    path_cost: parseInt($('statPathCost').textContent) || 0
+  };
+
+  if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+    state.ws.send(JSON.stringify(routeMsg));
+    addLog('Route sent: ' + state.currentCommands.join(','), 'success');
+    showToast('Route sent to robot!', 'success');
+  } else {
+    showToast('Not connected to robot!', 'danger');
+    addLog('Cannot send: WebSocket not connected', 'danger');
+    // Show JSON for debugging
+    console.log('Route JSON:', JSON.stringify(routeMsg, null, 2));
+  }
+});
+
+// ==================== TOAST ====================
+function showToast(message, type = 'info') {
+  const container = $('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = 'toast toast-' + type;
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+// ==================== EVENT LOG ====================
+function addLog(message, type = 'info') {
+  const log = $('eventLog');
+  const now = new Date();
+  const time = now.getHours().toString().padStart(2, '0') + ':' +
+               now.getMinutes().toString().padStart(2, '0') + ':' +
+               now.getSeconds().toString().padStart(2, '0');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry fade-in';
+  entry.innerHTML = `<span class="log-time">${time}</span><span class="log-msg log-${type}">${message}</span>`;
+  log.insertBefore(entry, log.firstChild);
+  // Keep max 50 entries
+  while (log.children.length > 50) log.removeChild(log.lastChild);
+}
+
+// ==================== INIT ====================
+window.addEventListener('resize', () => {
+  drawGrid();
+});
+
+initGrid(8, 8);
+addLog('AI Robot Pathfinder initialized', 'info');
+</script>
+
+</body>
+</html>

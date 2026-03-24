@@ -1,0 +1,1339 @@
+<!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>&Dstrok;&#x1ec0; C&#x1af;&#x1a0;NG &Dstrok;&#x1ed2; &Aacute;N M&Ocirc;N H&#x1ecc;C</title>
+            <style>
+/* From extension vscode.github */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.vscode-dark img[src$=\#gh-light-mode-only],
+.vscode-light img[src$=\#gh-dark-mode-only],
+.vscode-high-contrast:not(.vscode-high-contrast-light) img[src$=\#gh-light-mode-only],
+.vscode-high-contrast-light img[src$=\#gh-dark-mode-only] {
+	display: none;
+}
+
+</style>
+            
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+<style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+        <style>
+.task-list-item {
+    list-style-type: none;
+}
+
+.task-list-item-checkbox {
+    margin-left: -20px;
+    vertical-align: middle;
+    pointer-events: none;
+}
+</style>
+<style>
+:root {
+  --color-note: #0969da;
+  --color-tip: #1a7f37;
+  --color-warning: #9a6700;
+  --color-severe: #bc4c00;
+  --color-caution: #d1242f;
+  --color-important: #8250df;
+}
+
+</style>
+<style>
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-note: #2f81f7;
+    --color-tip: #3fb950;
+    --color-warning: #d29922;
+    --color-severe: #db6d28;
+    --color-caution: #f85149;
+    --color-important: #a371f7;
+  }
+}
+
+</style>
+<style>
+.markdown-alert {
+  padding: 0.5rem 1rem;
+  margin-bottom: 16px;
+  color: inherit;
+  border-left: .25em solid #888;
+}
+
+.markdown-alert>:first-child {
+  margin-top: 0
+}
+
+.markdown-alert>:last-child {
+  margin-bottom: 0
+}
+
+.markdown-alert .markdown-alert-title {
+  display: flex;
+  font-weight: 500;
+  align-items: center;
+  line-height: 1
+}
+
+.markdown-alert .markdown-alert-title .octicon {
+  margin-right: 0.5rem;
+  display: inline-block;
+  overflow: visible !important;
+  vertical-align: text-bottom;
+  fill: currentColor;
+}
+
+.markdown-alert.markdown-alert-note {
+  border-left-color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-note .markdown-alert-title {
+  color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-important {
+  border-left-color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-important .markdown-alert-title {
+  color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-warning {
+  border-left-color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-warning .markdown-alert-title {
+  color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-tip {
+  border-left-color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-tip .markdown-alert-title {
+  color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-caution {
+  border-left-color: var(--color-caution);
+}
+
+.markdown-alert.markdown-alert-caution .markdown-alert-title {
+  color: var(--color-caution);
+}
+
+</style>
+        
+        </head>
+        <body class="vscode-body vscode-light">
+            <h1 id="đề-cương-đồ-án-môn-học">ĐỀ CƯƠNG ĐỒ ÁN MÔN HỌC</h1>
+<h2 id="môn-trí-tuệ-nhân-tạo-artificial-intelligence">Môn: Trí tuệ Nhân tạo (Artificial Intelligence)</h2>
+<hr>
+<h2 id="1-tên-đề-tài">1. Tên đề tài</h2>
+<p><strong>&quot;Xây dựng Hệ thống Xe Robot Giao hàng Tự hành Dò Line Tránh Vật cản Ứng dụng Thuật toán Tìm kiếm AI (Informed &amp; Uninformed Search) với Giao diện Web Mô phỏng và Điều khiển&quot;</strong></p>
+<hr>
+<h2 id="2-giới-thiệu">2. Giới thiệu</h2>
+<h3 id="21-lý-do-chọn-đề-tài">2.1. Lý do chọn đề tài</h3>
+<p>Trong lĩnh vực Trí tuệ Nhân tạo, <strong>thuật toán tìm kiếm (Search Algorithms)</strong> là nền tảng cốt lõi cho hầu hết các bài toán lập kế hoạch (planning) và ra quyết định (decision-making). Từ điều hướng xe tự hành, robot trong kho Amazon, đến hệ thống GPS — tất cả đều dựa trên các thuật toán tìm đường kinh điển như BFS, DFS, UCS, A*, và Greedy Best-First Search.</p>
+<p>Tuy nhiên, trong môi trường học thuật, sinh viên thường chỉ tiếp cận các thuật toán này trên lý thuyết hoặc qua các bài tập mô phỏng thuần túy trên máy tính. Việc <strong>kết nối trực tiếp kết quả thuật toán AI với một robot vật lý thực tế</strong> mang lại những giá trị vượt trội:</p>
+<ul>
+<li><strong>Trực quan hóa thuật toán</strong>: Sinh viên &quot;nhìn thấy&quot; sự khác biệt giữa BFS (duyệt theo lớp), DFS (đi sâu trước), A* (có heuristic) qua chính hành vi thực tế của robot.</li>
+<li><strong>Cầu nối lý thuyết – thực hành</strong>: Hiểu rằng một đường đi &quot;tối ưu trên giấy&quot; phải đối mặt với nhiều thách thức thực tế: sai số cảm biến, trượt bánh, vật cản bất ngờ.</li>
+<li><strong>Kỹ năng tích hợp hệ thống</strong>: Phát triển đồng thời năng lực lập trình AI, phát triển web, và lập trình nhúng (embedded systems) — bộ kỹ năng đa ngành rất được ngành công nghiệp đánh giá cao.</li>
+<li><strong>Ứng dụng thực tiễn</strong>: Mô hình thu nhỏ của hệ thống logistics tự động (AGV) trong kho bãi, nhà máy, bệnh viện.</li>
+</ul>
+<h3 id="22-tính-cấp-thiết">2.2. Tính cấp thiết</h3>
+<table>
+<thead>
+<tr>
+<th>Yếu tố</th>
+<th>Mô tả</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Thị trường AGV</strong></td>
+<td>Dự kiến đạt 18 tỷ USD vào 2027 (CAGR ~14%), nhu cầu kỹ sư AI + Robotics tăng cao.</td>
+</tr>
+<tr>
+<td><strong>Giáo dục STEM</strong></td>
+<td>Xu hướng &quot;học qua dự án&quot; (Project-Based Learning); đồ án liên ngành AI–IoT–Robot là mô hình đào tạo hiệu quả.</td>
+</tr>
+<tr>
+<td><strong>Nghiên cứu kế thừa</strong></td>
+<td>Cơ sở để mở rộng sang các thuật toán nâng cao: Reinforcement Learning, SLAM, Multi-agent pathfinding.</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="3-mục-tiêu-đồ-án">3. Mục tiêu đồ án</h2>
+<h3 id="31-mục-tiêu-tổng-quát">3.1. Mục tiêu tổng quát</h3>
+<p>Thiết kế, chế tạo và vận hành thành công một hệ thống gồm: <strong>(1)</strong> giao diện web mô phỏng bản đồ 2D với các thuật toán tìm kiếm AI, và <strong>(2)</strong> xe robot 4 bánh thực thi lộ trình do thuật toán AI tính toán bằng cách dò line trên mặt sàn và tránh vật cản thực tế.</p>
+<h3 id="32-mục-tiêu-cụ-thể">3.2. Mục tiêu cụ thể</h3>
+<table>
+<thead>
+<tr>
+<th>STT</th>
+<th>Mục tiêu</th>
+<th>Chỉ tiêu đo lường</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><strong>Phát triển phần mềm mô phỏng thuật toán AI</strong></td>
+<td>Triển khai thành công ≥ 5 thuật toán: BFS, DFS, UCS, A*, Greedy Best-First Search trên giao diện web.</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>Trực quan hóa quá trình tìm kiếm</strong></td>
+<td>Web hiển thị animation từng bước &quot;khám phá&quot; của thuật toán: các node đã duyệt (explored), hàng đợi/frontier, đường đi tối ưu tìm được.</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>So sánh hiệu năng thuật toán</strong></td>
+<td>Giao diện hiển thị bảng so sánh: số node mở rộng, chi phí đường đi, thời gian thực thi, bộ nhớ sử dụng cho mỗi thuật toán trên cùng một bản đồ.</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>Giao tiếp Web ↔ ESP32</strong></td>
+<td>Truyền thành công lộ trình (chuỗi lệnh/điểm) từ web đến ESP32 qua Wi-Fi (HTTP/WebSocket) với độ tin cậy ≥ 99%.</td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>Robot di chuyển đúng lộ trình</strong></td>
+<td>Robot thực hiện đúng ≥ 90% các điểm rẽ trên track thực tế tương ứng với lộ trình AI đã tính.</td>
+</tr>
+<tr>
+<td>6</td>
+<td><strong>Dò line ổn định</strong></td>
+<td>Sai lệch tâm ≤ ±1.5 cm, vượt cua bán kính ≥ 15 cm mà không mất line.</td>
+</tr>
+<tr>
+<td>7</td>
+<td><strong>Tránh vật cản thực tế</strong></td>
+<td>Phát hiện vật cản tĩnh ở khoảng cách 10–30 cm, xử lý (dừng + thông báo hoặc vòng tránh) thành công ≥ 95%.</td>
+</tr>
+<tr>
+<td>8</td>
+<td><strong>Đo quãng đường bằng Encoder</strong></td>
+<td>Sai số ≤ 5% trên quãng đường thử nghiệm 2 m.</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="4-phạm-vi-đồ-án">4. Phạm vi đồ án</h2>
+<h3 id="41-trong-phạm-vi-in-scope">4.1. Trong phạm vi (In-Scope)</h3>
+<table>
+<thead>
+<tr>
+<th>Hạng mục</th>
+<th>Mô tả</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Bản đồ</strong></td>
+<td>Bản đồ 2D dạng lưới ô vuông (grid map) được tạo/chỉnh sửa trên giao diện web. Hỗ trợ đặt vật cản, điểm bắt đầu, điểm kết thúc, và các điểm giao (waypoint).</td>
+</tr>
+<tr>
+<td><strong>Thuật toán AI</strong></td>
+<td>Uninformed: BFS, DFS, UCS. Informed: A* Search, Greedy Best-First Search. Heuristic: Manhattan Distance và/hoặc Euclidean Distance.</td>
+</tr>
+<tr>
+<td><strong>Mô phỏng</strong></td>
+<td>Trực quan hóa từng bước hoạt động của thuật toán trên giao diện web (animation).</td>
+</tr>
+<tr>
+<td><strong>Robot thực tế</strong></td>
+<td>Xe 4 bánh dò line (vạch đen trên nền trắng), tránh vật cản tĩnh, trên mặt sàn phẳng trong nhà.</td>
+</tr>
+<tr>
+<td><strong>Giao tiếp</strong></td>
+<td>Wi-Fi (ESP32 AP/STA mode), HTTP hoặc WebSocket, phạm vi mạng LAN.</td>
+</tr>
+<tr>
+<td><strong>Track thực tế</strong></td>
+<td>Lưới đường (line grid) trên sàn tương ứng 1-1 với bản đồ 2D trên web. Giao lộ đánh dấu bằng pattern đặc biệt (ví dụ: chữ thập).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="42-ngoài-phạm-vi-out-of-scope">4.2. Ngoài phạm vi (Out-of-Scope)</h3>
+<ul>
+<li>Thuật toán học máy (Machine Learning), học tăng cường (Reinforcement Learning).</li>
+<li>Bản đồ liên tục (continuous space); chỉ dùng bản đồ rời rạc (discrete grid).</li>
+<li>Vật cản động (đang di chuyển).</li>
+<li>Hoạt động ngoài trời (outdoor).</li>
+<li>Nhận dạng hình ảnh / Computer Vision.</li>
+<li>Quy hoạch đường đi cho nhiều robot đồng thời (multi-agent).</li>
+<li>Truyền dữ liệu qua cloud; chỉ giao tiếp cục bộ trong mạng LAN.</li>
+<li>Cơ cấu nâng/hạ hàng hóa vật lý.</li>
+</ul>
+<hr>
+<h2 id="5-công-nghệ-sử-dụng">5. Công nghệ sử dụng</h2>
+<h3 id="51-phần-cứng">5.1. Phần cứng</h3>
+<table>
+<thead>
+<tr>
+<th>Thành phần</th>
+<th>Linh kiện</th>
+<th>Ghi chú</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Vi điều khiển</td>
+<td><strong>ESP32-WROOM-32</strong> + PCB hỗ trợ</td>
+<td>Dual-core 240 MHz, Wi-Fi 802.11 b/g/n</td>
+</tr>
+<tr>
+<td>Động cơ</td>
+<td>4× DC Geared Motor (3–6V)</td>
+<td>Giảm tốc ~1:48</td>
+</tr>
+<tr>
+<td>Bánh xe</td>
+<td>4× bánh cao su</td>
+<td>Đường kính ~65 mm</td>
+</tr>
+<tr>
+<td>Driver động cơ</td>
+<td><strong>L298N</strong> Dual H-Bridge</td>
+<td>2 kênh, mỗi kênh điều khiển 2 motor cùng phía</td>
+</tr>
+<tr>
+<td>Cảm biến dò line</td>
+<td><strong>5× TCRT5000</strong> (hồng ngoại)</td>
+<td><strong>Đề xuất thêm</strong> — 5 mắt cho PID mịn (xem mục 5.3)</td>
+</tr>
+<tr>
+<td>Cảm biến siêu âm</td>
+<td><strong>HC-SR04</strong></td>
+<td>Tầm đo 2–400 cm</td>
+</tr>
+<tr>
+<td>Servo</td>
+<td><strong>SG90</strong> (0°–180°)</td>
+<td>Xoay HC-SR04 quét trái/phải</td>
+</tr>
+<tr>
+<td>Encoder</td>
+<td>2× Encoder quang (trên 2 bánh)</td>
+<td>Đếm xung đo vận tốc và quãng đường</td>
+</tr>
+<tr>
+<td>Nguồn</td>
+<td>2× Đế pin 18650 (3S) = 6 cell</td>
+<td>~11.1V mỗi pack</td>
+</tr>
+<tr>
+<td>Hạ áp</td>
+<td>2× <strong>LM2596</strong> DC-DC Buck</td>
+<td>Module 1: 5V (ESP32 + cảm biến), Module 2: ~7.4V (L298N + motor)</td>
+</tr>
+<tr>
+<td>Công tắc</td>
+<td>2× công tắc gạt</td>
+<td>Tách nguồn logic / nguồn động lực</td>
+</tr>
+<tr>
+<td>Khung</td>
+<td>Tấm Mica (2 tầng)</td>
+<td>Tầng dưới: motor + pin; Tầng trên: ESP32 + cảm biến</td>
+</tr>
+<tr>
+<td>Dây nối</td>
+<td>Bộ dây Dupont + dây điện</td>
+<td>Jump wire Male-Female, Male-Male</td>
+</tr>
+</tbody>
+</table>
+<h3 id="52-phần-mềm--ngôn-ngữ-lập-trình">5.2. Phần mềm &amp; Ngôn ngữ lập trình</h3>
+<table>
+<thead>
+<tr>
+<th>Công nghệ</th>
+<th>Mục đích</th>
+<th>Chi tiết</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>C/C++ (Arduino Framework)</strong></td>
+<td>Firmware ESP32</td>
+<td>Arduino IDE 2.x hoặc PlatformIO; thư viện: <code>WiFi.h</code>, <code>WebServer.h</code>, <code>ESP32Servo.h</code>, <code>ArduinoJson.h</code></td>
+</tr>
+<tr>
+<td><strong>HTML5 / CSS3 / JavaScript (Vanilla)</strong></td>
+<td>Giao diện Web</td>
+<td>Tạo bản đồ grid, animation thuật toán, dashboard điều khiển. Sử dụng <strong>Canvas API</strong> hoặc <strong>SVG</strong> để render bản đồ.</td>
+</tr>
+<tr>
+<td><strong>JavaScript (ES6+)</strong></td>
+<td>Thuật toán AI</td>
+<td>Triển khai BFS, DFS, UCS, A*, Greedy ngay trên trình duyệt (client-side).</td>
+</tr>
+<tr>
+<td><strong>WebSocket</strong></td>
+<td>Giao tiếp real-time</td>
+<td>Truyền lộ trình từ web → ESP32 và nhận telemetry từ ESP32 → web.</td>
+</tr>
+<tr>
+<td><strong>SPIFFS / LittleFS</strong></td>
+<td>File system ESP32</td>
+<td>Lưu trữ file HTML/CSS/JS của web dashboard bên trong flash ESP32.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="53-đề-xuất-thêm-cảm-biến-dò-line--5-mắt-tcrt5000">5.3. Đề xuất thêm: Cảm biến dò line — 5 mắt TCRT5000</h3>
+<p><strong>Lý do cần bổ sung cảm biến line (không có trong danh sách ban đầu):</strong></p>
+<p>Robot cần dò line trên mặt sàn thực → bắt buộc phải có cảm biến hồng ngoại phản xạ. Đề xuất <strong>5 mắt TCRT5000</strong> vì:</p>
+<pre><code>Bố trí (nhìn từ dưới, phía trước robot):
+
+     [S1]   [S2]   [S3]   [S4]   [S5]
+    Ngoài  Trong  Tâm   Trong  Ngoài
+    trái   trái         phải   phải
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>So sánh</th>
+<th>3 mắt</th>
+<th>5 mắt</th>
+<th>7+ mắt</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Số trạng thái lệch</td>
+<td>3</td>
+<td>≥ 9</td>
+<td>≥ 15</td>
+</tr>
+<tr>
+<td>Chất lượng PID</td>
+<td>Thô, giật</td>
+<td><strong>Mịn, mượt</strong></td>
+<td>Rất mịn</td>
+</tr>
+<tr>
+<td>Xử lý cua gấp</td>
+<td>Kém</td>
+<td><strong>Tốt</strong></td>
+<td>Rất tốt</td>
+</tr>
+<tr>
+<td>GPIO ESP32</td>
+<td>3</td>
+<td>5 (ESP32 dư sức)</td>
+<td>7+</td>
+</tr>
+<tr>
+<td>Chi phí thêm</td>
+<td>—</td>
+<td>~15.000 VNĐ</td>
+<td>~25.000+</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Bảng mã hóa error PID (5 mắt):</strong></p>
+<table>
+<thead>
+<tr>
+<th>S1</th>
+<th>S2</th>
+<th>S3</th>
+<th>S4</th>
+<th>S5</th>
+<th>Trạng thái</th>
+<th>Error</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>Đúng tâm</td>
+<td>0</td>
+</tr>
+<tr>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>Lệch nhẹ trái</td>
+<td>+1</td>
+</tr>
+<tr>
+<td>0</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>Lệch trái</td>
+<td>+2</td>
+</tr>
+<tr>
+<td>1</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>Lệch mạnh trái</td>
+<td>+3</td>
+</tr>
+<tr>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>Mất line trái</td>
+<td>+4</td>
+</tr>
+<tr>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>0</td>
+<td>Lệch nhẹ phải</td>
+<td>−1</td>
+</tr>
+<tr>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>0</td>
+<td>Lệch phải</td>
+<td>−2</td>
+</tr>
+<tr>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>Lệch mạnh phải</td>
+<td>−3</td>
+</tr>
+<tr>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>Mất line phải</td>
+<td>−4</td>
+</tr>
+<tr>
+<td>1</td>
+<td>1</td>
+<td>1</td>
+<td>1</td>
+<td>1</td>
+<td><strong>Giao lộ (intersection)</strong></td>
+<td>Xử lý riêng</td>
+</tr>
+<tr>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>Mất line hoàn toàn</td>
+<td>Giữ error cuối</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong><code>1</code> = cảm biến phát hiện vạch đen (line).</strong> Trạng thái &quot;Giao lộ&quot; (5 mắt đều ON) rất quan trọng: đó là lúc robot cần quyết định rẽ trái/phải/đi thẳng theo lộ trình AI.</p>
+</blockquote>
+<h3 id="54-thư-viện--công-cụ-tham-khảo">5.4. Thư viện &amp; Công cụ tham khảo</h3>
+<table>
+<thead>
+<tr>
+<th>Thư viện / Công cụ</th>
+<th>Ngôn ngữ</th>
+<th>Mục đích</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ArduinoJson</code></td>
+<td>C++</td>
+<td>Serialize/Deserialize dữ liệu JSON trên ESP32</td>
+</tr>
+<tr>
+<td><code>ESPAsyncWebServer</code></td>
+<td>C++</td>
+<td>Web Server không đồng bộ, hỗ trợ WebSocket</td>
+</tr>
+<tr>
+<td><code>ESP32Servo</code></td>
+<td>C++</td>
+<td>Điều khiển Servo SG90</td>
+</tr>
+<tr>
+<td>Canvas API / <code>requestAnimationFrame</code></td>
+<td>JavaScript</td>
+<td>Render bản đồ grid + animation thuật toán</td>
+</tr>
+<tr>
+<td><code>PriorityQueue</code> (tự triển khai)</td>
+<td>JavaScript</td>
+<td>Hàng đợi ưu tiên cho UCS, A*, Greedy</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="6-kiến-trúc-hệ-thống">6. Kiến trúc hệ thống</h2>
+<h3 id="61-sơ-đồ-kiến-trúc-tổng-thể">6.1. Sơ đồ kiến trúc tổng thể</h3>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│                      KIẾN TRÚC HỆ THỐNG TỔNG THỂ                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌───────────────────────────────────────┐                                  │
+│  │      TẦNG GIAO DIỆN &amp; AI (WEB)    │                                  │
+│  │                                       │                                  │
+│  │  ┌─────────┐  ┌──────────────────┐   │                                  │
+│  │  │ Map     │  │ AI Search Engine │   │                                  │
+│  │  │ Editor  │  │                  │   │                                  │
+│  │  │         │  │ • BFS    • A*    │   │                                  │
+│  │  │ • Grid  │  │ • DFS    • Greedy│   │                                  │
+│  │  │ • Start │  │ • UCS           │   │                                  │
+│  │  │ • End   │  │                  │   │                                  │
+│  │  │ • Walls │  │ Animation Engine │   │                                  │
+│  │  └─────────┘  └──────────────────┘   │                                  │
+│  │                                       │                                  │
+│  │  ┌──────────────────────────────────┐│                                  │
+│  │  │  Dashboard: Tốc độ, Quãng đường, ││                                  │
+│  │  │  Trạng thái cảm biến, So sánh   ││                                  │
+│  │  └──────────────────────────────────┘│                                  │
+│  └──────────────────┬────────────────────┘                                  │
+│                     │  WebSocket / HTTP                                      │
+│                     │  (Wi-Fi LAN)                                           │
+│                     ▼                                                        │
+│  ┌───────────────────────────────────────┐                                  │
+│  │    TẦNG XỬ LÝ TRUNG TÂM (ESP32)     │                                  │
+│  │                                       │                                  │
+│  │  ┌─────────────┐  ┌────────────────┐ │                                  │
+│  │  │ Route       │  │ Motion Control │ │                                  │
+│  │  │ Interpreter │  │                │ │                                  │
+│  │  │             │  │ • PID Line     │ │                                  │
+│  │  │ • Parse     │  │   Following    │ │                                  │
+│  │  │   path      │  │ • Obstacle     │ │                                  │
+│  │  │ • Queue     │  │   Handling     │ │                                  │
+│  │  │   commands  │  │ • Encoder      │ │                                  │
+│  │  └─────────────┘  │   Odometry     │ │                                  │
+│  │                    └────────────────┘ │                                  │
+│  └──────────────────┬────────────────────┘                                  │
+│                     │  GPIO / PWM / Interrupt                                │
+│                     ▼                                                        │
+│  ┌───────────────────────────────────────┐     ┌─────────────────────────┐  │
+│  │      TẦNG CHẤP HÀNH (Actuators)      │     │  TẦNG CẢM BIẾN         │  │
+│  │                                       │     │                         │  │
+│  │  • 4× DC Motor (qua L298N)           │     │  • 5× TCRT5000 (line)  │  │
+│  │  • Servo SG90 (quét HC-SR04)         │     │  • HC-SR04 (khoảng cách)│  │
+│  │                                       │     │  • 2× Encoder (xung)   │  │
+│  └───────────────────────────────────────┘     └─────────────────────────┘  │
+│                                                                             │
+│  ┌───────────────────────────────────────┐                                  │
+│  │           TẦNG NGUỒN ĐIỆN            │                                  │
+│  │                                       │                                  │
+│  │  Pack A (3S 18650) ──▶ LM2596 → 5V  ──▶ ESP32 + Cảm biến + Servo    │  │
+│  │  Pack B (3S 18650) ──▶ LM2596 → 7.4V ──▶ L298N + 4× Motor           │  │
+│  │  [Switch A]              [Switch B]    (tách nguồn logic/động lực)    │  │
+│  └───────────────────────────────────────┘                                  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+<h3 id="62-luồng-hoạt-động-chính-data-flow">6.2. Luồng hoạt động chính (Data Flow)</h3>
+<pre><code>┌──────────────┐     ┌──────────────────┐     ┌──────────────────────┐
+│  NGƯỜI DÙNG  │     │   WEB BROWSER    │     │       ESP32          │
+│              │     │                  │     │                      │
+│ 1. Vẽ bản đồ│────▶│ 2. Lưu grid map │     │                      │
+│    trên web  │     │    (NxM matrix)  │     │                      │
+│              │     │                  │     │                      │
+│ 3. Chọn thuật│────▶│ 4. Chạy thuật   │     │                      │
+│    toán AI   │     │    toán tìm kiếm │     │                      │
+│              │     │    + Animation   │     │                      │
+│              │     │                  │     │                      │
+│ 5. Nhấn &quot;Gửi│────▶│ 6. Convert path  │     │                      │
+│    cho Robot&quot;│     │    → chuỗi lệnh: │     │                      │
+│              │     │    [&quot;F&quot;,&quot;F&quot;,&quot;R&quot;,  │────▶│ 7. Parse lệnh       │
+│              │     │     &quot;F&quot;,&quot;L&quot;,&quot;F&quot;]  │ WS  │ 8. Thực thi tuần tự:│
+│              │     │                  │     │    - Dò line tiến     │
+│              │     │                  │     │    - Khi gặp giao lộ  │
+│              │     │                  │     │      → rẽ theo lệnh  │
+│              │     │                  │     │    - HC-SR04 phát hiện│
+│              │     │ 10. Hiển thị     │◀────│      vật cản → dừng  │
+│              │     │     telemetry    │  WS │ 9. Gửi trạng thái   │
+│              │     │     real-time    │     │    về web             │
+└──────────────┘     └──────────────────┘     └──────────────────────┘
+
+Chú thích: WS = WebSocket
+           F = Forward, R = Right, L = Left
+</code></pre>
+<h3 id="63-ánh-xạ-bản-đồ-ảo--track-thực-tế">6.3. Ánh xạ bản đồ ảo ↔ Track thực tế</h3>
+<p>Đây là điểm then chốt của hệ thống — sự tương ứng giữa bản đồ grid trên web và lưới line trên sàn:</p>
+<pre><code>  BẢN ĐỒ WEB (Grid 5×5)              TRACK THỰC TẾ (Sàn nhà)
+  
+  ┌───┬───┬───┬───┬───┐              ●───────●───────●───────●───────●
+  │ S │   │   │   │   │              │       │       │       │       │
+  ├───┼───┼───┼───┼───┤              │       │       │       │       │
+  │   │ █ │ █ │   │   │              ●───────●░░░░░░░●───────●───────●
+  ├───┼───┼───┼───┼───┤                      (vật cản thực)
+  │   │   │   │   │   │              ●───────●───────●───────●───────●
+  ├───┼───┼───┼───┼───┤              │       │       │       │       │
+  │   │   │ █ │   │   │              ●───────●───────●░░░░░░░●───────●
+  ├───┼───┼───┼───┼───┤              │       │       │       │       │
+  │   │   │   │   │ E │              ●───────●───────●───────●───────●
+  └───┘───┘───┘───┘───┘              
+  
+  S = Start, E = End                  ● = Giao lộ (intersection)
+  █ = Vật cản (wall)                  ─ = Line trên sàn
+                                      ░ = Vật cản vật lý
+  
+  Mỗi ô grid ↔ 1 đoạn line giữa 2 giao lộ (~30cm)
+</code></pre>
+<hr>
+<h2 id="7-chức-năng-chi-tiết">7. Chức năng chi tiết</h2>
+<h3 id="71-chức-năng-phía-web-ai--giao-diện">7.1. Chức năng phía Web (AI &amp; Giao diện)</h3>
+<h4 id="711-editor-bản-đồ-map-editor">7.1.1. Editor bản đồ (Map Editor)</h4>
+<table>
+<thead>
+<tr>
+<th>Chức năng</th>
+<th>Mô tả</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tạo grid</td>
+<td>Người dùng chọn kích thước bản đồ (ví dụ: 5×5, 8×8, 10×10).</td>
+</tr>
+<tr>
+<td>Đặt/xóa vật cản</td>
+<td>Click vào ô để toggle wall (vật cản) / free cell.</td>
+</tr>
+<tr>
+<td>Đặt điểm Start</td>
+<td>Click chọn ô xuất phát (hiển thị icon 🟢).</td>
+</tr>
+<tr>
+<td>Đặt điểm End</td>
+<td>Click chọn ô đích (hiển thị icon 🔴).</td>
+</tr>
+<tr>
+<td>Đặt waypoint</td>
+<td>(Tùy chọn) Đặt các điểm giao trung gian mà robot phải đi qua.</td>
+</tr>
+<tr>
+<td>Đặt trọng số</td>
+<td>Cho phép gán chi phí khác nhau cho từng ô (phục vụ UCS và A*).</td>
+</tr>
+<tr>
+<td>Lưu/tải bản đồ</td>
+<td>Export/Import bản đồ dạng JSON để tái sử dụng.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="712-ai-search-engine--thuật-toán-tìm-kiếm">7.1.2. AI Search Engine — Thuật toán tìm kiếm</h4>
+<table>
+<thead>
+<tr>
+<th>Thuật toán</th>
+<th>Loại</th>
+<th>Đặc điểm</th>
+<th>Cấu trúc dữ liệu</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>BFS</strong> (Breadth-First Search)</td>
+<td>Uninformed</td>
+<td>Tìm đường ngắn nhất (số bước), duyệt theo lớp</td>
+<td>Queue (FIFO)</td>
+</tr>
+<tr>
+<td><strong>DFS</strong> (Depth-First Search)</td>
+<td>Uninformed</td>
+<td>Đi sâu trước, không đảm bảo tối ưu, tốn ít bộ nhớ</td>
+<td>Stack (LIFO)</td>
+</tr>
+<tr>
+<td><strong>UCS</strong> (Uniform-Cost Search)</td>
+<td>Uninformed</td>
+<td>Mở rộng node có chi phí nhỏ nhất, tối ưu khi có trọng số khác nhau</td>
+<td>Priority Queue</td>
+</tr>
+<tr>
+<td><strong>A*</strong> Search</td>
+<td>Informed</td>
+<td>f(n) = g(n) + h(n); tối ưu nếu h(n) admissible</td>
+<td>Priority Queue</td>
+</tr>
+<tr>
+<td><strong>Greedy Best-First</strong></td>
+<td>Informed</td>
+<td>f(n) = h(n); nhanh nhưng không đảm bảo tối ưu</td>
+<td>Priority Queue</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Heuristic function h(n)</strong> cho A* và Greedy:</p>
+<pre><code>Manhattan Distance:  h(n) = |x_current - x_goal| + |y_current - y_goal|
+Euclidean Distance:  h(n) = sqrt((x_current - x_goal)² + (y_current - y_goal)²)
+</code></pre>
+<blockquote>
+<p>Người dùng có thể chọn loại heuristic trên giao diện để so sánh hiệu quả.</p>
+</blockquote>
+<h4 id="713-animation-engine--trực-quan-hóa">7.1.3. Animation Engine — Trực quan hóa</h4>
+<p>Giao diện web hiển thị <strong>animation từng bước</strong> của thuật toán:</p>
+<pre><code>Bảng màu hiển thị:
+
+  ⬜ = Ô trống (chưa duyệt)
+  🟦 = Đang trong Frontier (hàng đợi/stack)
+  🟨 = Đã Explored (đã mở rộng)
+  🟩 = Đường đi tìm được (final path)
+  ⬛ = Vật cản (wall)
+  🟢 = Start
+  🔴 = End
+</code></pre>
+<ul>
+<li>Tốc độ animation có thể điều chỉnh (slider: slow → fast → instant).</li>
+<li>Hiển thị <strong>bảng thống kê real-time</strong>: Nodes explored, Frontier size, Path cost, Elapsed time.</li>
+<li>Nút <strong>&quot;So sánh tất cả&quot;</strong>: Chạy tất cả 5 thuật toán trên cùng bản đồ và hiển thị bảng so sánh:</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Thuật toán</th>
+<th>Nodes explored</th>
+<th>Path length</th>
+<th>Path cost</th>
+<th>Time (ms)</th>
+<th>Tối ưu?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>BFS</td>
+<td>24</td>
+<td>8</td>
+<td>8</td>
+<td>3</td>
+<td>✅ (đều bước)</td>
+</tr>
+<tr>
+<td>DFS</td>
+<td>15</td>
+<td>12</td>
+<td>12</td>
+<td>2</td>
+<td>❌</td>
+</tr>
+<tr>
+<td>UCS</td>
+<td>20</td>
+<td>8</td>
+<td>8</td>
+<td>4</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>A*</td>
+<td>12</td>
+<td>8</td>
+<td>8</td>
+<td>2</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Greedy</td>
+<td>8</td>
+<td>10</td>
+<td>10</td>
+<td>1</td>
+<td>❌</td>
+</tr>
+</tbody>
+</table>
+<h4 id="714-route-sender--gửi-lộ-trình-cho-robot">7.1.4. Route Sender — Gửi lộ trình cho Robot</h4>
+<p>Sau khi thuật toán tìm được đường đi, hệ thống chuyển đổi lộ trình thành <strong>chuỗi lệnh di chuyển</strong>:</p>
+<pre><code>Path trên grid:  (0,0) → (1,0) → (2,0) → (2,1) → (2,2) → (3,2) → (4,2)
+                   ↓        ↓        ↓        ↓        ↓        ↓
+Commands:        START →  &quot;F&quot;   →  &quot;F&quot;   →  &quot;R&quot;  →  &quot;F&quot;  →  &quot;L&quot;  →  &quot;F&quot; → END
+
+Trong đó:
+  F = Forward (đi thẳng đến giao lộ tiếp theo)
+  R = Turn Right (rẽ phải tại giao lộ)
+  L = Turn Left  (rẽ trái tại giao lộ)
+</code></pre>
+<p>Dữ liệu gửi qua WebSocket dạng JSON:</p>
+<pre><code class="language-json"><span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;ROUTE&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;commands&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">&quot;F&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;F&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;R&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;F&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;L&quot;</span><span class="hljs-punctuation">,</span> <span class="hljs-string">&quot;F&quot;</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;total_steps&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">6</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;algorithm&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;A*&quot;</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;path_cost&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">6</span>
+<span class="hljs-punctuation">}</span>
+</code></pre>
+<h4 id="715-telemetry-dashboard--giám-sát-robot">7.1.5. Telemetry Dashboard — Giám sát Robot</h4>
+<table>
+<thead>
+<tr>
+<th>Dữ liệu</th>
+<th>Nguồn</th>
+<th>Cập nhật</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tốc độ bánh trái / phải</td>
+<td>Encoder</td>
+<td>Real-time (200 ms)</td>
+</tr>
+<tr>
+<td>Quãng đường đã đi</td>
+<td>Encoder</td>
+<td>Real-time</td>
+</tr>
+<tr>
+<td>Bước hiện tại / tổng bước</td>
+<td>Route Interpreter</td>
+<td>Mỗi giao lộ</td>
+</tr>
+<tr>
+<td>Trạng thái cảm biến line</td>
+<td>5× TCRT5000</td>
+<td>Real-time</td>
+</tr>
+<tr>
+<td>Khoảng cách vật cản trước</td>
+<td>HC-SR04</td>
+<td>Real-time</td>
+</tr>
+<tr>
+<td>Chế độ: LINE_FOLLOW / TURNING / OBSTACLE / DONE</td>
+<td>State Machine</td>
+<td>Real-time</td>
+</tr>
+</tbody>
+</table>
+<h3 id="72-chức-năng-phía-esp32-firmware-robot">7.2. Chức năng phía ESP32 (Firmware Robot)</h3>
+<h4 id="721-route-interpreter--bộ-thông-dịch-lộ-trình">7.2.1. Route Interpreter — Bộ thông dịch lộ trình</h4>
+<pre><code>Nhận JSON lệnh từ Web
+        │
+        ▼
+Parse mảng commands[] → lưu vào hàng đợi (queue)
+        │
+        ▼
+┌───────────────────────────────────────────────────┐
+│  State Machine (Máy trạng thái chính)             │
+│                                                     │
+│  STATE_IDLE ──(nhận route)──▶ STATE_FOLLOWING_LINE │
+│                                                     │
+│  STATE_FOLLOWING_LINE:                              │
+│    • Chạy PID dò line                              │
+│    • Đọc encoder tính quãng đường                  │
+│    • Liên tục kiểm tra HC-SR04                     │
+│    │                                                │
+│    ├─(5 mắt ON = giao lộ)──▶ STATE_AT_INTERSECTION│
+│    │                                                │
+│    └─(HC-SR04 &lt; 15cm)──────▶ STATE_OBSTACLE        │
+│                                                     │
+│  STATE_AT_INTERSECTION:                             │
+│    • Dequeue lệnh tiếp theo                        │
+│    │                                                │
+│    ├─ &quot;F&quot; → Đi thẳng qua giao lộ                  │
+│    ├─ &quot;L&quot; → Xoay trái 90° (dùng encoder/gyro)     │
+│    ├─ &quot;R&quot; → Xoay phải 90°                          │
+│    └─ END → STATE_DONE                              │
+│    │                                                │
+│    └──────────────────────▶ STATE_FOLLOWING_LINE    │
+│                                                     │
+│  STATE_OBSTACLE:                                    │
+│    • Dừng robot                                     │
+│    • Servo quét trái/phải                           │
+│    • Gửi cảnh báo về Web                           │
+│    • Chờ vật cản được dọn HOẶC tự vòng tránh      │
+│    └──────────────────────▶ STATE_FOLLOWING_LINE    │
+│                                                     │
+│  STATE_DONE:                                        │
+│    • Dừng motor, gửi &quot;COMPLETED&quot; về Web            │
+│    └──────────────────────▶ STATE_IDLE              │
+└───────────────────────────────────────────────────┘
+</code></pre>
+<h4 id="722-pid-line-following--dò-line-bằng-pid">7.2.2. PID Line Following — Dò line bằng PID</h4>
+<pre><code class="language-cpp"><span class="hljs-comment">// Pseudocode</span>
+<span class="hljs-type">float</span> error = <span class="hljs-built_in">calculateLineError</span>(sensors[<span class="hljs-number">5</span>]);  <span class="hljs-comment">// [-4, +4]</span>
+<span class="hljs-type">float</span> P = Kp * error;
+<span class="hljs-type">float</span> I = Ki * integral;    <span class="hljs-comment">// integral += error * dt</span>
+<span class="hljs-type">float</span> D = Kd * (error - prevError) / dt;
+<span class="hljs-type">float</span> correction = P + I + D;
+
+<span class="hljs-type">int</span> speedL = BASE_SPEED + correction;
+<span class="hljs-type">int</span> speedR = BASE_SPEED - correction;
+<span class="hljs-built_in">setMotor</span>(LEFT,  <span class="hljs-built_in">constrain</span>(speedL, <span class="hljs-number">0</span>, <span class="hljs-number">255</span>));
+<span class="hljs-built_in">setMotor</span>(RIGHT, <span class="hljs-built_in">constrain</span>(speedR, <span class="hljs-number">0</span>, <span class="hljs-number">255</span>));
+</code></pre>
+<h4 id="723-xử-lý-giao-lộ-intersection-handling">7.2.3. Xử lý giao lộ (Intersection Handling)</h4>
+<p>Khi 5 mắt TCRT5000 đều phát hiện line (intersection detected):</p>
+<ol>
+<li>Robot tiến thêm ~2 cm (encoder-based) để tâm robot nằm đúng tâm giao lộ.</li>
+<li>Dequeue lệnh tiếp theo từ route queue.</li>
+<li>Thực thi lệnh:
+<ul>
+<li><strong>&quot;F&quot;</strong>: Tiếp tục PID line following.</li>
+<li><strong>&quot;L&quot;</strong>: Dừng → Xoay tại chỗ ngược chiều kim đồng hồ ~90° (sử dụng encoder đếm xung hoặc timer-based) → Tìm lại line → PID.</li>
+<li><strong>&quot;R&quot;</strong>: Dừng → Xoay tại chỗ theo chiều kim đồng hồ ~90° → Tìm lại line → PID.</li>
+</ul>
+</li>
+</ol>
+<h4 id="724-tránh-vật-cản-trên-đường-thực-tế">7.2.4. Tránh vật cản trên đường thực tế</h4>
+<p>Nếu HC-SR04 phát hiện vật cản &lt; 15 cm khi đang dò line:</p>
+<ol>
+<li><strong>Dừng ngay lập tức.</strong></li>
+<li>Servo SG90 quét trái (150°) và phải (30°) → đo khoảng cách 2 phía.</li>
+<li><strong>Gửi cảnh báo</strong> về Web Dashboard: <code>{&quot;type&quot;:&quot;OBSTACLE&quot;,&quot;dist&quot;:12.5}</code>.</li>
+<li>Hai tùy chọn xử lý (cấu hình trên Web):
+<ul>
+<li><strong>Chế độ an toàn</strong>: Dừng hẳn, chờ người dùng dọn vật cản, nhấn &quot;Resume&quot; trên web.</li>
+<li><strong>Chế độ tự động</strong>: Vòng tránh bằng thuật toán hình chữ U (sử dụng encoder đo quãng đường) → tìm lại line.</li>
+</ul>
+</li>
+</ol>
+<h4 id="725-encoder-odometry--đo-quãng-đường">7.2.5. Encoder Odometry — Đo quãng đường</h4>
+<pre><code>Chu vi bánh = π × 65mm ≈ 204.2 mm
+Xung mỗi vòng = PPR × Gear_ratio (ví dụ: 20 × 48 = 960)
+Mỗi xung ≈ 0.213 mm
+
+Quãng đường 1 đoạn grid ≈ 300 mm → ~1408 xung
+→ Robot biết khi nào đã đi hết 1 ô grid (kiểm chứng bằng intersection detection)
+</code></pre>
+<hr>
+<h2 id="8-timeline--lộ-trình-thực-hiện-4-tuần">8. Timeline — Lộ trình thực hiện (4 tuần)</h2>
+<h3 id="tổng-quan-gantt">Tổng quan Gantt</h3>
+<pre><code>Tuần 1 ──────────────────────────────────────
+│ Ngày 1-2: Nghiên cứu thuật toán AI         │
+│ Ngày 3-4: Thiết kế kiến trúc + sơ đồ mạch  │
+│ Ngày 5-7: Lắp ráp phần cứng + test nguồn   │
+──────────────────────────────────────────────
+
+Tuần 2 ──────────────────────────────────────
+│ Ngày 1-3: Firmware cơ bản (motor, sensor,   │
+│           encoder, PID line following)       │
+│ Ngày 4-5: Web Map Editor + AI Algorithms    │
+│ Ngày 6-7: Animation Engine cho web          │
+──────────────────────────────────────────────
+
+Tuần 3 ──────────────────────────────────────
+│ Ngày 1-2: Giao tiếp WebSocket Web↔ESP32    │
+│ Ngày 3-4: Route Interpreter + State Machine │
+│ Ngày 5-6: Tránh vật cản + Telemetry        │
+│ Ngày 7:   Tích hợp toàn bộ hệ thống        │
+──────────────────────────────────────────────
+
+Tuần 4 ──────────────────────────────────────
+│ Ngày 1-3: Test tổng hợp + Fix bug          │
+│ Ngày 4-5: Tối ưu PID + Test nhiều bản đồ   │
+│ Ngày 6:   Quay video demo                   │
+│ Ngày 7:   Viết báo cáo + Slide             │
+──────────────────────────────────────────────
+</code></pre>
+<h3 id="chi-tiết-từng-tuần">Chi tiết từng tuần</h3>
+<table>
+<thead>
+<tr>
+<th>Tuần</th>
+<th>Giai đoạn</th>
+<th>Công việc chi tiết</th>
+<th>Deliverable</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Tuần 1</strong></td>
+<td><strong>Nghiên cứu &amp; Phần cứng</strong></td>
+<td>• Nghiên cứu lý thuyết 5 thuật toán tìm kiếm (BFS, DFS, UCS, A*, Greedy). <br>• Thiết kế sơ đồ nguyên lý mạch điện, sơ đồ khối hệ thống. <br>• Lắp ráp khung Mica, gắn motor, bánh xe, encoder. <br>• Kết nối 2 bộ LM2596 (5V + 7.4V), test ổn định nguồn. <br>• Gắn 5× TCRT5000, HC-SR04, Servo lên khung.</td>
+<td>Khung robot hoàn chỉnh, nguồn ổn định, sơ đồ nguyên lý.</td>
+</tr>
+<tr>
+<td><strong>Tuần 2</strong></td>
+<td><strong>Firmware &amp; Web AI</strong></td>
+<td>• Lập trình firmware ESP32: đọc 5 cảm biến line, đọc encoder (interrupt), điều khiển motor qua L298N (PWM). <br>• Tích hợp PID line following cơ bản, test trên track thẳng. <br>• Phát triển web: Map Editor (Canvas), logic 5 thuật toán AI bằng JavaScript. <br>• Xây dựng Animation Engine hiển thị quá trình tìm kiếm từng bước.</td>
+<td>Robot bám line ổn định; Web mô phỏng 5 thuật toán hoạt động.</td>
+</tr>
+<tr>
+<td><strong>Tuần 3</strong></td>
+<td><strong>Tích hợp hệ thống</strong></td>
+<td>• Cấu hình ESP32 Web Server + WebSocket. <br>• Lập trình Route Sender (web) + Route Interpreter (ESP32). <br>• Triển khai State Machine: giao lộ detection, xử lý lệnh F/L/R. <br>• Lập trình tránh vật cản (Servo quét + HC-SR04). <br>• Xây dựng Telemetry Dashboard (real-time sensor data). <br>• Test tích hợp: web gửi route → robot chạy đúng trên track.</td>
+<td>Hệ thống end-to-end hoạt động: Web AI → ESP32 → Robot.</td>
+</tr>
+<tr>
+<td><strong>Tuần 4</strong></td>
+<td><strong>Kiểm thử &amp; Báo cáo</strong></td>
+<td>• Test hệ thống trên nhiều bản đồ khác nhau (5×5, 8×8). <br>• Test tránh vật cản thực tế trên track. <br>• Tinh chỉnh PID (Kp, Ki, Kd) cho chạy mượt. <br>• So sánh hiệu năng 5 thuật toán trên cùng bản đồ (ghi bảng kết quả). <br>• Quay video demo 3–5 phút. <br>• Viết báo cáo kỹ thuật + slide thuyết trình.</td>
+<td>Báo cáo hoàn chỉnh, video demo, source code trên GitHub.</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="9-kết-quả-mong-đợi">9. Kết quả mong đợi</h2>
+<h3 id="91-sản-phẩm-phần-mềm">9.1. Sản phẩm phần mềm</h3>
+<table>
+<thead>
+<tr>
+<th>Sản phẩm</th>
+<th>Mô tả</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Giao diện Web</strong></td>
+<td>Trang web hoạt động trên trình duyệt, cho phép vẽ bản đồ, chạy mô phỏng 5 thuật toán AI với animation, so sánh hiệu năng, gửi lộ trình cho robot, và giám sát real-time.</td>
+</tr>
+<tr>
+<td><strong>Firmware ESP32</strong></td>
+<td>Chương trình C++ hoàn chỉnh: nhận lệnh WebSocket, PID line following, intersection handling, obstacle avoidance, encoder odometry, telemetry reporting.</td>
+</tr>
+<tr>
+<td><strong>Source Code</strong></td>
+<td>Upload lên GitHub với README chi tiết, cấu trúc thư mục rõ ràng, comment đầy đủ.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="92-sản-phẩm-phần-cứng">9.2. Sản phẩm phần cứng</h3>
+<table>
+<thead>
+<tr>
+<th>Sản phẩm</th>
+<th>Mô tả</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Robot 4WD hoàn chỉnh</strong></td>
+<td>Xe robot 2 tầng Mica, 4 bánh, chạy ổn định, bám line, tránh vật cản.</td>
+</tr>
+<tr>
+<td><strong>Track thử nghiệm</strong></td>
+<td>Lưới line trên sàn (ít nhất 5×5), có giao lộ rõ ràng, có vật cản test.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="93-tài-liệu">9.3. Tài liệu</h3>
+<table>
+<thead>
+<tr>
+<th>Sản phẩm</th>
+<th>Mô tả</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Báo cáo đồ án</strong></td>
+<td>30–50 trang, đầy đủ: lý thuyết thuật toán, thiết kế hệ thống, kết quả thực nghiệm, so sánh thuật toán, nhận xét, hướng phát triển.</td>
+</tr>
+<tr>
+<td><strong>Video demo</strong></td>
+<td>3–5 phút, thể hiện: vẽ bản đồ → chạy mô phỏng AI → gửi route → robot di chuyển thực tế.</td>
+</tr>
+<tr>
+<td><strong>Slide thuyết trình</strong></td>
+<td>15–20 slide cho buổi bảo vệ.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="94-tiêu-chí-đánh-giá-thành-công">9.4. Tiêu chí đánh giá thành công</h3>
+<table>
+<thead>
+<tr>
+<th>Tiêu chí</th>
+<th>Ngưỡng đạt</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>5 thuật toán chạy đúng trên web</td>
+<td>5/5 thuật toán cho kết quả chính xác trên ≥ 3 bản đồ khác nhau.</td>
+</tr>
+<tr>
+<td>Animation trực quan</td>
+<td>Khách quan nhận biết được sự khác biệt giữa BFS, DFS, A* qua animation.</td>
+</tr>
+<tr>
+<td>So sánh hiệu năng</td>
+<td>Bảng so sánh đầy đủ (nodes, cost, time) cho ≥ 3 bản đồ.</td>
+</tr>
+<tr>
+<td>Truyền lộ trình thành công</td>
+<td>Lộ trình gửi từ web → ESP32 với tỷ lệ thành công ≥ 99%.</td>
+</tr>
+<tr>
+<td>Robot đi đúng lộ trình</td>
+<td>≥ 90% các lần chạy, robot rẽ đúng tại giao lộ theo lệnh AI.</td>
+</tr>
+<tr>
+<td>Tránh vật cản</td>
+<td>Phát hiện và xử lý ≥ 95% vật cản tĩnh trên track.</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="10-tài-liệu-tham-khảo">10. Tài liệu tham khảo</h2>
+<h3 id="101-sách-giáo-khoa--thuật-toán-ai">10.1. Sách giáo khoa — Thuật toán AI</h3>
+<ol>
+<li>
+<p><strong>Russell, S. &amp; Norvig, P.</strong> (2021). <em>Artificial Intelligence: A Modern Approach</em> (4th ed.). Pearson.</p>
+<ul>
+<li><strong>Chương 3</strong>: Solving Problems by Searching — BFS, DFS, UCS.</li>
+<li><strong>Chương 4</strong>: Informed Search — A*, Greedy Best-First Search, Heuristic Design.</li>
+</ul>
+<blockquote>
+<p>⭐ <em>Đây là giáo trình chuẩn cho môn AI toàn cầu; phần Search là nền tảng bắt buộc.</em></p>
+</blockquote>
+</li>
+<li>
+<p><strong>Ertel, W.</strong> (2017). <em>Introduction to Artificial Intelligence</em> (2nd ed.). Springer.</p>
+<ul>
+<li>Chương 3–4: Search algorithms with pseudocode và ví dụ minh họa.</li>
+</ul>
+</li>
+</ol>
+<h3 id="102-sách--robot--hệ-thống-nhúng">10.2. Sách — Robot &amp; Hệ thống nhúng</h3>
+<ol start="3">
+<li>
+<p><strong>Siegwart, R., Nourbakhsh, I.R. &amp; Scaramuzza, D.</strong> (2011). <em>Introduction to Autonomous Mobile Robots</em> (2nd ed.). MIT Press.</p>
+<ul>
+<li>Chương 3: Mobile Robot Kinematics.</li>
+<li>Chương 6: Planning and Navigation.</li>
+</ul>
+</li>
+<li>
+<p><strong>Kolban, N.</strong> (2018). <em>Kolban's Book on ESP32</em>. Leanpub.</p>
+<ul>
+<li>Hướng dẫn lập trình ESP32 toàn diện (Wi-Fi, GPIO, Interrupt, PWM).</li>
+</ul>
+</li>
+</ol>
+<h3 id="103-tài-liệu-kỹ-thuật-datasheets">10.3. Tài liệu kỹ thuật (Datasheets)</h3>
+<ol start="5">
+<li>
+<p><strong>Espressif Systems.</strong> <em>ESP32 Technical Reference Manual</em> (v5.1).<br>
+<a href="https://www.espressif.com/en/support/documents/technical-documents">https://www.espressif.com/en/support/documents/technical-documents</a></p>
+</li>
+<li>
+<p><strong>STMicroelectronics.</strong> <em>L298N Dual Full-Bridge Driver Datasheet.</em></p>
+</li>
+<li>
+<p><strong>Vishay.</strong> <em>TCRT5000 Reflective Optical Sensor Datasheet.</em></p>
+</li>
+</ol>
+<h3 id="104-bài-báo--tài-liệu-nghiên-cứu">10.4. Bài báo &amp; Tài liệu nghiên cứu</h3>
+<ol start="8">
+<li>
+<p><strong>Hart, P.E., Nilsson, N.J. &amp; Raphael, B.</strong> (1968). &quot;A Formal Basis for the Heuristic Determination of Minimum Cost Paths.&quot; <em>IEEE Transactions on Systems Science and Cybernetics</em>, 4(2), 100–107.</p>
+<blockquote>
+<p><em>Bài báo gốc về thuật toán A</em> — reading bắt buộc.*</p>
+</blockquote>
+</li>
+<li>
+<p><strong>Cormen, T.H., Leiserson, C.E., Rivest, R.L. &amp; Stein, C.</strong> (2022). <em>Introduction to Algorithms</em> (4th ed.). MIT Press.</p>
+<ul>
+<li>Chương 20–22: Graph algorithms (BFS, DFS, shortest paths).</li>
+</ul>
+</li>
+</ol>
+<h3 id="105-từ-khóa-tìm-kiếm">10.5. Từ khóa tìm kiếm</h3>
+<table>
+<thead>
+<tr>
+<th>Chủ đề</th>
+<th>Từ khóa tiếng Anh</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Thuật toán tìm kiếm AI</td>
+<td><code>AI search algorithms visualization</code>, <code>BFS DFS A* comparison</code></td>
+</tr>
+<tr>
+<td>A* pathfinding</td>
+<td><code>A* pathfinding tutorial grid map</code>, <code>A* heuristic admissible</code></td>
+</tr>
+<tr>
+<td>Mô phỏng web</td>
+<td><code>pathfinding visualization JavaScript Canvas</code>, <code>graph search animation web</code></td>
+</tr>
+<tr>
+<td>ESP32 WebSocket</td>
+<td><code>ESP32 WebSocket real-time communication Arduino</code></td>
+</tr>
+<tr>
+<td>Robot dò line PID</td>
+<td><code>PID line follower robot 5 sensor Arduino</code></td>
+</tr>
+<tr>
+<td>AGV indoor navigation</td>
+<td><code>AGV line following intersection detection</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="106-tài-nguyên-mở--thư-viện">10.6. Tài nguyên mở &amp; Thư viện</h3>
+<ol start="10">
+<li>
+<p><strong>Pathfinding.js</strong> — <a href="https://github.com/qiao/PathFinding.js">https://github.com/qiao/PathFinding.js</a><br>
+Thư viện JavaScript mã nguồn mở triển khai nhiều thuật toán pathfinding trên grid (tham khảo cấu trúc code).</p>
+</li>
+<li>
+<p><strong>Pathfinding Visualizer</strong> — <a href="https://clementmihailescu.github.io/Pathfinding-Visualizer/">https://clementmihailescu.github.io/Pathfinding-Visualizer/</a><br>
+Ứng dụng web trực quan hóa thuật toán pathfinding (tham khảo UX/UI).</p>
+</li>
+<li>
+<p><strong>Arduino-ESP32 Core</strong> — <a href="https://github.com/espressif/arduino-esp32">https://github.com/espressif/arduino-esp32</a><br>
+Framework lập trình ESP32 bằng Arduino IDE.</p>
+</li>
+<li>
+<p><strong>ESPAsyncWebServer</strong> — <a href="https://github.com/me-no-dev/ESPAsyncWebServer">https://github.com/me-no-dev/ESPAsyncWebServer</a><br>
+Web Server + WebSocket cho ESP32.</p>
+</li>
+<li>
+<p><strong>RandomNerdTutorials</strong> — <a href="https://randomnerdtutorials.com/">https://randomnerdtutorials.com/</a><br>
+Hướng dẫn thực hành ESP32 phong phú (WebSocket, sensors, motor control).</p>
+</li>
+</ol>
+<hr>
+<blockquote>
+<p><strong>Ghi chú cuối:</strong><br>
+Đồ án này kết hợp <strong>hai trụ cột kiến thức</strong>: <strong>(1)</strong> Thuật toán AI tìm kiếm — phần lý thuyết cốt lõi của môn Trí tuệ Nhân tạo, và <strong>(2)</strong> Hệ thống Robot-IoT — phần thực hành triển khai trên phần cứng thực tế. Sự kết hợp này tạo ra một dự án có chiều sâu về mặt học thuật và có tính ứng dụng cao, phù hợp cho đồ án môn học cấp đại học.</p>
+<p>Các thông số kỹ thuật cụ thể (Kp, Ki, Kd, kích thước grid, khoảng cách giữa các giao lộ...) sẽ được xác định chính xác trong quá trình thực nghiệm.</p>
+</blockquote>
+<hr>
+<p><em>Đề cương được soạn thảo bởi: [Tên sinh viên]</em><br>
+<em>GVHD: [Tên giảng viên]</em><br>
+<em>Ngày soạn: 17/03/2026</em></p>
+
+            
+            
+        </body>
+        </html>
