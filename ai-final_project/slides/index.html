@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Đồ án AI — Xe Robot Giao hàng Tự hành</title>
+  <meta name="description" content="Slide thuyết trình đồ án môn Trí tuệ Nhân tạo: Xe Robot Giao hàng Tự hành Dò Line Tránh Vật cản">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="presentation">
+
+  <!-- ==================== SLIDE 1: TITLE ==================== -->
+  <div class="slide title-slide active" data-slide="0">
+    <div class="slide-number">SLIDE 01</div>
+    <div class="university-name">ĐỒ ÁN MÔN HỌC</div>
+    <div class="course-name">🤖 Trí tuệ Nhân tạo — Artificial Intelligence</div>
+    <div class="robot-ascii float-anim">🚗</div>
+    <h1>
+      <span class="gradient-text">Xe Robot Giao hàng Tự hành</span><br>
+      Dò Line &amp; Tránh Vật cản
+    </h1>
+    <p class="subtitle">
+      Ứng dụng <strong>Thuật toán Tìm kiếm AI</strong> (Informed &amp; Uninformed Search)<br>
+      với Giao diện Web Mô phỏng và Điều khiển
+    </p>
+    <div class="metadata">
+      <div class="meta-item">
+        <span class="meta-label">Ngày</span>
+        <span class="meta-value">17/03/2026</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Môn</span>
+        <span class="meta-value">Trí tuệ Nhân tạo</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Loại</span>
+        <span class="meta-value">Đồ án Môn học</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SLIDE 2: AGENDA ==================== -->
+  <div class="slide" data-slide="1">
+    <div class="slide-number">SLIDE 02</div>
+    <span class="section-badge"><span class="badge-icon">📋</span> NỘI DUNG TRÌNH BÀY</span>
+    <h2><span class="gradient-text">Agenda</span></h2>
+    <div class="card-grid cols-2" style="margin-top: 16px;">
+      <div class="glass-card accent-blue"><span class="card-icon">📖</span><h3>1. Giới thiệu & Lý do</h3><p>Tính cấp thiết, bối cảnh AGV & AI Search</p></div>
+      <div class="glass-card accent-purple"><span class="card-icon">🎯</span><h3>2. Mục tiêu đồ án</h3><p>8 mục tiêu cụ thể & chỉ tiêu đo lường</p></div>
+      <div class="glass-card accent-cyan"><span class="card-icon">🔧</span><h3>3. Công nghệ & Linh kiện</h3><p>ESP32, cảm biến, phần mềm web</p></div>
+      <div class="glass-card accent-green"><span class="card-icon">🏗️</span><h3>4. Kiến trúc hệ thống</h3><p>3 tầng: Web AI — ESP32 — Robot</p></div>
+      <div class="glass-card accent-orange"><span class="card-icon">⚙️</span><h3>5. Thuật toán AI & Chức năng</h3><p>BFS, DFS, UCS, A*, Greedy + PID</p></div>
+      <div class="glass-card accent-pink"><span class="card-icon">📅</span><h3>6. Timeline & Kết quả</h3><p>Lộ trình 4 tuần & tiêu chí đánh giá</p></div>
+    </div>
+  </div>
+
+  <!-- ==================== SLIDE 3: GIỚI THIỆU ==================== -->
+  <div class="slide" data-slide="2">
+    <div class="slide-number">SLIDE 03</div>
+    <span class="section-badge"><span class="badge-icon">📖</span> PHẦN 1</span>
+    <h2>Lý do chọn đề tài</h2>
+    <p class="subtitle">Kết nối <strong>thuật toán AI</strong> với <strong>robot vật lý</strong> — cầu nối lý thuyết & thực hành</p>
+    <div class="card-grid cols-2" style="margin-top: 12px;">
+      <div class="glass-card accent-blue">
+        <span class="card-icon">👁️</span>
+        <h3>Trực quan hóa thuật toán</h3>
+        <p>"Nhìn thấy" sự khác biệt giữa BFS, DFS, A* qua hành vi thực tế của robot</p>
+      </div>
+      <div class="glass-card accent-purple">
+        <span class="card-icon">🔗</span>
+        <h3>Cầu nối lý thuyết – thực hành</h3>
+        <p>Đường đi "tối ưu trên giấy" đối mặt sai số cảm biến, trượt bánh, vật cản</p>
+      </div>
+      <div class="glass-card accent-cyan">
+        <span class="card-icon">🛠️</span>
+        <h3>Kỹ năng tích hợp hệ thống</h3>
+        <p>Lập trình AI + Web Dev + Embedded Systems — bộ kỹ năng đa ngành</p>
+      </div>
+      <div class="glass-card accent-green">
+        <span class="card-icon">📦</span>
+        <h3>Ứng dụng thực tiễn</h3>
+        <p>Mô hình AGV thu nhỏ cho logistics tự động trong kho bãi, nhà máy, bệnh viện</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SLIDE 4: TÍNH CẤP THIẾT ==================== -->
+  <div class="slide" data-slide="3">
+    <div class="slide-number">SLIDE 04</div>
+    <span class="section-badge"><span class="badge-icon">📈</span> TÍNH CẤP THIẾT</span>
+    <h2>Xu hướng <span class="gradient-text">AGV & AI</span></h2>
+    <div class="card-grid cols-3" style="margin-top: 16px;">
+      <div class="glass-card stat-card">
+        <div class="stat-value">$18B</div>
+        <div class="stat-label">Thị trường AGV 2027</div>
+        <p style="font-size:0.78rem; margin-top:6px;">CAGR ~14%</p>
+      </div>
+      <div class="glass-card stat-card">
+        <div class="stat-value">PBL</div>
+        <div class="stat-label">Project-Based Learning</div>
+        <p style="font-size:0.78rem; margin-top:6px;">Xu hướng giáo dục STEM</p>
+      </div>
+      <div class="glass-card stat-card">
+        <div class="stat-value">AI→RL</div>
+        <div class="stat-label">Nghiên cứu kế thừa</div>
+        <p style="font-size:0.78rem; margin-top:6px;">RL, SLAM, Multi-agent</p>
+      </div>
+    </div>
+    <div class="highlight-box" style="margin-top: 20px;">
+      <p>💡 Đồ án kết hợp <strong>AI Search + Robot IoT</strong> — mô hình đào tạo liên ngành hiệu quả</p>
+    </div>
+  </div>
+
+  <!-- ==================== SLIDE 5: MỤC TIÊU ==================== -->
+  <div class="slide" data-slide="4">
+    <div class="slide-number">SLIDE 05</div>
+    <span class="section-badge"><span class="badge-icon">🎯</span> PHẦN 2</span>
+    <h2>Mục tiêu <span class="gradient-text">Đồ án</span></h2>
+    <p class="subtitle">Thiết kế, chế tạo và vận hành: <strong>(1)</strong> Web mô phỏng AI &amp; <strong>(2)</strong> Robot thực thi lộ trình</p>
+    <table class="slide-table" style="margin-top:12px;">
+      <thead><tr><th>#</th><th>Mục tiêu</th><th>Chỉ tiêu</th></tr></thead>
+      <tbody>
+        <tr><td><strong>1</strong></td><td>Phát triển mô phỏng AI</td><td>≥ 5 thuật toán trên web</td></tr>
+        <tr><td><strong>2</strong></td><td>Trực quan hóa tìm kiếm</td><td>Animation từng bước explored / frontier / path</td></tr>
+        <tr><td><strong>3</strong></td><td>So sánh hiệu năng</td><td>Nodes, Cost, Time, Memory cho mỗi thuật toán</td></tr>
+        <tr><td><strong>4</strong></td><td>Giao tiếp Web ↔ ESP32</td><td>Wi-Fi WebSocket, độ tin cậy ≥ 99%</td></tr>
+        <tr><td><strong>5</strong></td><td>Robot đi đúng lộ trình</td><td>≥ 90% rẽ đúng tại giao lộ</td></tr>
+        <tr><td><strong>6</strong></td><td>Dò line ổn định (PID)</td><td>Sai lệch ≤ ±1.5 cm, cua ≥ 15 cm</td></tr>
+        <tr><td><strong>7</strong></td><td>Tránh vật cản</td><td>Phát hiện 10–30 cm, thành công ≥ 95%</td></tr>
+        <tr><td><strong>8</strong></td><td>Encoder Odometry</td><td>Sai số ≤ 5% trên 2 m</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ==================== SLIDE 6: PHẠM VI ==================== -->
+  <div class="slide" data-slide="5">
+    <div class="slide-number">SLIDE 06</div>
+    <span class="section-badge"><span class="badge-icon">📐</span> PHẦN 3</span>
+    <h2>Phạm vi <span class="gradient-text">Đồ án</span></h2>
+    <div class="two-col" style="margin-top: 16px;">
+      <div class="col">
+        <h3 style="color: var(--accent-green);">✅ Trong phạm vi</h3>
+        <ul class="feature-list">
+          <li><span class="li-icon">🗺️</span>Bản đồ 2D grid, vẽ/chỉnh sửa trên web</li>
+          <li><span class="li-icon">🧠</span>5 thuật toán: BFS, DFS, UCS, A*, Greedy</li>
+          <li><span class="li-icon">🎬</span>Animation trực quan từng bước</li>
+          <li><span class="li-icon">🤖</span>Robot 4WD dò line + tránh vật cản tĩnh</li>
+          <li><span class="li-icon">📡</span>Wi-Fi WebSocket (LAN)</li>
+          <li><span class="li-icon">🛤️</span>Track grid line trên sàn (1:1 với web)</li>
+        </ul>
+      </div>
+      <div class="col">
+        <h3 style="color: var(--accent-red);">❌ Ngoài phạm vi</h3>
+        <ul class="feature-list">
+          <li><span class="li-icon">🚫</span>Machine Learning / Reinforcement Learning</li>
+          <li><span class="li-icon">🚫</span>Bản đồ liên tục (continuous space)</li>
+          <li><span class="li-icon">🚫</span>Vật cản động (đang di chuyển)</li>
+          <li><span class="li-icon">🚫</span>Computer Vision / Nhận dạng hình ảnh</li>
+          <li><span class="li-icon">🚫</span>Multi-agent pathfinding</li>
+          <li><span class="li-icon">🚫</span>Cloud — chỉ LAN cục bộ</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SLIDE 7: PHẦN CỨNG ==================== -->
+  <div class="slide" data-slide="6">
+    <div class="slide-number">SLIDE 07</div>
+    <span class="section-badge"><span class="badge-icon">🔧</span> CÔNG NGHỆ</span>
+    <h2>Phần cứng <span class="gradient-text">Robot</span></h2>
+    <table class="slide-table" style="margin-top: 12px;">
+      <thead><tr><th>Thành phần</th><th>Linh kiện</th><th>Ghi chú</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Vi điều khiển</strong></td><td>ESP32-WROOM-32</td><td>Dual-core 240 MHz, Wi-Fi</td></tr>
+        <tr><td><strong>Động cơ</strong></td><td>4× DC Geared Motor</td><td>3–6V, giảm tốc 1:48</td></tr>
+        <tr><td><strong>Driver</strong></td><td>L298N Dual H-Bridge</td><td>2 kênh PWM</td></tr>
+        <tr><td><strong>Dò line</strong></td><td>5× TCRT5000</td><td>5 mắt hồng ngoại → PID mịn</td></tr>
+        <tr><td><strong>Siêu âm</strong></td><td>HC-SR04</td><td>Tầm đo 2–400 cm</td></tr>
+        <tr><td><strong>Servo</strong></td><td>SG90 (0°–180°)</td><td>Quét HC-SR04 trái/phải</td></tr>
+        <tr><td><strong>Encoder</strong></td><td>2× Encoder quang</td><td>Đo vận tốc & quãng đường</td></tr>
+        <tr><td><strong>Nguồn</strong></td><td>6× 18650 + 2× LM2596</td><td>5V logic + 7.4V motor</td></tr>
+        <tr><td><strong>Khung</strong></td><td>Tấm Mica 2 tầng</td><td>Tầng dưới: motor; Tầng trên: ESP32</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ==================== SLIDE 8: PHẦN MỀM ==================== -->
+  <div class="slide" data-slide="7">
+    <div class="slide-number">SLIDE 08</div>
+    <span class="section-badge"><span class="badge-icon">💻</span> CÔNG NGHỆ</span>
+    <h2>Phần mềm & <span class="gradient-text">Công nghệ</span></h2>
+    <div class="card-grid cols-3" style="margin-top: 16px;">
+      <div class="glass-card accent-blue">
+        <span class="card-icon">⚡</span>
+        <h3>C/C++ — Firmware</h3>
+        <p>Arduino Framework trên ESP32</p>
+        <div style="margin-top:8px;">
+          <span class="tag blue">WiFi.h</span>
+          <span class="tag blue">WebServer.h</span>
+          <span class="tag blue">ESP32Servo</span>
+          <span class="tag blue">ArduinoJson</span>
+        </div>
+      </div>
+      <div class="glass-card accent-purple">
+        <span class="card-icon">🌐</span>
+        <h3>HTML/CSS/JS — Web</h3>
+        <p>Canvas API, Animation Engine, Dashboard</p>
+        <div style="margin-top:8px;">
+          <span class="tag purple">Canvas</span>
+          <span class="tag purple">ES6+</span>
+          <span class="tag purple">WebSocket</span>
+        </div>
+      </div>
+      <div class="glass-card accent-cyan">
+        <span class="card-icon">🧠</span>
+        <h3>JavaScript — AI</h3>
+        <p>5 thuật toán search chạy client-side</p>
+        <div style="margin-top:8px;">
+          <span class="tag cyan">BFS</span>
+          <span class="tag cyan">DFS</span>
+          <span class="tag cyan">UCS</span>
+          <span class="tag cyan">A*</span>
+          <span class="tag cyan">Greedy</span>
+        </div>
+      </div>
+    </div>
+    <div class="highlight-box" style="margin-top: 20px;">
+      <p>📂 Web files lưu trong <strong>SPIFFS / LittleFS</strong> trên flash ESP32 — không cần server ngoài</p>
+    </div>
+  </div>
+
+  <!-- ==================== SLIDE 9: CẢM BIẾN 5 MẮT ==================== -->
+  <div class="slide" data-slide="8">
+    <div class="slide-number">SLIDE 09</div>
+    <span class="section-badge"><span class="badge-icon">👁️</span> CẢM BIẾN DÒ LINE</span>
+    <h2>5 mắt <span class="gradient-text">TCRT5000</span> — PID mịn</h2>
+    <div class="two-col" style="margin-top: 16px;">
+      <div class="col" style="align-items: center;">
+        <h3>Bố trí cảm biến</h3>
+        <div class="sensor-display">
+          <div class="sensor-dot off">S1</div>
+          <div class="sensor-dot off">S2</div>
+          <div class="sensor-dot on">S3</div>
+          <div class="sensor-dot off">S4</div>
+          <div class="sensor-dot off">S5</div>
+        </div>
+        <p style="text-align:center; font-size: 0.85rem;">Ngoài trái → Trong trái → <strong>Tâm</strong> → Trong phải → Ngoài phải</p>
+        <div style="margin-top: 16px;">
+          <table class="slide-table" style="font-size: 0.8rem;">
+            <thead><tr><th>Trạng thái</th><th>Error</th></tr></thead>
+            <tbody>
+              <tr><td>00100 — Đúng tâm</td><td><strong>0</strong></td></tr>
+              <tr><td>01100 — Lệch nhẹ trái</td><td>+1</td></tr>
+              <tr><td>01000 — Lệch trái</td><td>+2</td></tr>
+              <tr><td>11000 — Lệch mạnh trái</td><td>+3</td></tr>
+              <tr><td>10000 — Mất line trái</td><td>+4</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="col" style="align-items: center;">
+        <h3>So sánh hiệu năng</h3>
+        <table class="slide-table" style="font-size: 0.82rem;">
+          <thead><tr><th>So sánh</th><th>3 mắt</th><th>5 mắt</th></tr></thead>
+          <tbody>
+            <tr><td>Trạng thái lệch</td><td>3</td><td><strong>≥ 9</strong></td></tr>
+            <tr><td>Chất lượng PID</td><td>Thô</td><td><strong>Mịn, mượt</strong></td></tr>
+            <tr><td>Xử lý cua gấp</td><td>Kém</td><td><strong>Tốt</strong></td></tr>
+            <tr><td>GPIO ESP32</td><td>3</td><td>5</td></tr>
+          </tbody>
+        </table>
+        <div class="highlight-box" style="margin-top: 16px;">
+          <p>🔴 <strong>11111</strong> = Giao lộ → Robot quyết định rẽ theo lệnh AI</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SLIDE 10: KIẾN TRÚC HỆ THỐNG ==================== -->
+  <div class="slide" data-slide="9">
+    <div class="slide-number">SLIDE 10</div>
+    <span class="section-badge"><span class="badge-icon">🏗️</span> KIẾN TRÚC</span>
+    <h2>Kiến trúc <span class="gradient-text">Hệ thống</span></h2>
+    <div class="flow-row" style="margin-top: 20px;">
+      <div class="flow-box" style="border-color: var(--accent-blue);">
+        <div class="flow-step">Tầng 1</div>
+        <div class="flow-label">🌐 Web AI</div>
+        <p style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">Map Editor + AI Search<br>Animation + Dashboard</p>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box" style="border-color: var(--accent-purple);">
+        <div class="flow-step">Giao tiếp</div>
+        <div class="flow-label">📡 WebSocket</div>
+        <p style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">Wi-Fi LAN<br>JSON Commands</p>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box" style="border-color: var(--accent-cyan);">
+        <div class="flow-step">Tầng 2</div>
+        <div class="flow-label">⚡ ESP32</div>
+        <p style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">Route Interpreter<br>Motion Control</p>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box" style="border-color: var(--accent-green);">
+        <div class="flow-step">Tầng 3</div>
+        <div class="flow-label">🤖 Robot</div>
+        <p style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">Motor + Sensor<br>PID + Encoder</p>
+      </div>
+    </div>
+    <div class="card-grid cols-2" style="margin-top: 24px; max-width: 800px;">
+      <div class="glass-card accent-blue">
+        <h3>🔋 Nguồn tách đôi</h3>
+        <p>Pack A → LM2596 → 5V (ESP32 + Cảm biến)<br>Pack B → LM2596 → 7.4V (L298N + Motor)</p>
+      </div>
+      <div class="glass-card accent-green">
+        <h3>🧵 Dual-Core ESP32</h3>
+        <p>Core 0: Wi-Fi / WebSocket<br>Core 1: PID Control Loop (100Hz)</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SLIDE 11: LUỒNG HOẠT ĐỘNG ==================== -->
+  <div class="slide" data-slide="10">
+    <div class="slide-number">SLIDE 11</div>
+    <span class="section-badge"><span class="badge-icon">🔄</span> DATA FLOW</span>
+    <h2>Luồng hoạt động <span class="gradient-text">chính</span></h2>
+    <div class="card-grid cols-3" style="margin-top: 16px; max-width: 960px;">
+      <div class="glass-card accent-blue">
+        <span class="card-icon">👤</span>
+        <h3>Người dùng</h3>
+        <p>① Vẽ bản đồ<br>② Chọn thuật toán AI<br>③ Nhấn "Gửi cho Robot"</p>
+      </div>
+      <div class="glass-card accent-purple">
+        <span class="card-icon">🌐</span>
+        <h3>Web Browser</h3>
+        <p>④ Lưu grid map<br>⑤ Chạy AI + Animation<br>⑥ Convert path → lệnh<br>⑩ Hiển thị telemetry</p>
+      </div>
+      <div class="glass-card accent-cyan">
+        <span class="card-icon">⚡</span>
+        <h3>ESP32 + Robot</h3>
+        <p>⑦ Parse lệnh<br>⑧ Dò line / Rẽ / Tránh<br>⑨ Gửi trạng thái</p>
+      </div>
+    </div>
+    <div class="diagram-container" style="margin-top: 20px; max-width: 700px; font-size: 0.85rem;">Path grid:  (0,0) → (1,0) → (2,0) → (2,1) → (2,2)
+Commands:   START → "F"  → "F"  → "R"  → "F"  → END
+
+JSON: {"type":"ROUTE", "commands":["F","F","R","F"]}</div>
+  </div>
+
+  <!-- ==================== SLIDE 12: THUẬT TOÁN AI ==================== -->
+  <div class="slide" data-slide="11">
+    <div class="slide-number">SLIDE 12</div>
+    <span class="section-badge"><span class="badge-icon">🧠</span> THUẬT TOÁN AI</span>
+    <h2>5 Thuật toán <span class="gradient-text">Tìm kiếm</span></h2>
+    <table class="slide-table" style="margin-top: 12px;">
+      <thead><tr><th>Thuật toán</th><th>Loại</th><th>Đặc điểm</th><th>Cấu trúc</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>BFS</strong></td><td><span class="tag blue">Uninformed</span></td>
+          <td>Duyệt theo lớp, đường ngắn nhất (số bước)</td><td>Queue (FIFO)</td>
+        </tr>
+        <tr>
+          <td><strong>DFS</strong></td><td><span class="tag blue">Uninformed</span></td>
+          <td>Đi sâu trước, không đảm bảo tối ưu</td><td>Stack (LIFO)</td>
+        </tr>
+        <tr>
+          <td><strong>UCS</strong></td><td><span class="tag blue">Uninformed</span></td>
+          <td>Chi phí nhỏ nhất, tối ưu khi trọng số khác nhau</td><td>Priority Queue</td>
+        </tr>
+        <tr>
+          <td><strong>A*</strong></td><td><span class="tag purple">Informed</span></td>
+          <td>f(n) = g(n) + h(n) — tối ưu nếu h admissible</td><td>Priority Queue</td>
+        </tr>
+        <tr>
+          <td><strong>Greedy</strong></td><td><span class="tag purple">Informed</span></td>
+          <td>f(n) = h(n) — nhanh, không đảm bảo tối ưu</td><td>Priority Queue</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="highlight-box" style="margin-top: 16px;">
+      <p>📏 <strong>Heuristic:</strong> Manhattan |x₁−x₂| + |y₁−y₂| &nbsp;&nbsp;hoặc&nbsp;&nbsp; Euclidean √((x₁−x₂)² + (y₁−y₂)²)</p>
+    </div>
+  </div>
+
+  <!-- ==================== SLIDE 13: SO SÁNH THUẬT TOÁN ==================== -->
+  <div class="slide" data-slide="12">
+    <div class="slide-number">SLIDE 13</div>
+    <span class="section-badge"><span class="badge-icon">📊</span> SO SÁNH</span>
+    <h2>So sánh hiệu năng <span class="gradient-text">thuật toán</span></h2>
+    <p class="subtitle">Ví dụ kết quả trên cùng 1 bản đồ grid</p>
+    <table class="slide-table" style="margin-top: 12px;">
+      <thead><tr><th>Thuật toán</th><th>Nodes explored</th><th>Path length</th><th>Path cost</th><th>Time (ms)</th><th>Tối ưu?</th></tr></thead>
+      <tbody>
+        <tr><td><strong>BFS</strong></td><td>24</td><td>8</td><td>8</td><td>3</td><td style="color:var(--accent-green);">✅</td></tr>
+        <tr><td><strong>DFS</strong></td><td>15</td><td>12</td><td>12</td><td>2</td><td style="color:var(--accent-red);">❌</td></tr>
+        <tr><td><strong>UCS</strong></td><td>20</td><td>8</td><td>8</td><td>4</td><td style="color:var(--accent-green);">✅</td></tr>
+        <tr><td><strong>A*</strong></td><td style="color:var(--accent-green);font-weight:700;">12</td><td>8</td><td>8</td><td>2</td><td style="color:var(--accent-green);">✅</td></tr>
+        <tr><td><strong>Greedy</strong></td><td style="color:var(--accent-cyan);font-weight:700;">8</td><td>10</td><td>10</td><td style="color:var(--accent-cyan);font-weight:700;">1</td><td style="color:var(--accent-red);">❌</td></tr>
+      </tbody>
+    </table>
+    <div class="card-grid cols-2" style="margin-top: 16px; max-width: 600px;">
+      <div class="glass-card accent-green" style="text-align:center;">
+        <h3>🏆 A* — Hiệu quả nhất</h3>
+        <p>Ít node nhất mà vẫn tối ưu</p>
+      </div>
+      <div class="glass-card accent-cyan" style="text-align:center;">
+        <h3>⚡ Greedy — Nhanh nhất</h3>
+        <p>Ít node nhất nhưng không tối ưu</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SLIDE 14: STATE MACHINE ==================== -->
+  <div class="slide" data-slide="13">
+    <div class="slide-number">SLIDE 14</div>
+    <span class="section-badge"><span class="badge-icon">⚙️</span> FIRMWARE</span>
+    <h2>State Machine — <span class="gradient-text">ESP32</span></h2>
+    <div class="flow-row" style="margin-top: 20px; flex-wrap: wrap;">
+      <div class="flow-box" style="border-color: var(--text-muted);">
+        <div class="flow-step">State 0</div>
+        <div class="flow-label">💤 IDLE</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box" style="border-color: var(--accent-green);">
+        <div class="flow-step">State 1</div>
+        <div class="flow-label">🏃 LINE FOLLOW</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box" style="border-color: var(--accent-blue);">
+        <div class="flow-step">State 2</div>
+        <div class="flow-label">🔀 INTERSECTION</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box" style="border-color: var(--accent-orange);">
+        <div class="flow-step">State 3</div>
+        <div class="flow-label">🚧 OBSTACLE</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-box" style="border-color: var(--accent-green);">
+        <div class="flow-step">State 4</div>
+        <div class="flow-label">✅ DONE</div>
+      </div>
+    </div>
+    <div class="two-col" style="margin-top: 24px;">
+      <div class="col">
+        <div class="glass-card accent-blue">
+          <h3>🔀 Xử lý giao lộ</h3>
+          <p>5 mắt ON → Tiến thêm 2 cm → Dequeue lệnh:</p>
+          <p style="margin-top:6px;"><span class="tag green">"F" → thẳng</span> <span class="tag blue">"L" → trái 90°</span> <span class="tag purple">"R" → phải 90°</span></p>
+        </div>
+      </div>
+      <div class="col">
+        <div class="glass-card accent-orange">
+          <h3>🚧 Tránh vật cản</h3>
+          <p>HC-SR04 < 15 cm → Dừng → Servo quét → Gửi cảnh báo Web</p>
+          <p style="margin-top:6px;"><span class="tag orange">An toàn: chờ dọn</span> <span class="tag cyan">Tự động: vòng tránh</span></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SLIDE 15: PID ==================== -->
+  <div class="slide" data-slide="14">
+    <div class="slide-number">SLIDE 15</div>
+    <span class="section-badge"><span class="badge-icon">📐</span> PID CONTROLLER</span>
+    <h2>PID <span class="gradient-text">Line Following</span></h2>
+    <div class="two-col" style="margin-top: 16px;">
+      <div class="col">
+        <div class="code-block" style="font-size: 0.82rem;"><span class="comment">// PID Line Following</span>
+<span class="keyword">float</span> error = calculateLineError(sensors[<span class="number">5</span>]);
+<span class="keyword">float</span> P = Kp * error;
+<span class="keyword">float</span> I = Ki * integral;
+<span class="keyword">float</span> D = Kd * (error - prevError) / dt;
+<span class="keyword">float</span> correction = P + I + D;
+
+<span class="keyword">int</span> speedL = BASE_SPEED + correction;
+<span class="keyword">int</span> speedR = BASE_SPEED - correction;
+
+setMotor(LEFT,  constrain(speedL, <span class="number">0</span>, <span class="number">255</span>));
+setMotor(RIGHT, constrain(speedR, <span class="number">0</span>, <span class="number">255</span>));</div>
+      </div>
+      <div class="col">
+        <div class="glass-card accent-purple">
+          <h3>Công thức PID</h3>
+          <p style="font-family: 'JetBrains Mono'; font-size: 0.9rem; color: var(--accent-cyan); margin-top: 8px;">
+            correction = Kp×e + Ki×∫e·dt + Kd×de/dt
+          </p>
+        </div>
+        <div class="glass-card accent-cyan" style="margin-top: 8px;">
+          <h3>Tinh chỉnh Ziegler-Nichols</h3>
+          <p>1. Ki=0, Kd=0 → Tăng Kp → Dao động đều</p>
+          <p>2. Kp = 0.6×Ku, Ki = 2Kp/Tu, Kd = Kp×Tu/8</p>
+          <p>3. Fine-tune qua Web Interface real-time</p>
+        </div>
+        <div class="glass-card accent-green" style="margin-top: 8px;">
+          <h3>Encoder Odometry</h3>
+          <p>Chu vi bánh = π × 65mm ≈ 204.2 mm<br>960 xung/vòng → Mỗi xung ≈ 0.213 mm</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SLIDE 16: ÁNH XẠ BẢN ĐỒ ==================== -->
+  <div class="slide" data-slide="15">
+    <div class="slide-number">SLIDE 16</div>
+    <span class="section-badge"><span class="badge-icon">🗺️</span> ÁNH XẠ</span>
+    <h2>Bản đồ ảo ↔ <span class="gradient-text">Track thực tế</span></h2>
+    <div class="two-col" style="margin-top: 20px;">
+      <div class="col" style="align-items: center;">
+        <h3>🖥️ Bản đồ Web (Grid 5×5)</h3>
+        <div class="diagram-container" style="font-size: 0.85rem; text-align: center;">┌───┬───┬───┬───┬───┐
+│ S │   │   │   │   │
+├───┼───┼───┼───┼───┤
+│   │ █ │ █ │   │   │
+├───┼───┼───┼───┼───┤
+│   │   │   │   │   │
+├───┼───┼───┼───┼───┤
+│   │   │ █ │   │   │
+├───┼───┼───┼───┼───┤
+│   │   │   │   │ E │
+└───┘───┘───┘───┘───┘
+S=Start  E=End  █=Wall</div>
+      </div>
+      <div class="col" style="align-items: center;">
+        <h3>🏠 Track thực tế (Sàn nhà)</h3>
+        <div class="diagram-container" style="font-size: 0.85rem; text-align: center;">●───────●───────●───────●───────●
+│       │       │       │       │
+●───────●░░░░░░░●───────●───────●
+│            (vật cản)          │
+●───────●───────●───────●───────●
+│       │       │       │       │
+●───────●───────●░░░░░░░●───────●
+│       │       │       │       │
+●───────●───────●───────●───────●
+
+● = Giao lộ   ─ = Line   ░ = Vật cản</div>
+      </div>
+    </div>
+    <div class="highlight-box" style="margin-top: 14px;">
+      <p>🔑 Mỗi ô grid trên web ↔ 1 đoạn line giữa 2 giao lộ (~30 cm trên sàn)</p>
+    </div>
+  </div>
+
+  <!-- ==================== SLIDE 17: TIMELINE ==================== -->
+  <div class="slide" data-slide="16">
+    <div class="slide-number">SLIDE 17</div>
+    <span class="section-badge"><span class="badge-icon">📅</span> TIMELINE</span>
+    <h2>Lộ trình thực hiện — <span class="gradient-text">4 Tuần</span></h2>
+    <div class="timeline" style="margin-top: 16px;">
+      <div class="timeline-item">
+        <div class="timeline-marker w1">W1</div>
+        <div class="timeline-content">
+          <h3>Nghiên cứu & Phần cứng</h3>
+          <p>Nghiên cứu 5 thuật toán AI • Thiết kế sơ đồ mạch điện • Lắp ráp khung + motor + cảm biến • Test nguồn</p>
+          <div style="margin-top:6px;"><span class="tag blue">Deliverable: Khung robot + Sơ đồ nguyên lý</span></div>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-marker w2">W2</div>
+        <div class="timeline-content">
+          <h3>Firmware & Web AI</h3>
+          <p>Firmware ESP32: PID line following • Web: Map Editor + 5 thuật toán AI • Animation Engine</p>
+          <div style="margin-top:6px;"><span class="tag purple">Deliverable: Robot bám line + Web AI mô phỏng</span></div>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-marker w3">W3</div>
+        <div class="timeline-content">
+          <h3>Tích hợp hệ thống</h3>
+          <p>WebSocket Web↔ESP32 • Route Interpreter + State Machine • Tránh vật cản • Telemetry Dashboard</p>
+          <div style="margin-top:6px;"><span class="tag cyan">Deliverable: Hệ thống end-to-end hoạt động</span></div>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-marker w4">W4</div>
+        <div class="timeline-content">
+          <h3>Kiểm thử & Báo cáo</h3>
+          <p>Test tổng hợp nhiều bản đồ • Tối ưu PID • So sánh thuật toán • Video demo • Báo cáo + Slide</p>
+          <div style="margin-top:6px;"><span class="tag orange">Deliverable: Báo cáo + Video + Source code</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SLIDE 18: KẾT QUẢ MONG ĐỢI ==================== -->
+  <div class="slide" data-slide="17">
+    <div class="slide-number">SLIDE 18</div>
+    <span class="section-badge"><span class="badge-icon">🏆</span> KẾT QUẢ</span>
+    <h2>Kết quả <span class="gradient-text">mong đợi</span></h2>
+    <div class="card-grid cols-3" style="margin-top: 16px;">
+      <div class="glass-card accent-blue">
+        <span class="card-icon">💻</span>
+        <h3>Phần mềm</h3>
+        <p>• Web: Vẽ bản đồ, 5 thuật toán AI, animation, so sánh, gửi route, dashboard real-time<br>• Firmware ESP32: PID, WebSocket, State Machine<br>• Source code GitHub</p>
+      </div>
+      <div class="glass-card accent-green">
+        <span class="card-icon">🤖</span>
+        <h3>Phần cứng</h3>
+        <p>• Robot 4WD 2 tầng Mica: bám line, tránh vật cản, encoder odometry<br>• Track thử nghiệm grid ≥ 5×5 với giao lộ + vật cản</p>
+      </div>
+      <div class="glass-card accent-purple">
+        <span class="card-icon">📝</span>
+        <h3>Tài liệu</h3>
+        <p>• Báo cáo 30–50 trang<br>• Video demo 3–5 phút<br>• Slide 15–20 slide<br>• Source code có README</p>
+      </div>
+    </div>
+    <div style="margin-top: 20px; width: 100%; max-width: 700px;">
+      <div class="progress-bar-container">
+        <div class="progress-bar-label"><span>5/5 thuật toán chạy đúng</span><span style="color:var(--accent-green);">100%</span></div>
+        <div class="progress-bar-track"><div class="progress-bar-fill" style="width: 100%;"></div></div>
+      </div>
+      <div class="progress-bar-container">
+        <div class="progress-bar-label"><span>Robot rẽ đúng lộ trình</span><span style="color:var(--accent-blue);">≥ 90%</span></div>
+        <div class="progress-bar-track"><div class="progress-bar-fill" style="width: 90%;"></div></div>
+      </div>
+      <div class="progress-bar-container">
+        <div class="progress-bar-label"><span>Truyền route thành công</span><span style="color:var(--accent-purple);">≥ 99%</span></div>
+        <div class="progress-bar-track"><div class="progress-bar-fill" style="width: 99%;"></div></div>
+      </div>
+      <div class="progress-bar-container">
+        <div class="progress-bar-label"><span>Tránh vật cản thành công</span><span style="color:var(--accent-cyan);">≥ 95%</span></div>
+        <div class="progress-bar-track"><div class="progress-bar-fill" style="width: 95%;"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SLIDE 19: TÀI LIỆU THAM KHẢO ==================== -->
+  <div class="slide" data-slide="18">
+    <div class="slide-number">SLIDE 19</div>
+    <span class="section-badge"><span class="badge-icon">📚</span> TÀI LIỆU</span>
+    <h2>Tài liệu <span class="gradient-text">tham khảo</span></h2>
+    <div class="two-col" style="margin-top: 16px;">
+      <div class="col">
+        <div class="glass-card accent-blue">
+          <h3>📖 Sách giáo khoa</h3>
+          <ul class="feature-list" style="gap:6px;">
+            <li><span class="li-icon">1.</span><strong>Russell & Norvig</strong> — AI: A Modern Approach (4th ed.) — Chương 3, 4: Search</li>
+            <li><span class="li-icon">2.</span><strong>Ertel, W.</strong> — Intro to AI (2nd ed.) — Search algorithms</li>
+            <li><span class="li-icon">3.</span><strong>Siegwart et al.</strong> — Autonomous Mobile Robots — Kinematics, Navigation</li>
+          </ul>
+        </div>
+        <div class="glass-card accent-purple" style="margin-top: 12px;">
+          <h3>📄 Bài báo gốc</h3>
+          <ul class="feature-list" style="gap:6px;">
+            <li><span class="li-icon">📌</span><strong>Hart, Nilsson & Raphael</strong> (1968) — A* Algorithm — IEEE</li>
+            <li><span class="li-icon">📌</span><strong>Cormen et al.</strong> (2022) — Intro to Algorithms — Graph search</li>
+          </ul>
+        </div>
+      </div>
+      <div class="col">
+        <div class="glass-card accent-cyan">
+          <h3>🔧 Tài liệu kỹ thuật</h3>
+          <ul class="feature-list" style="gap:6px;">
+            <li><span class="li-icon">⚡</span>ESP32 Technical Reference Manual</li>
+            <li><span class="li-icon">⚡</span>L298N Datasheet — STMicroelectronics</li>
+            <li><span class="li-icon">⚡</span>TCRT5000 Datasheet — Vishay</li>
+          </ul>
+        </div>
+        <div class="glass-card accent-green" style="margin-top: 12px;">
+          <h3>🌐 Nguồn mở</h3>
+          <ul class="feature-list" style="gap:6px;">
+            <li><span class="li-icon">🔗</span>Pathfinding.js — GitHub</li>
+            <li><span class="li-icon">🔗</span>ESPAsyncWebServer — GitHub</li>
+            <li><span class="li-icon">🔗</span>RandomNerdTutorials.com</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SLIDE 20: CẢM ƠN ==================== -->
+  <div class="slide title-slide" data-slide="19">
+    <div class="slide-number">SLIDE 20</div>
+    <div class="robot-ascii float-anim" style="font-size: 60px;">🎓</div>
+    <h1>
+      <span class="gradient-text">Cảm ơn</span><br>
+      đã lắng nghe!
+    </h1>
+    <p class="subtitle" style="margin-top: 8px;">
+      Đồ án kết hợp <strong>AI Search Algorithms</strong> + <strong>Robot IoT thực tế</strong><br>
+      Cầu nối giữa lý thuyết và ứng dụng
+    </p>
+    <div style="margin-top: 24px; display: flex; gap: 16px;">
+      <span class="tag blue" style="font-size: 0.85rem; padding: 8px 16px;">🧠 BFS • DFS • UCS • A* • Greedy</span>
+      <span class="tag green" style="font-size: 0.85rem; padding: 8px 16px;">🤖 ESP32 • PID • WebSocket</span>
+    </div>
+    <p style="margin-top: 32px; color: var(--text-muted); font-size: 0.9rem;">
+      Q & A — Hỏi đáp
+    </p>
+  </div>
+
+</div>
+
+<!-- ==================== NAVIGATION BAR ==================== -->
+<nav id="nav-bar">
+  <div class="nav-left">
+    <button class="nav-btn" id="btn-prev" disabled title="Previous (← hoặc ↑)">‹</button>
+    <span class="slide-counter" id="slide-counter">1 / 20</span>
+    <button class="nav-btn" id="btn-next" title="Next (→ hoặc ↓)">›</button>
+  </div>
+  <div class="nav-center">
+    <div class="slide-dots" id="slide-dots"></div>
+  </div>
+  <div class="nav-right">
+    <button class="fullscreen-btn" id="btn-fullscreen" title="Fullscreen (F)">⛶ Fullscreen</button>
+  </div>
+</nav>
+
+<script src="script.js"></script>
+</body>
+</html>
