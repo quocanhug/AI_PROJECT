@@ -46,163 +46,200 @@
             <button class="btn-dir hold" data-path="/backward">↓</button>
             <button class="btn-dir hold" data-path="/back_right">↘</button>
           </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title"><span>Lệnh Can Thiệp Sự Cố</span></div>
-          <div class="command-grid">
-            <button
-              class="btn-cmd start-delivery"
-              onclick="sendCommand('/resume')"
-            >
-              <span class="btn-icon">▶️</span> TIẾP TỤC
+          <div class="grid-2" style="margin-top: 10px">
+            <button class="btn-action grip-open grip" data-path="/grip/open">
+              MỞ KẸP
             </button>
-            <button
-              class="btn-cmd return-home"
-              onclick="sendCommand('/return_home')"
-            >
-              <span class="btn-icon">🏠</span> VỀ KHO
-            </button>
-            <button
-              class="btn-cmd emergency-stop"
-              onclick="sendCommand('/estop')"
-            >
-              <span class="btn-icon">⚠️</span> E-STOP
+            <button class="btn-action grip-close grip" data-path="/grip/close">
+              ĐÓNG KẸP
             </button>
           </div>
         </div>
       </main>
 
       <main id="panel-auto" class="panel">
-        <div class="card">
-          <div class="card-title">Cấu hình thuật toán & Nhiệm vụ</div>
-          <div class="config-row">
-            <div class="config-box">
-              <label>THUẬT TOÁN TÌM ĐƯỜNG</label>
-              <select id="algoSel">
-                <option value="astar">A* (Thông minh/Tối ưu)</option>
-                <option value="bfs">BFS (Loang theo lớp)</option>
-                <option value="dfs">DFS (Đi sâu - Ngõ cụt)</option>
-              </select>
-            </div>
-            <div class="config-box">
-              <label>CHẾ ĐỘ GIAO</label>
-              <select id="orderModeSel">
-                <option value="single">Giao 1 đơn (Điểm đến)</option>
-                <option value="multi">Giao nhiều đơn (Tối đa 6)</option>
-              </select>
-            </div>
+        <div
+          class="card"
+          style="
+            border: 1px solid var(--danger);
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.15);
+          "
+        >
+          <div class="card-title" style="color: var(--danger)">
+            <span>Lệnh Can Thiệp Tự Động</span>
           </div>
-          <div class="config-row">
-            <div class="config-box">
-              <label>VỊ TRÍ XUẤT PHÁT (KHO)</label>
-              <select id="startNode"></select>
-            </div>
-            <div class="config-box">
-              <label>MẶT HƯỚNG VỀ</label>
-              <select id="startDir">
-                <option value="0">Bắc (Trục Y+)</option>
-                <option value="1" selected>Đông (Trục X+)</option>
-                <option value="2">Nam (Trục Y-)</option>
-                <option value="3">Tây (Trục X-)</option>
-              </select>
-            </div>
+          <div class="command-grid">
+            <button
+              class="btn-cmd start-delivery"
+              onclick="sendCommand('/resume')"
+            >
+              ▶️ TIẾP TỤC
+            </button>
+            <button
+              class="btn-cmd return-home"
+              onclick="sendCommand('/return_home')"
+            >
+              🏠 VỀ KHO
+            </button>
+            <button
+              class="btn-cmd emergency-stop"
+              onclick="sendCommand('/estop')"
+            >
+              ⚠️ E-STOP
+            </button>
           </div>
         </div>
 
-        <div class="card">
-          <div class="card-title">BẢN ĐỒ GIAO HÀNG</div>
-          <div class="config-row" style="margin-bottom: 8px">
-            <div class="config-box" style="grid-column: 1 / -1">
-              <label>CÔNG CỤ TƯƠNG TÁC BẢN ĐỒ</label>
-              <select id="mapTool" style="color: var(--warning)">
-                <option value="target">📍 Đặt điểm Giao hàng (Tối đa 6)</option>
-                <option value="obstacle">🚧 Đặt Vật cản / Đường cấm</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="svg-container">
-            <svg id="agvMap" viewBox="0 0 340 270">
-              <g class="track-base">
-                <line x1="30" y1="30" x2="100" y2="30" />
-                <line x1="170" y1="30" x2="310" y2="30" />
-                <line x1="30" y1="100" x2="310" y2="100" />
-                <line x1="30" y1="170" x2="100" y2="170" />
-                <line x1="170" y1="170" x2="310" y2="170" />
-                <line x1="30" y1="240" x2="100" y2="240" />
-                <line x1="170" y1="240" x2="310" y2="240" />
-                <line x1="30" y1="30" x2="30" y2="240" />
-                <line x1="100" y1="30" x2="100" y2="100" />
-                <line x1="100" y1="170" x2="100" y2="240" />
-                <line x1="170" y1="30" x2="170" y2="240" />
-                <line x1="240" y1="30" x2="240" y2="240" />
-                <line x1="310" y1="100" x2="310" y2="170" />
-              </g>
-              <g id="pathLayer"></g>
-              <g id="nodeLayer"></g>
-            </svg>
-          </div>
-
-          <div id="deliveryLegend" class="legend-box"></div>
-          <div id="pathResult">Chưa có dữ liệu lộ trình</div>
-
-          <div class="stats-bar" id="searchStats">
-            <div>
-              BƯỚC DI CHUYỂN:<span
-                class="stats-val"
-                id="statSteps"
-                style="color: var(--warning)"
-                >0</span
-              >
-            </div>
-            <div>
-              NODE ĐÃ DUYỆT:<span
-                class="stats-val"
-                id="statVisited"
-                style="color: var(--primary)"
-                >0</span
-              >
-            </div>
-          </div>
-
-          <button class="btn-submit" id="deliverBtn">
-            🚀 NẠP LỘ TRÌNH & BẮT ĐẦU CHẠY
+        <div class="auto-mode-toggle">
+          <button
+            class="auto-tab-btn active"
+            id="btn-sub-delivery"
+            onclick="switchAutoMode('delivery')"
+          >
+            📦 GIAO HÀNG BẢN ĐỒ
           </button>
+          <button
+            class="auto-tab-btn"
+            id="btn-sub-line"
+            onclick="switchAutoMode('line_only')"
+          >
+            〰️ DÒ LINE CƠ BẢN
+          </button>
+        </div>
+
+        <div id="line-only-section" style="display: none; text-align: center">
+          <div class="card" style="padding: 30px 15px">
+            <h3 style="margin-bottom: 15px; color: var(--success)">
+              CHẾ ĐỘ DÒ LINE VÔ TẬN
+            </h3>
+            <p
+              style="
+                font-size: 12px;
+                color: var(--text-muted);
+                margin-bottom: 20px;
+              "
+            >
+              Xe sẽ bám theo vạch đen liên tục và đi thẳng qua mọi ngã tư mà
+              không cần quan tâm đến bản đồ lộ trình.
+            </p>
+            <button class="btn-line-only" onclick="startLineOnly()">
+              🚀 BẮT ĐẦU DÒ LINE CƠ BẢN
+            </button>
+          </div>
+        </div>
+
+        <div id="delivery-section">
+          <div class="card">
+            <div class="card-title">Cấu hình thuật toán & Nhiệm vụ</div>
+            <div class="config-row">
+              <div class="config-box">
+                <label>THUẬT TOÁN TÌM ĐƯỜNG</label
+                ><select id="algoSel">
+                  <option value="astar">A*</option>
+                  <option value="bfs">BFS</option>
+                  <option value="dfs">DFS</option>
+                </select>
+              </div>
+              <div class="config-box">
+                <label>CHẾ ĐỘ GIAO</label
+                ><select id="orderModeSel">
+                  <option value="single">Giao 1 đơn</option>
+                  <option value="multi">Nhiều đơn (Tối đa 6)</option>
+                </select>
+              </div>
+            </div>
+            <div class="config-row">
+              <div class="config-box">
+                <label>VỊ TRÍ XUẤT PHÁT</label
+                ><select id="startNode"></select>
+              </div>
+              <div class="config-box">
+                <label>MẶT HƯỚNG VỀ</label
+                ><select id="startDir">
+                  <option value="0">Bắc</option>
+                  <option value="1" selected>Đông</option>
+                  <option value="2">Nam</option>
+                  <option value="3">Tây</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">BẢN ĐỒ GIAO HÀNG</div>
+            <div class="config-row" style="margin-bottom: 8px">
+              <div class="config-box" style="grid-column: 1 / -1">
+                <select id="mapTool" style="color: var(--warning)">
+                  <option value="target">📍 Đặt điểm Giao hàng</option>
+                  <option value="obstacle">🚧 Đặt Vật cản</option>
+                </select>
+              </div>
+            </div>
+            <div class="svg-container">
+              <svg id="agvMap" viewBox="0 0 340 270">
+                <g class="track-base">
+                  <line x1="30" y1="30" x2="100" y2="30" />
+                  <line x1="170" y1="30" x2="310" y2="30" />
+                  <line x1="30" y1="100" x2="310" y2="100" />
+                  <line x1="30" y1="170" x2="100" y2="170" />
+                  <line x1="170" y1="170" x2="310" y2="170" />
+                  <line x1="30" y1="240" x2="100" y2="240" />
+                  <line x1="170" y1="240" x2="310" y2="240" />
+                  <line x1="30" y1="30" x2="30" y2="240" />
+                  <line x1="100" y1="30" x2="100" y2="100" />
+                  <line x1="100" y1="170" x2="100" y2="240" />
+                  <line x1="170" y1="30" x2="170" y2="240" />
+                  <line x1="240" y1="30" x2="240" y2="240" />
+                  <line x1="310" y1="100" x2="310" y2="170" />
+                </g>
+                <g id="pathLayer"></g>
+                <g id="nodeLayer"></g>
+              </svg>
+            </div>
+            <div id="deliveryLegend" class="legend-box"></div>
+            <div id="pathResult">Chưa có dữ liệu lộ trình</div>
+            <div class="stats-bar" id="searchStats">
+              <div>
+                BƯỚC DI CHUYỂN:<span
+                  class="stats-val"
+                  id="statSteps"
+                  style="color: var(--warning)"
+                  >0</span
+                >
+              </div>
+              <div>
+                NODE ĐÃ DUYỆT:<span
+                  class="stats-val"
+                  id="statVisited"
+                  style="color: var(--primary)"
+                  >0</span
+                >
+              </div>
+            </div>
+            <button class="btn-submit" id="deliverBtn">
+              🚀 NẠP LỘ TRÌNH & BẮT ĐẦU CHẠY
+            </button>
+          </div>
         </div>
       </main>
 
       <main id="panel-stats" class="panel">
         <div class="kpi-grid">
           <div class="kpi-card">
-            <span class="kpi-label">Đã Giao Hôm Nay</span>
-            <span class="kpi-val v-blue" id="kpiDelivered">24</span>
+            <span class="kpi-label">Đã Giao Hôm Nay</span
+            ><span class="kpi-val v-blue" id="kpiDelivered">0</span>
           </div>
           <div class="kpi-card">
-            <span class="kpi-label">Thời Gian TB / Đơn</span>
-            <span class="kpi-val v-orange" id="kpiAvgTime">4.2m</span>
+            <span class="kpi-label">Thời Gian TB / Đơn</span
+            ><span class="kpi-val v-orange" id="kpiAvgTime">0s</span>
           </div>
           <div class="kpi-card">
-            <span class="kpi-label">Hiệu Suất AGV</span>
-            <span class="kpi-val v-green" id="kpiEfficiency">96%</span>
+            <span class="kpi-label">Hiệu Suất AGV</span
+            ><span class="kpi-val v-green" id="kpiEfficiency">100%</span>
           </div>
         </div>
-
         <div class="card">
-          <div class="card-title">
-            <span>Phân Tích Thời Gian: Thực Tế vs Dự Kiến</span>
-          </div>
-          <p
-            style="
-              font-size: 11px;
-              color: var(--text-muted);
-              margin-bottom: 10px;
-              text-align: center;
-            "
-          >
-            So sánh thời gian ước tính của thuật toán và thời gian xe thực tế
-            hoàn thành.
-          </p>
+          <div class="card-title"><span>Phân Tích Thời Gian</span></div>
           <div class="chart-container">
             <canvas id="timeComparisonChart"></canvas>
           </div>

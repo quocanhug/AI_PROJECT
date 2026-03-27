@@ -1,7 +1,8 @@
 let currentMode = "manual";
 let timeChartInstance = null;
-let statsInterval = null; // Biến lưu bộ đếm thời gian gọi API
+let statsInterval = null;
 
+// ================= UI TABS LOGIC =================
 async function switchTab(tab) {
   document
     .querySelectorAll(".panel, .tab-btn")
@@ -10,51 +11,64 @@ async function switchTab(tab) {
   document.getElementById("btn-tab-" + tab).classList.add("active");
   currentMode = tab;
 
-  // Xóa bộ đếm cũ nếu chuyển tab khác để đỡ nặng ESP32
   if (statsInterval) {
     clearInterval(statsInterval);
     statsInterval = null;
   }
 
-  if (tab !== "stats") {
+  if (tab !== "stats" && tab !== "auto") {
     try {
       await fetch("/setMode?m=" + (tab === "manual" ? "manual" : "line"));
     } catch (e) {}
-  } else {
-    // Gọi ngay lần đầu khi vừa mở tab
+  } else if (tab === "stats") {
     fetchRealStats();
-    // Sau đó cứ 3 giây (3000ms) sẽ tự động hỏi xe 1 lần để cập nhật số đơn đã giao
     statsInterval = setInterval(fetchRealStats, 3000);
   }
 }
 
-// HÀM LẤY DỮ LIỆU THỐNG KÊ TỪ XE AGV (ESP32)
+function switchAutoMode(mode) {
+  document
+    .querySelectorAll(".auto-tab-btn")
+    .forEach((b) => b.classList.remove("active"));
+  if (mode === "delivery") {
+    document.getElementById("btn-sub-delivery").classList.add("active");
+    document.getElementById("delivery-section").style.display = "block";
+    document.getElementById("line-only-section").style.display = "none";
+  } else {
+    document.getElementById("btn-sub-line").classList.add("active");
+    document.getElementById("delivery-section").style.display = "none";
+    document.getElementById("line-only-section").style.display = "block";
+  }
+}
+
+async function startLineOnly() {
+  try {
+    await fetch("/setMode?m=line_only");
+    alert("Xe bắt đầu dò line cơ bản!");
+  } catch (e) {
+    console.error("Lỗi gửi lệnh", e);
+  }
+}
+
+// ================= STATS API & CHART =================
 async function fetchRealStats() {
   try {
-    // Web gửi yêu cầu xuống ESP32 qua đường dẫn /api/stats
     const response = await fetch("/api/stats");
     if (response.ok) {
-      const data = await response.json(); // Nhận dữ liệu JSON từ xe
-
-      // 1. Cập nhật Bảng KPI
+      const data = await response.json();
       document.getElementById("kpiDelivered").innerText = data.delivered;
       document.getElementById("kpiAvgTime").innerText = data.avgTime + "s";
       document.getElementById("kpiEfficiency").innerText =
         data.efficiency + "%";
-
-      // 2. Vẽ/Cập nhật Biểu đồ
       updateChart(data.chart.labels, data.chart.expected, data.chart.actual);
     }
   } catch (error) {
-    console.log("Đang chờ kết nối dữ liệu thống kê từ xe...");
+    console.log("Đang chờ kết nối dữ liệu thống kê...");
   }
 }
 
-// HÀM CẬP NHẬT BIỂU ĐỒ BẰNG CHART.JS
 function updateChart(labels, expectedData, actualData) {
   const ctx = document.getElementById("timeComparisonChart").getContext("2d");
-
-  // Nếu biểu đồ đã vẽ rồi thì chỉ cần cập nhật data mới để hiệu ứng mượt mà
   if (timeChartInstance) {
     timeChartInstance.data.labels = labels;
     timeChartInstance.data.datasets[0].data = expectedData;
@@ -62,8 +76,6 @@ function updateChart(labels, expectedData, actualData) {
     timeChartInstance.update();
     return;
   }
-
-  // Nếu chưa vẽ thì tạo mới
   timeChartInstance = new Chart(ctx, {
     type: "bar",
     data: {
@@ -86,7 +98,7 @@ function updateChart(labels, expectedData, actualData) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: { duration: 500 }, // Rút ngắn animation để cập nhật liên tục đỡ rối
+      animation: { duration: 500 },
       scales: {
         y: {
           beginAtZero: true,
@@ -113,9 +125,7 @@ function updateChart(labels, expectedData, actualData) {
   document.getElementById("timeComparisonChart").style.height = "200px";
 }
 
-// ==========================================
-// CODE BẢN ĐỒ VÀ THUẬT TOÁN (GIỮ NGUYÊN)
-// ==========================================
+// ================= GRAPH & MAP LOGIC =================
 const startNodeEl = document.getElementById("startNode");
 for (let i = 0; i < 20; i++) {
   let opt = document.createElement("option");
@@ -192,7 +202,6 @@ function initNodes() {
     g.setAttribute("class", "node-group");
     g.setAttribute("id", "svg-node-" + i);
     g.onclick = () => handleNodeClick(i);
-
     const circle = document.createElementNS(
       "http://www.w3.org/2000/svg",
       "circle",
@@ -201,13 +210,11 @@ function initNodes() {
     circle.setAttribute("cy", y);
     circle.setAttribute("r", "12");
     circle.setAttribute("class", "node-circle");
-
     const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
     text.setAttribute("x", x);
     text.setAttribute("y", y);
     text.setAttribute("class", "node-text");
     text.textContent = i;
-
     g.appendChild(circle);
     g.appendChild(text);
     layer.appendChild(g);
@@ -230,7 +237,7 @@ function handleNodeClick(nodeId) {
         targets.delete(nodeId);
       } else {
         if (targets.size >= 6) {
-          alert("Vượt quá giới hạn! Chỉ được giao tối đa 6 đơn hàng cùng lúc.");
+          alert("Chỉ được giao tối đa 6 đơn hàng cùng lúc.");
           return;
         }
         targets.add(nodeId);
@@ -309,9 +316,9 @@ function findPath(start, end) {
   return null;
 }
 
+// ==== ĐÃ SỬA LỖI TẠI HÀM NÀY ====
 function calculateOverallPath() {
   const startNode = parseInt(document.getElementById("startNode").value);
-
   for (let i = 0; i < 20; i++) {
     let cls = "node-group";
     if (i === startNode) cls += " node-start";
@@ -321,7 +328,6 @@ function calculateOverallPath() {
 
   const pathLayer = document.getElementById("pathLayer");
   pathLayer.innerHTML = "";
-
   const resEl = document.getElementById("pathResult");
   const statsBar = document.getElementById("searchStats");
   const legendBox = document.getElementById("deliveryLegend");
@@ -338,7 +344,6 @@ function calculateOverallPath() {
   let fullPath = [startNode];
   let currentS = startNode;
   let remainingTargets = new Set(targets);
-
   let totalSteps = 0;
   let totalVisitedNodes = 0;
   let orderedTargets = [];
@@ -356,11 +361,14 @@ function calculateOverallPath() {
         bestTarget = t;
       }
     }
-    if (!bestPathObj) break;
+
+    // Nếu không còn đường tới TẤT CẢ các điểm còn lại thì dừng vòng lặp tính toán
+    if (!bestPathObj) {
+      break;
+    }
 
     orderedTargets.push(bestTarget);
     pathSegments.push(bestPathObj.path);
-
     fullPath =
       fullPath.length > 1
         ? fullPath.concat(bestPathObj.path.slice(1))
@@ -371,16 +379,16 @@ function calculateOverallPath() {
     remainingTargets.delete(bestTarget);
   }
 
+  // CHỈ CẦN CÓ ÍT NHẤT 1 ĐIỂM ĐẾN ĐƯỢC LÀ XE SẼ CHẠY
   if (orderedTargets.length > 0) {
     finalCalculatedPath = fullPath;
     let msgText = "LỘ TRÌNH: " + fullPath.join(" ➔ ");
 
+    // Xử lý báo lỗi gạch chéo cho các điểm không thể đến
     if (remainingTargets.size > 0) {
       let skippedArr = Array.from(remainingTargets);
       msgText +=
-        "\n⚠️ BỎ QUA ĐƠN: " +
-        skippedArr.join(", ") +
-        " (Vướng vật cản chặn đường)";
+        "\n⚠️ BỎ QUA ĐƠN: " + skippedArr.join(", ") + " (Vướng vật cản)";
       resEl.className = "warn-msg";
       skippedArr.forEach((t) =>
         document.getElementById("svg-node-" + t).classList.add("node-skipped"),
@@ -388,22 +396,19 @@ function calculateOverallPath() {
     } else {
       resEl.className = "";
     }
-    resEl.innerText = msgText;
 
+    resEl.innerText = msgText;
     document.getElementById("statSteps").innerText = totalSteps;
     document.getElementById("statVisited").innerText = totalVisitedNodes;
     statsBar.style.display = "flex";
 
     let legendHTML = `<div style="width:100%; text-align:center; margin-bottom:4px;">THỨ TỰ GIAO HÀNG</div>`;
-
     orderedTargets.forEach((node, idx) => {
       let colorIndex = Math.min(idx, 5);
       let colorHex = TARGET_COLORS[colorIndex];
-
       document
         .getElementById("svg-node-" + node)
         .classList.add("target-" + (colorIndex + 1));
-
       let segPts = pathSegments[idx].map((n) => coords[n].join(",")).join(" ");
       let poly = document.createElementNS(
         "http://www.w3.org/2000/svg",
@@ -414,12 +419,10 @@ function calculateOverallPath() {
       poly.setAttribute("stroke", colorHex);
       poly.setAttribute("style", `filter: drop-shadow(0 0 6px ${colorHex})`);
       pathLayer.appendChild(poly);
-
       legendHTML += `<div class="legend-item"><span class="legend-color" style="background:${colorHex}"></span> Đơn ${idx + 1} (Node ${node})</div>`;
       if (idx < orderedTargets.length - 1)
         legendHTML += `<div style="color:#475569;font-size:10px;">➔</div>`;
     });
-
     legendBox.innerHTML = legendHTML;
     legendBox.style.display = "flex";
 
@@ -430,8 +433,8 @@ function calculateOverallPath() {
           .classList.add("node-path");
     }
   } else {
-    resEl.innerText =
-      "LỖI: Khu vực bị cô lập hoặc vật cản chặn toàn bộ điểm giao!";
+    // KHÔNG THỂ ĐẾN BẤT CỨ ĐIỂM NÀO
+    resEl.innerText = "LỖI: Khu vực bị cô lập, không thể tìm đường!";
     resEl.className = "err-msg";
     statsBar.style.display = "none";
     legendBox.style.display = "none";
@@ -441,6 +444,7 @@ function calculateOverallPath() {
     );
   }
 }
+// ===========================================
 
 document.querySelectorAll("#startNode, #algoSel, #orderModeSel").forEach((el) =>
   el.addEventListener("change", () => {
@@ -456,24 +460,22 @@ document.querySelectorAll("#startNode, #algoSel, #orderModeSel").forEach((el) =>
 initNodes();
 calculateOverallPath();
 
+// ================= API GỬI LỆNH XUỐNG XE =================
 document.getElementById("deliverBtn").addEventListener("click", async () => {
   if (finalCalculatedPath.length < 2) return alert("Lộ trình không hợp lệ!");
   const dir = document.getElementById("startDir").value;
   const btn = document.getElementById("deliverBtn");
   const pathString = finalCalculatedPath.join(",");
 
-  btn.innerText = "ĐANG TRUYỀN DỮ LIỆU & KHỞI ĐỘNG XE...";
+  btn.innerText = "ĐANG TRUYỀN DỮ LIỆU...";
   btn.style.opacity = "0.7";
   try {
     await fetch(`/deliver?dir=${dir}&path=${pathString}`);
   } catch (e) {}
   setTimeout(() => {
-    btn.innerText = "ĐÃ NHẬN LỆNH CHẠY!";
+    btn.innerText = "🚀 NẠP LỘ TRÌNH & BẮT ĐẦU CHẠY";
     btn.style.opacity = "1";
-    setTimeout(() => {
-      btn.innerText = "🚀 NẠP LỘ TRÌNH & BẮT ĐẦU CHẠY";
-    }, 2000);
-  }, 1000);
+  }, 1500);
 });
 
 async function sendCommand(cmd) {
@@ -490,6 +492,7 @@ async function send(path) {
     await fetch(path);
   } catch (e) {}
 }
+
 let activeHold = { btn: null, pid: null };
 function guard(fn) {
   return (e) => {
@@ -536,3 +539,13 @@ document.getElementById("stopBtn").addEventListener(
   }),
   { passive: false },
 );
+document.querySelectorAll(".grip").forEach((b) => {
+  b.addEventListener(
+    "pointerdown",
+    guard((e) => {
+      e.preventDefault();
+      send(b.dataset.path);
+    }),
+    { passive: false },
+  );
+});
