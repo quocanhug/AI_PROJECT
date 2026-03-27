@@ -5,7 +5,14 @@
 
 let currentMode = "manual";
 let timeChartInstance = null;
+let algoChartInstance = null;
 let statsInterval = null;
+
+// Delivery tracking
+let deliveryStartTime = null;
+let deliveryExpectedTime = null; // estimated seconds
+let deliveryInProgress = false;
+let deliveredOrders = []; // track completed deliveries
 
 // ==================== Clock ====================
 function updateClock() {
@@ -78,8 +85,39 @@ function handleWsMessage(data) {
     showToast(`⚠️ Vật cản tại (${data.position.row},${data.position.col})!`, "error");
     updateRobotState("OBSTACLE");
   }
-  else if (data.type === "COMPLETED") { showToast(`Hoàn thành! ${data.intersections} giao lộ, ${data.distance_cm}cm`, "success"); updateRobotState("DONE"); }
+  else if (data.type === "COMPLETED") {
+    showToast(`Hoàn thành! ${data.intersections} giao lộ, ${data.distance_cm}cm`, "success");
+    updateRobotState("DONE");
+    handleDeliveryCompleted();
+  }
   else if (data.type === "PONG" || data.type === "PING") { /* ping handled */ }
+}
+
+function handleDeliveryCompleted() {
+  if (!deliveryInProgress) return;
+  deliveryInProgress = false;
+  const actualTime = ((Date.now() - deliveryStartTime) / 1000).toFixed(1);
+  const banner = document.getElementById('deliveryStatusBanner');
+  const icon = document.getElementById('deliveryStatusIcon');
+  const text = document.getElementById('deliveryStatusText');
+  banner.classList.remove('hidden');
+
+  if (deliveryExpectedTime && parseFloat(actualTime) > deliveryExpectedTime) {
+    const lateBy = (parseFloat(actualTime) - deliveryExpectedTime).toFixed(1);
+    banner.className = 'flex items-center gap-2 rounded-xl p-3 bg-red-50 border border-red-200';
+    icon.textContent = 'warning';
+    icon.className = 'material-symbols-outlined text-lg text-red-600';
+    text.textContent = `✅ Đã giao xong — ⚠️ TRỄ ${lateBy}s (Thực tế: ${actualTime}s / Dự kiến: ${deliveryExpectedTime}s)`;
+    text.className = 'text-sm font-bold text-red-700';
+    showToast(`⚠️ Giao hàng trễ ${lateBy} giây!`, "error");
+  } else {
+    banner.className = 'flex items-center gap-2 rounded-xl p-3 bg-green-50 border border-green-200';
+    icon.textContent = 'check_circle';
+    icon.className = 'material-symbols-outlined text-lg text-green-600';
+    text.textContent = `✅ Đã giao xong — Thời gian: ${actualTime}s` + (deliveryExpectedTime ? ` (Dự kiến: ${deliveryExpectedTime}s)` : '');
+    text.className = 'text-sm font-bold text-green-700';
+    showToast(`✅ Giao hàng thành công trong ${actualTime}s!`, "success");
+  }
 }
 
 function updateTelemetry(d) {
@@ -146,24 +184,8 @@ async function fetchRealStats() {
       document.getElementById('kpiAvgTime').textContent = d.avgTime;
       document.getElementById('kpiSuccess').textContent = d.efficiency;
       document.getElementById('kpiDistance').textContent = d.totalDistance || '--';
-      if (d.chart) updateChart(d.chart.labels, d.chart.expected, d.chart.actual);
     }
   } catch(e) {}
-}
-
-function updateChart(labels, expected, actual) {
-  const ctx = document.getElementById('timeComparisonChart').getContext('2d');
-  if (timeChartInstance) { timeChartInstance.data.labels=labels; timeChartInstance.data.datasets[0].data=expected; timeChartInstance.data.datasets[1].data=actual; timeChartInstance.update(); return; }
-  timeChartInstance = new Chart(ctx, {
-    type:'bar', data:{ labels, datasets:[
-      { label:'Dự kiến (s)', data:expected, backgroundColor:'#aac7ff', borderRadius:6 },
-      { label:'Thực tế (s)', data:actual, backgroundColor:'#005ab4', borderRadius:6 }
-    ]},
-    options:{ responsive:true, maintainAspectRatio:false, animation:{duration:500},
-      scales:{ y:{beginAtZero:true, grid:{color:'#e1e3e4'}, ticks:{color:'#414753',font:{size:10}}}, x:{grid:{display:false}, ticks:{color:'#414753',font:{size:10}}} },
-      plugins:{ legend:{position:'top', labels:{color:'#191c1d',font:{size:11,family:'Inter'},boxWidth:12}} }
-    }
-  });
 }
 
 // ==================== Map & Graph ====================
@@ -261,6 +283,7 @@ function findPath(start, end, algo) {
 // ==================== Path Calculation ====================
 function calculateOverallPath() {
   const sn = parseInt(document.getElementById("startNode").value);
+  const deliveryMode = document.getElementById("deliveryModeSel").value;
   for (let i = 0; i < 20; i++) {
     let cls = "node-group";
     if (i === sn) cls += " node-start";
@@ -271,26 +294,57 @@ function calculateOverallPath() {
   pathLayer.innerHTML = "";
   const resEl = document.getElementById("pathResult");
   const legendBox = document.getElementById("deliveryLegend");
+  const orderInfoEl = document.getElementById("deliveryOrderInfo");
+  const routeInfoEl = document.getElementById("deliveryRouteInfo");
 
   if (!targets.size) {
     resEl.innerText = "Chọn điểm giao hàng trên bản đồ"; resEl.className = "p-4 text-sm text-on-surface-variant text-center";
     legendBox.classList.add("hidden"); finalCalculatedPath = [];
     document.getElementById("autoStepsVal").innerHTML = '0 <span class="text-xs font-medium text-on-surface-variant italic">bước</span>';
     document.getElementById("autoVisitedVal").textContent = '0';
+    orderInfoEl.textContent = 'Chưa có đơn hàng';
+    routeInfoEl.textContent = '—';
     return;
   }
 
   let fullPath = [sn], curS = sn, rem = new Set(targets), totalSteps=0, totalVis=0;
   let ordTar = [], segs = [];
 
-  while (rem.size) {
-    let best=null, bestT=null, shortLen=Infinity;
-    for (let t of rem) { let r=findPath(curS,t); if (r && r.path.length < shortLen) { shortLen=r.path.length; best=r; bestT=t; } }
-    if (!best) break;
-    ordTar.push(bestT); segs.push(best.path);
-    fullPath = fullPath.length > 1 ? fullPath.concat(best.path.slice(1)) : best.path;
-    totalSteps += best.path.length-1; totalVis += best.visitedCount;
-    curS = bestT; rem.delete(bestT);
+  // Express mode: deliver the last-selected target (express) first, then the rest by algorithm
+  if (deliveryMode === "express" && targets.size > 1) {
+    const tarArr = Array.from(targets);
+    const expressTarget = tarArr[tarArr.length - 1]; // last selected = express
+    // Go straight to express target first
+    const expressResult = findPath(sn, expressTarget);
+    if (expressResult) {
+      ordTar.push(expressTarget); segs.push(expressResult.path);
+      fullPath = expressResult.path;
+      totalSteps += expressResult.path.length - 1;
+      totalVis += expressResult.visitedCount;
+      curS = expressTarget;
+      rem.delete(expressTarget);
+    }
+    // Then deliver remaining by nearest-first
+    while (rem.size) {
+      let best=null, bestT=null, shortLen=Infinity;
+      for (let t of rem) { let r=findPath(curS,t); if (r && r.path.length < shortLen) { shortLen=r.path.length; best=r; bestT=t; } }
+      if (!best) break;
+      ordTar.push(bestT); segs.push(best.path);
+      fullPath = fullPath.concat(best.path.slice(1));
+      totalSteps += best.path.length-1; totalVis += best.visitedCount;
+      curS = bestT; rem.delete(bestT);
+    }
+  } else {
+    // Normal mode: nearest-first greedy
+    while (rem.size) {
+      let best=null, bestT=null, shortLen=Infinity;
+      for (let t of rem) { let r=findPath(curS,t); if (r && r.path.length < shortLen) { shortLen=r.path.length; best=r; bestT=t; } }
+      if (!best) break;
+      ordTar.push(bestT); segs.push(best.path);
+      fullPath = fullPath.length > 1 ? fullPath.concat(best.path.slice(1)) : best.path;
+      totalSteps += best.path.length-1; totalVis += best.visitedCount;
+      curS = bestT; rem.delete(bestT);
+    }
   }
 
   if (ordTar.length) {
@@ -305,11 +359,22 @@ function calculateOverallPath() {
     }
     resEl.innerText = msg;
 
+    // Update delivery info lines
+    let orderStr = ordTar.map((node, idx) => {
+      let label = `Đơn ${idx+1} → Node ${node}`;
+      if (deliveryMode === 'express' && idx === 0) label += ' 🚀';
+      return label;
+    }).join('  |  ');
+    orderInfoEl.textContent = orderStr;
+    routeInfoEl.textContent = fullPath.join(' → ');
+
     document.getElementById("autoStepsVal").innerHTML = totalSteps + ' <span class="text-xs font-medium text-on-surface-variant italic">bước</span>';
     document.getElementById("autoVisitedVal").textContent = totalVis;
     document.getElementById("autoOrderNum").textContent = '#01/' + (ordTar.length < 10 ? '0'+ordTar.length : ordTar.length);
 
-    let legHTML = '<div class="w-full text-center font-bold text-xs text-on-surface-variant mb-1">THỨ TỰ GIAO HÀNG</div>';
+    let legHTML = '<div class="w-full text-center font-bold text-xs text-on-surface-variant mb-1">THỨ TỰ GIAO HÀNG';
+    if (deliveryMode === 'express') legHTML += ' <span class="text-red-500">(CHẾ ĐỘ HỎA TỐC)</span>';
+    legHTML += '</div>';
     ordTar.forEach((node, idx) => {
       let ci = Math.min(idx,5), col = TARGET_COLORS[ci];
       document.getElementById("svg-node-"+node).classList.add("target-"+(ci+1));
@@ -318,7 +383,8 @@ function calculateOverallPath() {
       poly.setAttribute("class","segment-path"); poly.setAttribute("points",pts);
       poly.setAttribute("stroke",col); poly.setAttribute("style",`filter:drop-shadow(0 0 4px ${col}40)`);
       pathLayer.appendChild(poly);
-      legHTML += `<span class="flex items-center gap-1 px-2 py-1 bg-surface-container rounded-lg"><span class="w-2 h-2 rounded-full" style="background:${col}"></span>Đơn ${idx+1} (N${node})</span>`;
+      let expressTag = (deliveryMode === 'express' && idx === 0) ? ' 🚀' : '';
+      legHTML += `<span class="flex items-center gap-1 px-2 py-1 bg-surface-container rounded-lg"><span class="w-2 h-2 rounded-full" style="background:${col}"></span>Đơn ${idx+1} (N${node})${expressTag}</span>`;
       if (idx < ordTar.length-1) legHTML += '<span class="text-outline-variant">➔</span>';
     });
     legendBox.innerHTML = legHTML; legendBox.classList.remove("hidden");
@@ -326,6 +392,8 @@ function calculateOverallPath() {
   } else {
     resEl.innerText = "LỖI: Không tìm được đường! Vật cản chặn toàn bộ."; resEl.className = "p-4 text-sm text-center err-msg";
     legendBox.classList.add("hidden"); finalCalculatedPath = [];
+    orderInfoEl.textContent = 'Không tìm được đường!';
+    routeInfoEl.textContent = '—';
     targets.forEach(t => document.getElementById("svg-node-"+t).classList.add("target-1"));
   }
 }
@@ -351,16 +419,31 @@ function pathToCommands(path, initialDir) {
 // ==================== Deliver Button ====================
 document.getElementById("deliverBtn").addEventListener("click", async () => {
   if (finalCalculatedPath.length < 2) return showToast("Lộ trình không hợp lệ!","error");
-  const dir = document.getElementById("startDir").value;
-  const cmds = pathToCommands(finalCalculatedPath, dir);
+  const cmds = pathToCommands(finalCalculatedPath, 1); // default East direction
   const algo = document.getElementById("algoSel").value;
   const btn = document.getElementById("deliverBtn");
   btn.innerHTML = '<span class="material-symbols-outlined text-sm animate-spin">progress_activity</span> ĐANG TRUYỀN...';
 
+  // Start delivery tracking
+  deliveryStartTime = Date.now();
+  deliveryExpectedTime = finalCalculatedPath.length * 2; // ~2s per node
+  deliveryInProgress = true;
+
+  // Show in-progress status
+  const banner = document.getElementById('deliveryStatusBanner');
+  const icon = document.getElementById('deliveryStatusIcon');
+  const text = document.getElementById('deliveryStatusText');
+  banner.classList.remove('hidden');
+  banner.className = 'flex items-center gap-2 rounded-xl p-3 bg-amber-50 border border-amber-200';
+  icon.textContent = 'local_shipping';
+  icon.className = 'material-symbols-outlined text-lg text-amber-600 animate-pulse';
+  text.textContent = `🚚 Đang giao hàng... (Dự kiến: ~${deliveryExpectedTime}s)`;
+  text.className = 'text-sm font-bold text-amber-700';
+
   if (ws && ws.readyState === WebSocket.OPEN) {
     wsSend({ type:"ROUTE", commands:cmds, total_steps:cmds.length, algorithm:algo, path:finalCalculatedPath });
   } else {
-    try { await fetch(`/deliver?dir=${dir}&path=${finalCalculatedPath.join(",")}`); } catch(e) {}
+    try { await fetch(`/deliver?dir=1&path=${finalCalculatedPath.join(",")}`); } catch(e) {}
   }
 
   setTimeout(() => {
@@ -383,25 +466,85 @@ document.getElementById("compareAllBtn").addEventListener("click", () => {
     const t0 = performance.now();
     let tv=0,tc=0,pl=0,ok=true,cs=sn;
     for (let t of tarArr) { const r=findPath(cs,t,algo); if (r) { tv+=r.visitedCount; tc+=(r.cost||r.path.length-1); pl+=r.path.length-1; cs=t; } else { ok=false; break; } }
-    results.push({ algo, name:names[algo], visited:tv, pathLen:pl, cost:tc, time:(performance.now()-t0).toFixed(2), success:ok });
+    results.push({ algo, name:names[algo], visited:tv, pathLen:pl, cost:tc, time:parseFloat((performance.now()-t0).toFixed(3)), success:ok });
   }
 
+  // Sort results: successful first sorted by steps (ascending), then failed
+  results.sort((a, b) => {
+    if (a.success && !b.success) return -1;
+    if (!a.success && b.success) return 1;
+    if (!a.success && !b.success) return 0;
+    if (a.pathLen !== b.pathLen) return a.pathLen - b.pathLen;
+    if (a.visited !== b.visited) return a.visited - b.visited;
+    return a.time - b.time;
+  });
+
+  // Assign rank
+  const medals = ['🥇', '🥈', '🥉'];
+  results.forEach((r, i) => { r.rank = i + 1; r.medal = i < 3 ? medals[i] : ''; });
+
+  // Render Chart.js grouped bar chart (sorted order)
+  const labels = results.map(r => `${r.medal} #${r.rank} ${r.name}`);
+  const stepsData = results.map(r => r.success ? r.pathLen : 0);
+  const visitedData = results.map(r => r.success ? r.visited : 0);
+  const timeData = results.map(r => r.success ? r.time : 0);
+
+  // Bar colors: highlight #1 gold, #2 silver, #3 bronze, rest default
+  const barColors = ['#16a34a', '#0873df', '#bd5700', '#717785', '#717785'];
+  const stepsColors = results.map((_, i) => barColors[i] || '#717785');
+
+  const ctx = document.getElementById('algoComparisonChart').getContext('2d');
+  if (algoChartInstance) { algoChartInstance.destroy(); }
+  algoChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Số bước di chuyển', data: stepsData, backgroundColor: '#005ab4', borderRadius: 6, barPercentage: 0.7 },
+        { label: 'Node đã duyệt', data: visitedData, backgroundColor: '#aac7ff', borderRadius: 6, barPercentage: 0.7 },
+        { label: 'Thời gian (ms)', data: timeData, backgroundColor: '#bd5700', borderRadius: 6, barPercentage: 0.7 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 600, easing: 'easeOutQuart' },
+      scales: {
+        y: { beginAtZero: true, grid: { color: '#e1e3e4' }, ticks: { color: '#414753', font: { size: 11 } } },
+        x: { grid: { display: false }, ticks: { color: '#414753', font: { size: 12, weight: 'bold' } } }
+      },
+      plugins: {
+        legend: { position: 'top', labels: { color: '#191c1d', font: { size: 12, family: 'Inter', weight: '600' }, boxWidth: 14, padding: 16 } },
+        tooltip: {
+          backgroundColor: '#191c1d', titleFont: { size: 13, family: 'Inter' }, bodyFont: { size: 12, family: 'Inter' },
+          cornerRadius: 10, padding: 12
+        }
+      }
+    }
+  });
+
+  // Summary table sorted with ranking
   let html = `<table class="w-full text-left text-xs border-separate border-spacing-y-1 mt-2">
     <thead><tr class="text-[10px] uppercase font-bold text-on-surface-variant tracking-widest">
-      <th class="px-2 py-1">Thuật toán</th><th class="px-2 py-1 text-center">Node</th><th class="px-2 py-1 text-center">Bước</th><th class="px-2 py-1 text-center">ms</th>
+      <th class="px-2 py-1">Hạng</th><th class="px-2 py-1">Thuật toán</th><th class="px-2 py-1 text-center">Node duyệt</th><th class="px-2 py-1 text-center">Bước</th><th class="px-2 py-1 text-center">ms</th><th class="px-2 py-1 text-center">Kết quả</th>
     </tr></thead><tbody>`;
   for (let r of results) {
-    html += `<tr class="bg-surface-container-low/40 rounded"><td class="px-2 py-2 font-bold text-primary">${r.name}</td>
-      <td class="text-center px-2 py-2">${r.success?r.visited:'❌'}</td><td class="text-center px-2 py-2">${r.success?r.pathLen:'-'}</td>
-      <td class="text-center px-2 py-2">${r.time}</td></tr>`;
+    const rankBg = r.rank === 1 ? 'bg-green-50' : r.rank === 2 ? 'bg-blue-50' : r.rank === 3 ? 'bg-amber-50' : 'bg-surface-container-low/40';
+    const statusBadge = r.success
+      ? '<span class="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-[10px] font-bold">✓ OK</span>'
+      : '<span class="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-[10px] font-bold">✗ Fail</span>';
+    html += `<tr class="${rankBg} rounded">
+      <td class="px-2 py-2 font-black text-center">${r.medal || r.rank}</td>
+      <td class="px-2 py-2 font-bold text-primary">${r.name}</td>
+      <td class="text-center px-2 py-2">${r.success?r.visited:'—'}</td><td class="text-center px-2 py-2">${r.success?r.pathLen:'—'}</td>
+      <td class="text-center px-2 py-2">${r.time.toFixed(3)}</td><td class="text-center px-2 py-2">${statusBadge}</td></tr>`;
   }
   html += '</tbody></table>';
   document.getElementById("algoCompareResult").innerHTML = html;
-  showToast("So sánh hoàn tất!","success");
+  showToast("So sánh hoàn tất — Đã sắp xếp theo hiệu suất!","success");
 });
 
 // ==================== Event Listeners ====================
-document.querySelectorAll("#startNode, #algoSel, #orderModeSel").forEach(el =>
+document.querySelectorAll("#startNode, #algoSel, #orderModeSel, #deliveryModeSel").forEach(el =>
   el.addEventListener("change", () => {
     if (el.id === "orderModeSel" && el.value === "single" && targets.size > 1) { const f = Array.from(targets)[0]; targets.clear(); targets.add(f); }
     obstacles.delete(parseInt(document.getElementById("startNode").value));
