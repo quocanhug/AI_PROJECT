@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Pathfinder AI - Robot Control Dashboard</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Manrope:wght@500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-error": "#ffefee",
+              "surface-container-highest": "#d9dde0",
+              "surface-dim": "#d0d5d8",
+              "on-tertiary": "#f6f0ff",
+              "on-primary-container": "#001e58",
+              "surface-variant": "#d9dde0",
+              "secondary-fixed-dim": "#00e8a2",
+              "tertiary-fixed-dim": "#a894ff",
+              "on-primary": "#f1f2ff",
+              "primary-dim": "#0047b7",
+              "inverse-surface": "#0b0f10",
+              "surface-container-high": "#dfe3e6",
+              "on-secondary-container": "#00583b",
+              "tertiary": "#5f46bf",
+              "inverse-on-surface": "#9a9d9f",
+              "on-primary-fixed": "#000000",
+              "surface-bright": "#f5f7f9",
+              "tertiary-container": "#b5a4ff",
+              "outline-variant": "#abadaf",
+              "secondary": "#006947",
+              "secondary-dim": "#005c3e",
+              "on-error-container": "#570008",
+              "primary-fixed-dim": "#638eff",
+              "on-secondary": "#c8ffe0",
+              "on-primary-fixed-variant": "#00276c",
+              "on-tertiary-fixed": "#190057",
+              "tertiary-dim": "#5338b2",
+              "primary": "#0052d0",
+              "background": "#f5f7f9",
+              "surface-container-low": "#eef1f3",
+              "error-container": "#fb5151",
+              "surface-container": "#e5e9eb",
+              "secondary-container": "#20f7ae",
+              "on-secondary-fixed-variant": "#006343",
+              "surface": "#f5f7f9",
+              "surface-container-lowest": "#ffffff",
+              "secondary-fixed": "#20f7ae",
+              "inverse-primary": "#5e8bff",
+              "tertiary-fixed": "#b5a4ff",
+              "surface-tint": "#0052d0",
+              "on-tertiary-container": "#330a93",
+              "on-tertiary-fixed-variant": "#3c1b9b",
+              "error": "#b31b25",
+              "on-secondary-fixed": "#00432c",
+              "on-background": "#2c2f31",
+              "outline": "#747779",
+              "primary-fixed": "#799dff",
+              "on-surface-variant": "#595c5e",
+              "primary-container": "#799dff",
+              "error-dim": "#9f0519",
+              "on-surface": "#2c2f31"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .glass-card {
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(171, 173, 175, 0.15);
+      }
+    </style>
+</head>
+<body class="bg-background font-body text-on-background min-h-screen flex flex-col">
+<!-- TopNavBar: Authority Source JSON -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-8 h-16 bg-[#f5f7f9]/70 dark:bg-slate-900/70 backdrop-blur-xl shadow-sm dark:shadow-none">
+<div class="flex items-center gap-8">
+<span class="text-xl font-bold tracking-tighter text-[#2c2f31] dark:text-slate-100 font-headline">Pathfinder AI</span>
+<nav class="hidden md:flex gap-6 items-center">
+<a class="font-manrope text-sm font-medium tracking-tight text-[#0066FF] border-b-2 border-[#0066FF] pb-1 transition-all duration-200 hover:opacity-80" href="#">Dashboard</a>
+<a class="font-manrope text-sm font-medium tracking-tight text-[#595c5e] dark:text-slate-400 hover:text-[#2c2f31] transition-all duration-200 hover:opacity-80" href="#">Logs</a>
+<a class="font-manrope text-sm font-medium tracking-tight text-[#595c5e] dark:text-slate-400 hover:text-[#2c2f31] transition-all duration-200 hover:opacity-80" href="#">Analytics</a>
+<a class="font-manrope text-sm font-medium tracking-tight text-[#595c5e] dark:text-slate-400 hover:text-[#2c2f31] transition-all duration-200 hover:opacity-80" href="#">Settings</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors">notifications</button>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors">account_circle</button>
+</div>
+</header>
+<main class="flex-1 mt-16 p-6 lg:p-8 flex flex-col gap-6 max-w-[1600px] mx-auto w-full">
+<!-- Top Control Banner -->
+<section class="glass-card rounded-xl p-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+<div class="flex flex-col gap-1">
+<h1 class="text-2xl font-black font-headline tracking-tight text-on-surface">AI Robot Pathfinder (AVG System)</h1>
+<p class="text-label-md text-on-surface-variant font-medium">Student Name | MSSV: 12345678</p>
+</div>
+<div class="flex flex-wrap items-center gap-2 bg-surface-container-low p-1.5 rounded-xl">
+<button class="px-6 py-2 rounded-lg text-sm font-bold transition-all bg-primary text-on-primary shadow-sm">MANUAL</button>
+<button class="px-6 py-2 rounded-lg text-sm font-bold transition-all text-on-surface-variant hover:bg-surface-container-high">AUTO</button>
+<button class="px-6 py-2 rounded-lg text-sm font-bold transition-all text-on-surface-variant hover:bg-surface-container-high">STATISTICS</button>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-full bg-secondary-container shadow-[0_0_8px_rgba(32,247,174,0.6)]"></span>
+<span class="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Robot Connected (Live)</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Battery 85%</span>
+<div class="w-24 h-1.5 bg-surface-container-highest rounded-full mt-1 overflow-hidden">
+<div class="bg-secondary h-full w-[85%]"></div>
+</div>
+</div>
+<div class="text-right">
+<span class="text-xs font-bold text-on-surface-variant uppercase tracking-widest block">Ping</span>
+<span class="text-sm font-bold text-primary">15ms</span>
+</div>
+</div>
+</section>
+<!-- Main Workspace: Map and Floating Controls -->
+<div class="flex-1 grid grid-cols-12 gap-6 min-h-[600px]">
+<!-- Virtual Map Section -->
+<section class="col-span-12 lg:col-span-9 glass-card rounded-2xl relative overflow-hidden flex flex-col">
+<div class="p-6 flex justify-between items-center border-b border-outline-variant/10">
+<h2 class="text-lg font-bold font-headline flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">map</span>
+                        Spatial Intelligence Node-Link Diagram
+                    </h2>
+<div class="flex gap-4">
+<div class="flex items-center gap-2 px-3 py-1 bg-surface-container-low rounded-full">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+<span class="text-[10px] font-bold uppercase tracking-tighter">Start</span>
+</div>
+<div class="flex items-center gap-2 px-3 py-1 bg-surface-container-low rounded-full">
+<span class="w-2 h-2 rounded-full bg-secondary-fixed-dim"></span>
+<span class="text-[10px] font-bold uppercase tracking-tighter">Path</span>
+</div>
+<div class="flex items-center gap-2 px-3 py-1 bg-surface-container-low rounded-full">
+<span class="w-2 h-2 rounded-full bg-error"></span>
+<span class="text-[10px] font-bold uppercase tracking-tighter">Obstacle</span>
+</div>
+</div>
+</div>
+<div class="flex-1 relative p-12 bg-[#f8fafc]/50">
+<!-- SVG Map Layer -->
+<svg class="absolute inset-0 w-full h-full pointer-events-none" viewbox="0 0 800 500">
+<!-- Path Connections -->
+<g stroke="#abadaf" stroke-opacity="0.2" stroke-width="2">
+<line x1="100" x2="250" y1="100" y2="150"></line>
+<line x1="250" x2="400" y1="150" y2="100"></line>
+<line x1="100" x2="150" y1="100" y2="300"></line>
+<line x1="150" x2="350" y1="300" y2="350"></line>
+<line x1="350" x2="550" y1="350" y2="300"></line>
+<line x1="400" x2="600" y1="100" y2="150"></line>
+<line x1="600" x2="700" y1="150" y2="300"></line>
+<line x1="550" x2="700" y1="300" y2="300"></line>
+</g>
+<!-- Active Calculated Route -->
+<g stroke="#0052d0" stroke-dasharray="8 4" stroke-linecap="round" stroke-width="4">
+<line x1="100" x2="250" y1="100" y2="150"></line>
+<line x1="250" x2="400" y1="150" y2="100"></line>
+<line x1="400" x2="600" y1="100" y2="150"></line>
+</g>
+</svg>
+<!-- Interactive Nodes -->
+<div class="absolute inset-0">
+<!-- Node 0 - Start -->
+<div class="absolute left-[100px] top-[100px] -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold shadow-lg shadow-primary/30 z-10 border-4 border-white">0</div>
+<!-- Node 1 - Intermediate -->
+<div class="absolute left-[250px] top-[150px] -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white flex items-center justify-center text-on-surface-variant font-bold border-2 border-primary z-10">1</div>
+<!-- Node 2 - Intermediate -->
+<div class="absolute left-[400px] top-[100px] -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white flex items-center justify-center text-on-surface-variant font-bold border-2 border-primary z-10">2</div>
+<!-- Node 3 - Target -->
+<div class="absolute left-[600px] top-[150px] -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-secondary-fixed flex items-center justify-center text-on-secondary-fixed font-bold shadow-lg shadow-secondary/30 z-10 border-4 border-white animate-pulse">3</div>
+<!-- Node 4 - Obstacle -->
+<div class="absolute left-[300px] top-[250px] -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-error-container flex items-center justify-center text-on-error-container font-bold border-2 border-error z-10">4</div>
+<!-- Node 5 -->
+<div class="absolute left-[150px] top-[300px] -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white flex items-center justify-center text-on-surface-variant font-bold border-2 border-surface-container-highest z-10">5</div>
+<!-- Node 6 -->
+<div class="absolute left-[350px] top-[350px] -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white flex items-center justify-center text-on-surface-variant font-bold border-2 border-surface-container-highest z-10">6</div>
+<!-- Node 7 -->
+<div class="absolute left-[550px] top-[300px] -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white flex items-center justify-center text-on-surface-variant font-bold border-2 border-surface-container-highest z-10">7</div>
+</div>
+</div>
+<!-- Map Legend/Overlay -->
+<div class="absolute bottom-6 left-6 glass-card p-4 rounded-xl border border-outline-variant/20 max-w-xs">
+<h4 class="text-[10px] font-black uppercase tracking-widest text-on-surface-variant mb-3">Unit Telemetry (Map Context)</h4>
+<div class="space-y-2">
+<div class="flex justify-between items-center">
+<span class="text-xs text-on-surface-variant">Last Node</span>
+<span class="text-xs font-bold">Node 0 (Base)</span>
+</div>
+<div class="flex justify-between items-center">
+<span class="text-xs text-on-surface-variant">Target Node</span>
+<span class="text-xs font-bold text-secondary">Node 3 (Lab)</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Right Sidebar / Panels -->
+<aside class="col-span-12 lg:col-span-3 flex flex-col gap-6">
+<!-- Telemetry Panel -->
+<div class="glass-card rounded-2xl p-6 flex flex-col gap-4">
+<h3 class="text-xs font-black uppercase tracking-[0.2em] text-on-surface-variant">Telemetry Flux</h3>
+<div class="space-y-6">
+<!-- Speed Chart Placeholder -->
+<div class="h-24 bg-surface-container-low rounded-xl relative overflow-hidden flex items-end px-2 pb-2 gap-1">
+<div class="bg-primary-container/40 w-full h-[40%] rounded-sm"></div>
+<div class="bg-primary-container/40 w-full h-[60%] rounded-sm"></div>
+<div class="bg-primary-container/40 w-full h-[55%] rounded-sm"></div>
+<div class="bg-primary-container/60 w-full h-[85%] rounded-sm"></div>
+<div class="bg-primary w-full h-[70%] rounded-sm"></div>
+<div class="bg-primary w-full h-[65%] rounded-sm"></div>
+<div class="bg-primary w-full h-[40%] rounded-sm"></div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="bg-surface-container-low p-3 rounded-xl text-center">
+<span class="text-[10px] uppercase font-bold text-on-surface-variant block mb-1">Speed</span>
+<span class="text-xl font-headline font-black text-primary">42 <span class="text-[10px]">cm/s</span></span>
+</div>
+<div class="bg-surface-container-low p-3 rounded-xl text-center">
+<span class="text-[10px] uppercase font-bold text-on-surface-variant block mb-1">Distance</span>
+<span class="text-xl font-headline font-black text-primary">128 <span class="text-[10px]">cm</span></span>
+</div>
+</div>
+<div class="flex flex-col gap-2">
+<div class="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+<span>Sensor Status</span>
+<span>Signal 100%</span>
+</div>
+<div class="flex gap-1">
+<div class="h-2 flex-1 bg-secondary rounded-full"></div>
+<div class="h-2 flex-1 bg-secondary rounded-full"></div>
+<div class="h-2 flex-1 bg-secondary rounded-full"></div>
+<div class="h-2 flex-1 bg-secondary rounded-full"></div>
+<div class="h-2 flex-1 bg-secondary rounded-full"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Algorithm Selection -->
+<div class="glass-card rounded-2xl p-6 flex flex-col gap-4">
+<h3 class="text-xs font-black uppercase tracking-[0.2em] text-on-surface-variant">Logic Processor</h3>
+<div class="relative">
+<select class="w-full bg-surface-container-low border-none rounded-xl py-3 px-4 text-sm font-semibold focus:ring-2 focus:ring-primary appearance-none">
+<option>A* Search (Heuristic)</option>
+<option>BFS (Breadth First)</option>
+<option>DFS (Depth First)</option>
+<option>UCS (Uniform Cost)</option>
+<option>Greedy Best-First</option>
+</select>
+<span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-outline">expand_more</span>
+</div>
+</div>
+<!-- Control Buttons -->
+<div class="mt-auto flex flex-col gap-3">
+<button class="w-full py-4 bg-secondary-fixed text-on-secondary-fixed font-black uppercase tracking-widest text-xs rounded-xl shadow-lg shadow-secondary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined">rocket_launch</span>
+                        LOAD ROUTE &amp; START
+                    </button>
+<button class="w-full py-4 bg-primary-container text-on-primary-container font-black uppercase tracking-widest text-xs rounded-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined">home</span>
+                        RETURN TO BASE
+                    </button>
+<button class="w-full py-4 bg-error text-on-error font-black uppercase tracking-widest text-xs rounded-xl shadow-lg shadow-error/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">report</span>
+                        E-STOP
+                    </button>
+</div>
+</aside>
+</div>
+</main>
+<!-- BottomNavBar: Authority Source JSON (Responsive) -->
+<nav class="md:hidden fixed bottom-0 left-1/2 -translate-x-1/2 z-50 flex items-center p-2 mb-8 bg-white/40 dark:bg-slate-950/40 backdrop-blur-2xl rounded-2xl mx-auto w-fit shadow-[0_20px_50px_rgba(0,0,0,0.1)] border border-white/20 dark:border-slate-700/30">
+<button class="bg-[#0066FF] text-white rounded-xl px-6 py-3 flex items-center gap-2 transition-all active:scale-90 duration-200">
+<span class="material-symbols-outlined">play_arrow</span>
+<span class="font-inter text-[10px] font-bold">Start</span>
+</button>
+<button class="text-[#2c2f31] dark:text-slate-300 px-6 py-3 flex items-center gap-2 hover:bg-[#0066FF]/10 transition-all active:scale-90 duration-200">
+<span class="material-symbols-outlined">stop</span>
+<span class="font-inter text-[10px] font-bold">Stop</span>
+</button>
+<button class="text-[#2c2f31] dark:text-slate-300 px-6 py-3 flex items-center gap-2 hover:bg-[#0066FF]/10 transition-all active:scale-90 duration-200">
+<span class="material-symbols-outlined">auto_mode</span>
+<span class="font-inter text-[10px] font-bold">Auto</span>
+</button>
+<button class="text-[#2c2f31] dark:text-slate-300 px-6 py-3 flex items-center gap-2 hover:bg-[#0066FF]/10 transition-all active:scale-90 duration-200">
+<span class="material-symbols-outlined">videogame_asset</span>
+<span class="font-inter text-[10px] font-bold">Manual</span>
+</button>
+</nav>
+</body></html>
