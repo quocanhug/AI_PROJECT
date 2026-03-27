@@ -34,7 +34,7 @@ AsyncWebServer server(80);
 // ================= CÁC BIẾN QUẢN LÝ CHẾ ĐỘ =================
 volatile UIMode currentMode = MODE_MANUAL;
 bool line_mode = false;
-bool is_auto_running = false; // <--- KHÓA AN TOÀN TRẠNG THÁI CHẠY
+bool is_auto_running = false; // KHÓA AN TOÀN TRẠNG THÁI CHẠY
 
 int currentPath[20]; 
 int pathLength = 0;
@@ -76,7 +76,6 @@ void setup() {
 
   server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
 
-  // API Cập nhật chế độ (Chỉ setup, không cho chạy bậy)
   server.on("/setMode", HTTP_GET, [](AsyncWebServerRequest* r){
     if (!r->hasParam("m")) { r->send(400,"text/plain","manual"); return; }
     String m = r->getParam("m")->value();
@@ -86,18 +85,17 @@ void setup() {
       do_line_setup();
       currentMode = MODE_LINE_ONLY;
       line_mode = true;
-      is_auto_running = true; // <--- MỞ KHÓA: User đã bấm nút Bắt đầu dò line
+      is_auto_running = true; // MỞ KHÓA CHẠY
     } else if (m == "manual") {
       do_line_abort();
       stopCar();
       currentMode = MODE_MANUAL;
       line_mode = false;
-      is_auto_running = false; // <--- ĐÓNG KHÓA
+      is_auto_running = false; // ĐÓNG KHÓA
     }
     r->send(200,"text/plain", m);
   });
 
-  // API Nạp lộ trình
   server.on("/deliver", HTTP_GET, [](AsyncWebServerRequest* r){
     if (r->hasParam("dir")) currentDir = r->getParam("dir")->value().toInt();
     currentPathIndex = 0; 
@@ -118,7 +116,7 @@ void setup() {
     do_line_setup();
     currentMode = MODE_DELIVERY;
     line_mode = true;
-    is_auto_running = true; // <--- MỞ KHÓA: User đã nạp lộ trình và yêu cầu chạy
+    is_auto_running = true; // MỞ KHÓA CHẠY GIAO HÀNG
     
     r->send(200, "text/plain", "OK");
   });
@@ -150,7 +148,6 @@ void setup() {
     r->send(200, "application/json", json);
   });
 
-  // Moves
   server.on("/forward",    HTTP_GET, [](AsyncWebServerRequest *r){ curMotion=FWD;        if(currentMode==MODE_MANUAL) forward();      r->send(200,"text/plain","OK"); });
   server.on("/backward",   HTTP_GET, [](AsyncWebServerRequest *r){ curMotion=BWD;        if(currentMode==MODE_MANUAL) backward();     r->send(200,"text/plain","OK"); });
   server.on("/left",       HTTP_GET, [](AsyncWebServerRequest *r){ curMotion=LEFT_TURN;  if(currentMode==MODE_MANUAL) left();         r->send(200,"text/plain","OK"); });
@@ -171,7 +168,6 @@ void setup() {
 }
 
 void loop() {
-  // Chỉ gọi hàm tự động khi đã đúng chế độ VÀ người dùng đã bấm nút Bắt Đầu
   if ((currentMode == MODE_LINE_ONLY || currentMode == MODE_DELIVERY) && is_auto_running) {
     do_line_loop();
   } else {

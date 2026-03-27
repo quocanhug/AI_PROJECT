@@ -11,7 +11,7 @@ extern volatile UIMode currentMode;
 extern void gripOpen();
 extern void gripClose();
 
-// CẤU HÌNH MỨC LOGIC CẢM BIẾN (HIGH hoặc LOW tùy vào loại cảm biến)
+// CẤU HÌNH MỨC LOGIC CẢM BIẾN
 #define LINE_DETECT_STATE HIGH 
 inline bool onLine(int pin){ return digitalRead(pin) == LINE_DETECT_STATE; }
 
@@ -51,20 +51,50 @@ int getTargetDirection(int nodeA, int nodeB) {
 #define PPR_EFFECTIVE (PULSES_PER_REV*3) 
 #define MIN_EDGE_US 1500
 
+// ================= HC-SR04 TỐI ƯU HÓA TỐC ĐỘ (KHÔNG DELAY) =================
 #define TRIG_PIN 21
 #define ECHO_PIN 19
 const float OBSTACLE_TH_CM = 20.0f;     
-const unsigned long US_TIMEOUT = 12000; 
+const unsigned long US_TIMEOUT = 6000; // Ép timeout ngắn để không lag vòng lặp PID
 
 static unsigned long us_last_ms = 0;
 static float us_dist_cm = 999.0f;
+static float us_ema = 999.0f; 
 static uint8_t obs_hit = 0;
 static bool obs_latched = false;
 
 const float OBSTACLE_ON_CM  = OBSTACLE_TH_CM; 
 const float OBSTACLE_OFF_CM = 25.0f;          
-const uint8_t OBS_HIT_N = 3;               
-const unsigned long US_PERIOD_MS = 25;        
+const uint8_t OBS_HIT_N = 2;               
+
+float readDistanceCM_Fast(){
+  digitalWrite(TRIG_PIN, LOW); delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH); delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+  unsigned long dur = pulseIn(ECHO_PIN, HIGH, US_TIMEOUT);
+  if (dur == 0) return 999.0f;
+  return dur * 0.0343f / 2.0f;
+}
+
+static inline void updateObstacleState(){
+  if (millis() - us_last_ms < 40) return; // Chỉ quét siêu âm 25Hz để nhẹ CPU
+  us_last_ms = millis();
+  
+  float d = readDistanceCM_Fast();
+  if (d < 2.0f) d = 999.0f; 
+  
+  us_ema = 0.6f * us_ema + 0.4f * d; 
+  us_dist_cm = us_ema;
+
+  if (!obs_latched){
+    if (us_dist_cm > 0 && us_dist_cm <= OBSTACLE_ON_CM){
+      if (++obs_hit >= OBS_HIT_N) obs_latched = true;
+    } else { obs_hit = 0; }
+  } else {
+    if (us_dist_cm >= OBSTACLE_OFF_CM){ obs_latched = false; obs_hit = 0; }
+  }
+}
+// =========================================================================
 
 const float WHEEL_RADIUS_M = 0.0325f;
 const float CIRC = 2.0f * 3.1415926f * WHEEL_RADIUS_M; 
@@ -153,44 +183,6 @@ int pidStep(PID &pid, float v_target, float v_meas, float dt_s){
   float u = pid.Kp * err + pid.i_term + pid.Kd * d;
   pid.prev_err = err;
   return clamp255((int)u);
-}
-
-float readDistanceCM(){
-  digitalWrite(TRIG_PIN, LOW); delayMicroseconds(2);
-  digitalWrite(TRIG_PIN, HIGH); delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
-  unsigned long dur = pulseIn(ECHO_PIN, HIGH, US_TIMEOUT);
-  if (dur == 0) return -1;
-  return dur * 0.0343f / 2.0f;
-}
-
-static float readDistanceCM_filtered(){
-  float a[5];
-  for (int i = 0; i < 5; i++){
-    float d = readDistanceCM();
-    if (d < 2.0f || d > 200.0f) d = 999.0f; 
-    a[i] = d; delay(2);                                
-  }
-  for(int i=0; i<4; i++) {
-    for(int j=0; j<4-i; j++) {
-      if(a[j] > a[j+1]) { float t = a[j]; a[j] = a[j+1]; a[j+1] = t; }
-    }
-  }
-  return a[2];
-}
-
-static inline void updateObstacleState(){
-  if (millis() - us_last_ms < US_PERIOD_MS) return;
-  us_last_ms = millis();
-  us_dist_cm = readDistanceCM_filtered();
-
-  if (!obs_latched){
-    if (us_dist_cm > 0 && us_dist_cm <= OBSTACLE_ON_CM){
-      if (++obs_hit >= OBS_HIT_N) obs_latched = true;
-    } else { obs_hit = 0; }
-  } else {
-    if (us_dist_cm >= OBSTACLE_OFF_CM){ obs_latched = false; obs_hit = 0; }
-  }
 }
 
 long countsForDistance(double dist_m){ return (long)(dist_m / CIRC * PPR_EFFECTIVE + 0.5); }
@@ -371,7 +363,7 @@ void do_line_loop() {
     } else {
       if (last_seen == LEFT)       { vL_tgt = -vF; vR_tgt =  vF; }
       else if (last_seen == RIGHT) { vL_tgt =  vF; vR_tgt = -vF; }
-      else                         { vL_tgt =  vF; vR_tgt = -vF; } // Mất line không rõ hướng -> Auto xoay phải tìm line
+      else                         { vL_tgt =  vF; vR_tgt = -vF; } 
     }
   }
 
@@ -386,21 +378,17 @@ void do_line_loop() {
     else if ( R1 && !M && !R2 ){ last_seen = RIGHT; vL_tgt = v_base + v_boost; vR_tgt = v_base - v_boost; }
     else if ( R2 && (!L1 && !L2) ){ last_seen = RIGHT; vL_tgt = v_base + v_hard;  vR_tgt = v_base - v_hard; }
     
-    // ================= XỬ LÝ NGÃ TƯ / NGÃ BA =================
+    // ================= XỬ LÝ NGÃ TƯ / NGÃ BA CHỮ T =================
     else if (on_cnt >= 3){
       if (currentMode == MODE_LINE_ONLY) {
-        motorsStop(); delay(200); // Dừng lại lấy bình tĩnh
+        motorsStop(); delay(200); 
         
-        // Nhích nhẹ lên 0.06m để vượt qua vạch đen nằm ngang của ngã tư
         move_forward_distance(0.06, 120); 
         
-        // Check xem đằng trước có đường thẳng không
         if (!onLine(M_SENSOR) && !onLine(L1_SENSOR) && !onLine(R1_SENSOR)) {
-          // Lỗi cụt đường (Ngã 3 chữ T) -> Xoay mòng mòng để tìm line!
-          motorWriteLR_signed(130, -130); // Xoay phải
+          motorWriteLR_signed(130, -130); 
           unsigned long t0 = millis();
           while(millis() - t0 < 3500) {
-            // Khi xoay mà một trong các mắt giữa thấy line thì thoát vòng lặp
             if (onLine(M_SENSOR) || onLine(L1_SENSOR) || onLine(R1_SENSOR)) {
               break; 
             }
@@ -409,7 +397,6 @@ void do_line_loop() {
           motorsStop();
         }
         
-        // Reset biến để xe tự tin đi tiếp
         last_seen = NONE; 
         recovering = false;
       } 
@@ -448,15 +435,13 @@ void do_line_loop() {
         }
       }
     }
-    // =========================================================
-    
     else {
       if (!seen_line_ever){ vL_tgt = 0; vR_tgt = 0; }
       else {
         recovering = true; rec_t0 = millis();
         if (last_seen == LEFT)       { vL_tgt = -vF; vR_tgt =  vF; }
         else if (last_seen == RIGHT) { vL_tgt =  vF; vR_tgt = -vF; }
-        else                         { vL_tgt =  vF; vR_tgt = -vF; } // Mất line -> Tự xoay phải tìm line
+        else                         { vL_tgt =  vF; vR_tgt = -vF; } 
       }
     }
   }
