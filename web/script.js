@@ -216,7 +216,8 @@ function updateTelemetry(d){
   document.getElementById('autoObstacleVal').textContent=obs>200?'--':obs.toFixed(0);
   if(d.sensors){ for(let i=0;i<5;i++){ const el=document.getElementById('sm'+i); if(el) el.className='w-3 h-3 rounded-full '+(d.sensors[i]?'bg-primary shadow-[0_0_6px_rgba(0,90,180,0.5)]':'bg-surface-container'); } }
   if(d.state) updateRobotState(d.state);
-  if(d.robotNode!==undefined && d.robotNode>=0){
+  // Chỉ cập nhật vị trí mũi tên từ telemetry khi robot ĐANG CHẠY (không phải IDLE)
+  if(d.robotNode!==undefined && d.robotNode>=0 && d.state && d.state!=="IDLE"){
     const jsDir=CPP_TO_JS_DIR[d.robotDir||0];
     updateRobotIndicator(d.robotNode, jsDir);
   }
