@@ -98,15 +98,35 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
     client->text("{\"type\":\"PONG\"}");
   }
   else if (strcmp(type, "ROUTE") == 0) {
-    // Switch to AI route mode
+    // Nạp path node trực tiếp vào currentPath[] — dùng do_line_loop() đã ổn định
     stopCar();
+    
+    // Parse path array từ JSON: [0, 1, 6, 7, 12, ...]
+    JsonArray pathArr = doc["path"].as<JsonArray>();
+    pathLength = 0;
+    for (JsonVariant v : pathArr) {
+      if (pathLength < 20) currentPath[pathLength++] = v.as<int>();
+    }
+    currentPathIndex = 0;
+    
+    // Tính hướng ban đầu từ 2 node đầu tiên
+    if (doc.containsKey("initialDir")) {
+      currentDir = doc["initialDir"] | 0;
+    } else if (pathLength >= 2) {
+      // Tự tính từ node_coords trong do_line.cpp
+      extern int getTargetDirection(int, int);
+      currentDir = getTargetDirection(currentPath[0], currentPath[1]);
+    }
+    
     do_line_setup();
     currentMode = MODE_AI_ROUTE;
     line_mode = true;
     is_auto_running = true;
-    route_setup();
-    route_load(msg);
-    Serial.println("AI Route mode activated via WebSocket");
+    
+    // Gửi ACK về Web
+    String ack = "{\"type\":\"ROUTE_ACK\",\"commands\":" + String(pathLength) + "}";
+    ws.textAll(ack);
+    Serial.printf("AI Route: %d nodes loaded, dir=%d\n", pathLength, currentDir);
   }
   else if (strcmp(type, "STOP") == 0 || strcmp(type, "ESTOP") == 0) {
     stopCar();
@@ -132,9 +152,16 @@ static unsigned long lastTelemetryMs = 0;
 const unsigned long TELEMETRY_INTERVAL_MS = 200;
 
 void sendTelemetry() {
-  if (ws.count() == 0) return; // No clients connected
+  if (ws.count() == 0) return;
   if (currentMode == MODE_AI_ROUTE) {
-    String json = route_telemetry_json();
+    // Gửi telemetry với vị trí node hiện tại (intersection-based)
+    int robotNode = (currentPathIndex < pathLength) ? currentPath[currentPathIndex] : currentPath[pathLength-1];
+    String json = "{\"type\":\"TELEMETRY\",\"state\":\"";
+    json += is_auto_running ? "FOLLOWING_LINE" : "IDLE";
+    json += "\",\"step\":" + String(currentPathIndex);
+    json += ",\"total\":" + String(pathLength);
+    json += ",\"robotNode\":" + String(robotNode);
+    json += ",\"robotDir\":" + String(currentDir) + "}";
     ws.textAll(json);
   }
 }
@@ -273,16 +300,13 @@ void loop() {
   static unsigned long lastCleanup = 0;
   if (millis() - lastCleanup > 1000) { ws.cleanupClients(); lastCleanup = millis(); }
 
-  if (currentMode == MODE_AI_ROUTE && is_auto_running) {
-    // AI Route mode — use Route Interpreter state machine
-    route_loop();
-    // Send telemetry every 200ms
-    if (millis() - lastTelemetryMs >= TELEMETRY_INTERVAL_MS) {
+  if ((currentMode == MODE_LINE_ONLY || currentMode == MODE_DELIVERY || currentMode == MODE_AI_ROUTE) && is_auto_running) {
+    do_line_loop();
+    // Gửi telemetry cho AI Route
+    if (currentMode == MODE_AI_ROUTE && millis() - lastTelemetryMs >= TELEMETRY_INTERVAL_MS) {
       lastTelemetryMs = millis();
       sendTelemetry();
     }
-  } else if ((currentMode == MODE_LINE_ONLY || currentMode == MODE_DELIVERY) && is_auto_running) {
-    do_line_loop();
   } else {
     if (line_mode) { stopCar(); line_mode = false; }
     delay(5);

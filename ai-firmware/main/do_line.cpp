@@ -273,7 +273,7 @@ void move_forward_distance(double dist_m, int pwmAbs){
 bool move_forward_distance_until_line(double dist_m, int pwmAbs){
   long target = countsForDistance(dist_m);
   long sL, sR; noInterrupts(); sL = encL_total; sR = encR_total; interrupts();
-  motorWriteLR_signed(+pwmAbs, +pwmAbs);
+  motorWriteLR_signed(+pwmAbs, +pwmAbs);qq
   while (true){
     if (!g_line_enabled){ motorsStop(); return false; }
     long cL, cR; noInterrupts(); cL = encL_total; cR = encR_total; interrupts();
@@ -431,6 +431,67 @@ void do_line_loop() {
               currentDir = targetDir; 
             }
             move_forward_distance(0.08, 120); 
+          }
+        }
+      }
+      // ================= MODE_AI_ROUTE =================
+      // Dùng logic GIỐNG DELIVERY (đã proven) — chỉ khác: không gripper, gửi WS khi xong
+      else if (currentMode == MODE_AI_ROUTE) {
+        static unsigned long last_ai_node_time = 0;
+        if (millis() - last_ai_node_time < 1500) {
+          // Debounce — tránh đếm trùng giao lộ
+          last_seen = NONE; vL_tgt = v_base * 0.8f; vR_tgt = v_base * 0.8f;
+        } else {
+          last_ai_node_time = millis();
+          motorsStop(); delay(300);
+
+          if (pathLength > 0) {
+            currentPathIndex++;
+            Serial.printf("[AI_ROUTE] Node %d/%d (pathIndex=%d)\n", 
+                          currentPathIndex, pathLength-1, currentPathIndex);
+            
+            if (currentPathIndex >= pathLength - 1) {
+              // ĐẾN ĐÍCH — dừng và thông báo Web
+              motorsStop();
+              Serial.println("[AI_ROUTE] >>> DESTINATION REACHED <<<");
+              // Gửi WS completion (extern từ main.ino)
+              extern void wsBroadcast(const char*);
+              String msg = "{\"type\":\"COMPLETED\",\"robotNode\":" + String(currentPath[pathLength-1]) + 
+                           ",\"robotDir\":" + String(currentDir) + "}";
+              wsBroadcast(msg.c_str());
+              delivered_count++;
+              line_mode = false; do_line_abort();
+              return;
+            }
+
+            // Tính hướng rẽ tại giao lộ
+            int currentNode = currentPath[currentPathIndex];
+            int nextNode = currentPath[currentPathIndex + 1];
+            int targetDir = getTargetDirection(currentNode, nextNode);
+            
+            if (targetDir != -1) {
+              int diff = (targetDir - currentDir + 4) % 4;
+              const int TURN_PWM = 160;
+              
+              if (diff == 1) {
+                spin_right_deg(85.0, TURN_PWM);
+                Serial.println("  >> Turn RIGHT");
+              }
+              else if (diff == 3) {
+                spin_left_deg(85.0, TURN_PWM);
+                Serial.println("  >> Turn LEFT");
+              }
+              else if (diff == 2) {
+                spin_right_deg(175.0, TURN_PWM);
+                Serial.println("  >> U-TURN");
+              }
+              else {
+                Serial.println("  >> STRAIGHT");
+              }
+              currentDir = targetDir;
+            }
+            // Tiến thêm để thoát giao lộ và bắt lại line
+            move_forward_distance(0.08, 120);
           }
         }
       }
