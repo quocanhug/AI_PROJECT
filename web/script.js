@@ -387,17 +387,93 @@ function findPath(start,end,algo){
 const SEG_COLORS = ["#16a34a","#0873df","#964400","#ba1a1a","#465f89","#bd5700"];
 
 // Build segments for multi-target delivery
+// Greedy nearest-by-traversal: run algo from current node, whichever target it reaches first → go there next
+function findPathToNearest(start, targetSet, algo){
+  // Run the algorithm from 'start'; stop at the first node in targetSet it discovers.
+  if(obstacles.has(start)) return null;
+  algo=algo||document.getElementById("algoSel").value;
+  const steps=[];
+
+  if(algo==="bfs"){
+    let queue=[[start]], explored=new Set(), frontier=new Set([start]);
+    while(queue.length){
+      let path=queue.shift(), node=path[path.length-1];
+      frontier.delete(node); explored.add(node);
+      steps.push({current:node,explored:new Set(explored),frontier:new Set(frontier),from:path.length>1?path[path.length-2]:-1});
+      if(targetSet.has(node)) return {path,steps,visitedCount:explored.size,cost:path.length-1,foundTarget:node};
+      for(let nx of shuffle(graph[node]||[])){ if(!explored.has(nx)&&!frontier.has(nx)&&!obstacles.has(nx)){ frontier.add(nx); queue.push([...path,nx]); } }
+    }
+  } else if(algo==="dfs"){
+    let stack=[[start]], explored=new Set(), frontier=new Set([start]);
+    while(stack.length){
+      let path=stack.pop(), node=path[path.length-1];
+      frontier.delete(node);
+      if(explored.has(node)) continue; explored.add(node);
+      steps.push({current:node,explored:new Set(explored),frontier:new Set(frontier),from:path.length>1?path[path.length-2]:-1});
+      if(targetSet.has(node)) return {path,steps,visitedCount:explored.size,cost:path.length-1,foundTarget:node};
+      for(let nx of shuffle(graph[node]||[])){ if(!explored.has(nx)&&!obstacles.has(nx)){ frontier.add(nx); stack.push([...path,nx]); } }
+    }
+  } else if(algo==="ucs"){
+    let pq=[{path:[start],cost:0}], best=new Map(), frontier=new Set([start]);
+    best.set(start,0);
+    while(pq.length){
+      pq.sort((a,b)=>a.cost-b.cost); let cur=pq.shift(), node=cur.path[cur.path.length-1];
+      frontier.delete(node);
+      steps.push({current:node,explored:new Set(best.keys()),frontier:new Set(frontier),from:cur.path.length>1?cur.path[cur.path.length-2]:-1});
+      if(targetSet.has(node)) return {path:cur.path,steps,visitedCount:best.size,cost:cur.cost,foundTarget:node};
+      for(let nx of shuffle(graph[node]||[])){ if(obstacles.has(nx)) continue; let nc=cur.cost+getEdgeWeight(node,nx);
+        if(!best.has(nx)||nc<best.get(nx)){ best.set(nx,nc); frontier.add(nx); pq.push({path:[...cur.path,nx],cost:nc}); } }
+    }
+  } else if(algo==="greedy"){
+    // Greedy needs a target for heuristic — use nearest Euclidean center of remaining targets
+    let pq=[], explored=new Set(), frontier=new Set([start]);
+    // Initialize with heuristic to each target, pick minimum
+    for(let t of targetSet) pq.push({path:[start],h:heuristic(start,t),target:t});
+    pq.sort((a,b)=>a.h-b.h);
+    // Use multi-target greedy: h = min heuristic to any remaining target
+    pq=[{path:[start],h:Math.min(...[...targetSet].map(t=>heuristic(start,t)))}];
+    while(pq.length){
+      pq.sort((a,b)=>a.h-b.h); let cur=pq.shift(), node=cur.path[cur.path.length-1];
+      frontier.delete(node);
+      if(explored.has(node)) continue; explored.add(node);
+      steps.push({current:node,explored:new Set(explored),frontier:new Set(frontier),from:cur.path.length>1?cur.path[cur.path.length-2]:-1});
+      if(targetSet.has(node)) return {path:cur.path,steps,visitedCount:explored.size,cost:cur.path.length-1,foundTarget:node};
+      for(let nx of shuffle(graph[node]||[])){ if(!explored.has(nx)&&!obstacles.has(nx)){
+        frontier.add(nx); pq.push({path:[...cur.path,nx],h:Math.min(...[...targetSet].map(t=>heuristic(nx,t)))}); } }
+    }
+  } else { // astar
+    // A* multi-target: f = g + min_h(to any remaining target)
+    let pq=[{path:[start],g:0,f:Math.min(...[...targetSet].map(t=>heuristic(start,t)))}];
+    let gS=new Map(), explored=new Set(), frontier=new Set([start]);
+    gS.set(start,0);
+    while(pq.length){
+      pq.sort((a,b)=>a.f-b.f); let cur=pq.shift(), node=cur.path[cur.path.length-1];
+      frontier.delete(node);
+      if(explored.has(node)) continue; explored.add(node);
+      steps.push({current:node,explored:new Set(explored),frontier:new Set(frontier),from:cur.path.length>1?cur.path[cur.path.length-2]:-1});
+      if(targetSet.has(node)) return {path:cur.path,steps,visitedCount:explored.size,cost:cur.g,foundTarget:node};
+      for(let nx of shuffle(graph[node]||[])){ if(obstacles.has(nx)||explored.has(nx)) continue; let ng=cur.g+getEdgeWeight(node,nx);
+        if(!gS.has(nx)||ng<gS.get(nx)){ gS.set(nx,ng); frontier.add(nx);
+          pq.push({path:[...cur.path,nx],g:ng,f:ng+Math.min(...[...targetSet].map(t=>heuristic(nx,t)))}); } }
+    }
+  }
+  return null;
+}
+
 function buildSegments(sn, tarArr, algo){
   let ordered=[], currentS=sn, remaining=new Set(tarArr);
   const dm=document.getElementById("deliveryModeSel").value;
   if(dm==="express"&&tarArr.length>1){
+    // Express mode: deliver last-clicked target first
     ordered.push(tarArr[tarArr.length-1]); remaining.delete(tarArr[tarArr.length-1]);
   }
+  // Greedy nearest-by-traversal: run algo, whichever target it finds first → visit that one
   while(remaining.size){
-    let best=null,bestT=null,bestL=Infinity;
-    for(let t of remaining){let r=findPath(currentS,t,algo);if(r&&r.path.length<bestL){best=r;bestT=t;bestL=r.path.length;}}
-    if(!best) break; ordered.push(bestT); remaining.delete(bestT); currentS=bestT;
+    const r = findPathToNearest(currentS, remaining, algo);
+    if(!r) break;
+    ordered.push(r.foundTarget); remaining.delete(r.foundTarget); currentS=r.foundTarget;
   }
+  // Now build animated segments for each ordered pair
   let segs=[], fullPath=[sn]; currentS=sn;
   let totalSteps=0, totalExplored=0, totalCost=0;
   for(let tar of ordered){
@@ -711,22 +787,22 @@ document.getElementById("deliverBtn").addEventListener("click",async()=>{
   const cmds=pathToCommands(finalCalculatedPath,1);
   const algo=document.getElementById("algoSel").value;
   const btn=document.getElementById("deliverBtn");
-  btn.innerHTML='<span class="material-symbols-outlined text-sm animate-spin">progress_activity</span> ĐANG TRUYỀN...';
+  btn.innerHTML='⏳ ĐANG TRUYỀN...';
   deliveryStartTime=Date.now(); deliveryExpectedTime=finalCalculatedPath.length*2; deliveryInProgress=true;
   const banner=document.getElementById('deliveryStatusBanner');
   const icon=document.getElementById('deliveryStatusIcon');
   const text=document.getElementById('deliveryStatusText');
   banner.classList.remove('hidden');
   banner.className='flex items-center gap-2 rounded-xl p-3 bg-amber-50 border border-amber-200';
-  icon.textContent='local_shipping'; icon.className='material-symbols-outlined text-lg text-amber-600 animate-pulse';
+  icon.textContent='🚚'; icon.className='text-lg text-amber-600 animate-pulse';
   text.textContent=`🚚 Đang giao hàng... (Dự kiến: ~${deliveryExpectedTime}s)`; text.className='text-sm font-bold text-amber-700';
   if(ws&&ws.readyState===WebSocket.OPEN){
     wsSend({type:"ROUTE",commands:cmds,total_steps:cmds.length,algorithm:algo,path:finalCalculatedPath});
   } else { try{await fetch(`/deliver?dir=1&path=${finalCalculatedPath.join(",")}`);}catch(e){} }
   setTimeout(()=>{
-    btn.innerHTML='<span class="material-symbols-outlined text-sm">check_circle</span> ĐÃ NẠP!';
+    btn.innerHTML='✅ ĐÃ NẠP!';
     showToast("Lộ trình đã được gửi đến robot","success");
-    setTimeout(()=>{ btn.innerHTML='<span class="material-symbols-outlined text-sm">play_circle</span> NẠP LỘ TRÌNH & BẮT ĐẦU'; },2000);
+    setTimeout(()=>{ btn.innerHTML='▶ NẠP LỘ TRÌNH & BẮT ĐẦU'; },2000);
   },1000);
 });
 
