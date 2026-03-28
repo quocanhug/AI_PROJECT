@@ -3,7 +3,6 @@
 #include "route_interpreter.h"
 #include "do_line.h"
 
-// ---- Gọi hàm gốc từ do_line.cpp ----
 extern void spin_left_deg(double deg, int pwmMax);
 extern void spin_right_deg(double deg, int pwmMax);
 extern void move_forward_distance(double dist_m, int pwmAbs);
@@ -29,7 +28,6 @@ extern void gripClose();
 #define RT_M_SENSOR  33
 #define RT_R1_SENSOR 27
 #define RT_R2_SENSOR 25
-
 #define RT_TRIG_PIN 21
 #define RT_ECHO_PIN 19
 
@@ -60,15 +58,12 @@ static float rt_vR_ema = 0.0f;
 static int rt_pwmL_prev = 0;
 static int rt_pwmR_prev = 0;
 static unsigned long rt_ctrl_prev = 0;
-
 static long rt_encL_start = 0;
 static long rt_encR_start = 0;
 
 static WsSendFn wsSendCallback = nullptr;
-
 void route_set_ws_callback(WsSendFn fn) { wsSendCallback = fn; }
 
-// LOGIC CẢM BIẾN (Tương tự do_line.cpp)
 inline bool rt_onLine(int pin) { return digitalRead(pin) == HIGH; }  
 inline int rt_clamp255(int v) { return v < 0 ? 0 : (v > 255 ? 255 : v); }
 inline float rt_clampf(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
@@ -87,10 +82,26 @@ static inline int rt_shape_pwm(int target, int prev) {
 
 extern float ticksToVel(long ticks, float dt_s);
 
+// ================= XÁC ĐỊNH NGÃ TƯ THÔNG MINH =================
 bool isIntersection() {
-  return rt_onLine(RT_L2_SENSOR) && rt_onLine(RT_L1_SENSOR) &&
-         rt_onLine(RT_M_SENSOR) && rt_onLine(RT_R1_SENSOR) && rt_onLine(RT_R2_SENSOR);
+  bool L2 = rt_onLine(RT_L2_SENSOR);
+  bool L1 = rt_onLine(RT_L1_SENSOR);
+  bool M  = rt_onLine(RT_M_SENSOR);
+  bool R1 = rt_onLine(RT_R1_SENSOR);
+  bool R2 = rt_onLine(RT_R2_SENSOR);
+  int onCount = (int)L2 + (int)L1 + (int)M + (int)R1 + (int)R2;
+  
+  // Đảm bảo là Ngã tư hoặc Ngã 3 chữ T: Cần ít nhất 3 mắt sáng, trong đó phải có mắt Giữa và các mắt Rìa
+  if (onCount >= 3) {
+     if ((L2 || L1) && M && (R2 || R1)) return true; // Ngã tư hoặc ngã 3 hoàn chỉnh
+     if (L2 && L1 && M) return true; // Ngã 3 vuông góc trái
+     if (R2 && R1 && M) return true; // Ngã 3 vuông góc phải
+  }
+  return false;
 }
+
+// ================= CẢI TIẾN BÁM LINE CÓ BỘ NHỚ =================
+static float rt_last_line_err = 0.0f; // Bộ nhớ lưu hướng văng cuối cùng
 
 float getLineError() {
   bool L2 = rt_onLine(RT_L2_SENSOR);
@@ -99,11 +110,18 @@ float getLineError() {
   bool R1 = rt_onLine(RT_R1_SENSOR);
   bool R2 = rt_onLine(RT_R2_SENSOR);
   
-  int onCount = (int)L2 + L1 + M + R1 + R2;
-  if (onCount == 0) return 0.0f;  
+  int onCount = (int)L2 + (int)L1 + (int)M + (int)R1 + (int)R2;
+  
+  // NẾU MẤT LINE HOÀN TOÀN -> Dùng bộ nhớ đánh lái gắt tìm lại line
+  if (onCount == 0) {
+    if (rt_last_line_err > 0) return 4.0f;  // Văng qua trái -> Đánh mạnh qua phải
+    if (rt_last_line_err < 0) return -4.0f; // Văng qua phải -> Đánh mạnh qua trái
+    return 0.0f;
+  }
   
   float weighted = (-4.0f * L2) + (-2.0f * L1) + (0.0f * M) + (2.0f * R1) + (4.0f * R2);
-  return weighted / onCount;
+  rt_last_line_err = weighted / onCount; // Cập nhật lại bộ nhớ
+  return rt_last_line_err;
 }
 
 void rt_wsSend(const String& msg) {
@@ -111,20 +129,17 @@ void rt_wsSend(const String& msg) {
   Serial.println(msg);
 }
 
-// QUẢN LÝ LỆNH
 void cmdQueueClear() { cmdHead = 0; cmdTail = 0; cmdTotal = 0; cmdExecuted = 0; }
 bool cmdQueueEmpty() { return cmdHead == cmdTail; }
 void cmdQueuePush(char cmd) { if (cmdTail < MAX_COMMANDS) { commandQueue[cmdTail++] = cmd; cmdTotal++; } }
 char cmdQueuePop() { if (cmdHead < cmdTail) { cmdExecuted++; return commandQueue[cmdHead++]; } return '\0'; }
 int cmdQueueSize() { return cmdTail - cmdHead; }
 
-// KHỞI TẠO TỌA ĐỘ
-struct GridPos { int row; int col; int dir; }; // dir: 0=up, 1=right, 2=down, 3=left
+struct GridPos { int row; int col; int dir; }; 
 static GridPos robotGridPos = {0, 0, 0};
-static int initialTargetNode = -1; // Để phục vụ thả kẹp
+static int initialTargetNode = -1; 
 
 void rt_initGridPos(int startNode, int startDir) {
-  // Lưới 4x5: node = row * 5 + col
   robotGridPos.row = startNode / 5;
   robotGridPos.col = startNode % 5;
   robotGridPos.dir = startDir;
@@ -144,17 +159,13 @@ void rt_updateDirAfterTurn(char cmd) {
   else if (cmd == 'L') robotGridPos.dir = (robotGridPos.dir + 3) % 4;
 }
 
-void rt_advanceGridPos() {
-  robotGridPos = rt_getNextGridPos(robotGridPos);
-}
+void rt_advanceGridPos() { robotGridPos = rt_getNextGridPos(robotGridPos); }
 
-// SETUP & LOAD
 void route_setup() {
   currentState = RS_IDLE; cmdQueueClear();
   intersectionCount = 0; wasIntersection = false;
   rt_vL_ema = 0; rt_vR_ema = 0; rt_pwmL_prev = 0; rt_pwmR_prev = 0;
   rt_ctrl_prev = millis(); rt_distance = 0;
-  
   noInterrupts(); rt_encL_start = encL_total; rt_encR_start = encR_total; interrupts();
 }
 
@@ -164,7 +175,6 @@ void route_load(const char* json) {
   if (err) { Serial.println("JSON parse error!"); return; }
   
   if (!doc.containsKey("commands")) return;
-  
   cmdQueueClear();
   JsonArray cmds = doc["commands"].as<JsonArray>();
   for (JsonVariant v : cmds) {
@@ -180,7 +190,8 @@ void route_load(const char* json) {
   if(pathArr.size() > 0) initialTargetNode = pathArr[pathArr.size() - 1];
 
   currentState = RS_FOLLOWING_LINE;
-  intersectionCount = 0; wasIntersection = false; stateTimer = millis();
+  intersectionCount = 0; wasIntersection = true; // Bắt đầu ở Node -> Đợi xe chạy ra khỏi node mới bắt đầu đếm
+  stateTimer = millis();
   
   pidL.i_term = 0; pidL.prev_err = 0; pidR.i_term = 0; pidR.prev_err = 0;
   rt_vL_ema = 0; rt_vR_ema = 0; rt_pwmL_prev = 0; rt_pwmR_prev = 0;
@@ -193,14 +204,13 @@ void route_load(const char* json) {
   rt_wsSend("{\"type\":\"ROUTE_ACK\",\"commands\":" + String(cmdTotal) + "}");
 }
 
-// DÒ LINE
 void rt_pidLineFollow() {
   unsigned long now = millis(); const unsigned long CTRL_DT_MS = 10;
   if (now - rt_ctrl_prev < CTRL_DT_MS) return;
   float dt_s = (now - rt_ctrl_prev) / 1000.0f; rt_ctrl_prev = now;
   
   float lineErr = getLineError();
-  float v_boost = 0.08f; float v_hard  = 0.10f; // Tương đương do_line.cpp
+  float v_boost = 0.08f; float v_hard  = 0.10f;
   float vL_tgt, vR_tgt;
   
   float absErr = fabs(lineErr);
@@ -238,17 +248,14 @@ float rt_checkObstacle() {
   return rt_obstacleDist;
 }
 
-// ==================== LOOP ====================
 void route_loop() {
   rt_readSensors();
   
-  // Tính quãng đường chuẩn (PPR = 20)
   noInterrupts(); long totalL = encL_total - rt_encL_start; long totalR = encR_total - rt_encR_start; interrupts();
   const float RT_CIRC = 2.0f * 3.1415926f * 0.0325f;  
-  const int RT_PPR = 20;  // ĐÃ SỬA THÀNH 20
+  const int RT_PPR = 20;  
   rt_distance = ((float)(totalL + totalR) / 2.0f / RT_PPR) * RT_CIRC * 100.0f;
   
-  // Phát Telemetry định kỳ lên Web (500ms / lần)
   static unsigned long lastTel = 0;
   if (millis() - lastTel > 500 && currentState != RS_IDLE) {
     lastTel = millis();
@@ -274,7 +281,10 @@ void route_loop() {
       bool isInter = isIntersection();
       if (isInter && !wasIntersection) {
         motorsStop(); delay(50);
-        move_forward_distance(0.02, 100); motorsStop(); delay(50); // Nhích qua vạch
+        // ================= CĂN TÂM BÁNH XE CHUẨN XÁC =================
+        // Đẩy trục bánh xe tiến thêm 4.5cm để vào chính giữa ngã tư trước khi xoay
+        move_forward_distance(0.045, 120); 
+        motorsStop(); delay(50); 
         currentState = RS_AT_INTERSECTION;
         wasIntersection = true;
         break;
@@ -290,8 +300,8 @@ void route_loop() {
       
       switch (cmd) {
         case 'F': rt_advanceGridPos(); break;
-        case 'L': spin_left_deg(90.0, 140); motorsStop(); delay(100); rt_updateDirAfterTurn('L'); rt_advanceGridPos(); break; // ĐÃ SỬA: PWM 140
-        case 'R': spin_right_deg(90.0, 140); motorsStop(); delay(100); rt_updateDirAfterTurn('R'); rt_advanceGridPos(); break; // ĐÃ SỬA: PWM 140
+        case 'L': spin_left_deg(90.0, 140); motorsStop(); delay(100); rt_updateDirAfterTurn('L'); rt_advanceGridPos(); break;
+        case 'R': spin_right_deg(90.0, 140); motorsStop(); delay(100); rt_updateDirAfterTurn('R'); rt_advanceGridPos(); break;
         default: break;
       }
       
@@ -305,7 +315,7 @@ void route_loop() {
       if (cmdQueueEmpty()) currentState = RS_DONE;
       else currentState = RS_FOLLOWING_LINE;
       
-      rt_wsSend(route_telemetry_json()); // Cập nhật ngay sau khi qua ngã tư
+      rt_wsSend(route_telemetry_json()); 
       break;
     }
     
@@ -322,19 +332,16 @@ void route_loop() {
     
     case RS_DONE: {
       motorsStop();
-      // Nhả kẹp nếu có đơn
       gripOpen(); delay(1500); gripClose();
       delivered_count++;
-      
       rt_wsSend("{\"type\":\"COMPLETED\",\"intersections\":" + String(intersectionCount) + ",\"distance_cm\":" + String(rt_distance, 1) + "}");
       currentState = RS_IDLE;
-      is_auto_running = false; // Xong là tắt auto
+      is_auto_running = false; 
       break;
     }
   }
 }
 
-// ==================== API ====================
 void route_abort() { motorsStop(); cmdQueueClear(); currentState = RS_IDLE; Serial.println("Route aborted"); }
 bool route_is_done() { return currentState == RS_IDLE || currentState == RS_DONE; }
 
