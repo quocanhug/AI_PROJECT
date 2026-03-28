@@ -130,36 +130,55 @@ function wsSend(obj){ if(ws&&ws.readyState===WebSocket.OPEN) ws.send(JSON.string
 // ==================== WS Message Handler ====================
 function handleWsMessage(data){
   if(data.type==="TELEMETRY") updateTelemetry(data);
-  else if(data.type==="ROUTE_ACK") showToast(`Route nạp: ${data.commands} lệnh`,"success");
+  else if(data.type==="ROUTE_ACK") showToast(`Route nạp: ${data.commands} node`,"success");
   else if(data.type==="OBSTACLE_DETECTED"){
-    showToast(`⚠️ Vật cản tại (${data.position.row},${data.position.col})!`,"error");
+    const obsNode = data.obstacleNode !== undefined ? data.obstacleNode : 
+                    (data.position ? data.position.row * 5 + data.position.col : -1);
+    showToast(`⚠️ Vật cản tại Node ${obsNode}!`,"error");
     updateRobotState("OBSTACLE");
     handleDynamicReroute(data);
   }
   else if(data.type==="COMPLETED"){
-    showToast(`Hoàn thành! ${data.intersections} giao lộ, ${data.distance_cm}cm`,"success");
-    updateRobotState("DONE"); handleDeliveryCompleted();
+    showToast(`✅ Hoàn thành lộ trình!`,"success");
+    updateRobotState("DONE");
+    if(data.robotNode!==undefined){
+      const jsDir=CPP_TO_JS_DIR[data.robotDir||0];
+      updateRobotIndicator(data.robotNode, jsDir);
+    }
+    handleDeliveryCompleted();
   }
   else if(data.type==="PONG"||data.type==="PING"){}
 }
 
 function handleDynamicReroute(data){
-  const obsNode = data.position.row * 5 + data.position.col;
-  if(obsNode>=0&&obsNode<20){ obstacles.add(obsNode); }
-  const robotNode = data.robot_position.row * 5 + data.robot_position.col;
+  // Lấy node vật cản và node robot
+  const obsNode = data.obstacleNode !== undefined ? data.obstacleNode : 
+                  (data.position ? data.position.row * 5 + data.position.col : -1);
+  const robotNode = data.robotNode !== undefined ? data.robotNode :
+                    (data.robot_position ? data.robot_position.row * 5 + data.robot_position.col : -1);
+  
+  if(obsNode>=0 && obsNode<20) obstacles.add(obsNode);
+  
+  // Cập nhật hướng robot từ ESP32
+  if(data.robotDir !== undefined){
+    robotCurrentDir = CPP_TO_JS_DIR[data.robotDir];
+    updateRobotIndicator(robotNode, robotCurrentDir);
+  }
+  
+  updateNodeVisuals();
+  
   const tarArr = Array.from(targets);
-  if(tarArr.length>0){
+  if(tarArr.length>0 && robotNode>=0){
     const algo = document.getElementById("algoSel").value;
     const result = findPathAnimated(robotNode, tarArr[0], algo);
     if(result){
-      const cmds = pathToCommands(result.path, robotCurrentDir);
-      wsSend({type:"ROUTE",commands:cmds,total_steps:cmds.length,rerouted:true});
-      // Animate the rerouted path
+      // Gửi path node array (không phải commands) — main.ino nạp trực tiếp
+      const cppDir = data.robotDir !== undefined ? data.robotDir : JS_TO_CPP_DIR[robotCurrentDir];
+      wsSend({type:"ROUTE", path:result.path, initialDir:cppDir, rerouted:true});
       animRunSingle(result, getAlgoName(algo), '🔄 Tái định tuyến');
-      showToast("🔄 Đang tính lại đường đi mới...","info");
+      showToast("🔄 Đang tìm đường mới từ vị trí hiện tại...","info");
     } else { showToast("❌ Không tìm được đường đi mới!","error"); }
   }
-  updateNodeVisuals();
 }
 
 function handleDeliveryCompleted(){

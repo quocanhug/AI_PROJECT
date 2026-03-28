@@ -219,15 +219,6 @@ void route_load(const char* json) {
   
   bool isRerouted = doc["rerouted"] | false;
   
-  // Initialize grid position for intersection-based node tracking
-  // Node position is determined ONLY by counting intersections + turn commands,
-  // NOT by encoder distance (tolerant of uneven line spacing)
-  if (!isRerouted) {
-    int startNode = doc["startNode"] | 0;
-    int initialDir = doc["initialDir"] | 0; // C++ dir: 0=down, 1=right, 2=up, 3=left
-    rt_initGridPos(startNode / 5, startNode % 5, initialDir);
-  }
-  
   Serial.printf("Route loaded: %d commands", cmdTotal);
   if (isRerouted) Serial.print(" (rerouted)");
   Serial.println();

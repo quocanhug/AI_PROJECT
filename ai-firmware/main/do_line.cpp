@@ -273,7 +273,7 @@ void move_forward_distance(double dist_m, int pwmAbs){
 bool move_forward_distance_until_line(double dist_m, int pwmAbs){
   long target = countsForDistance(dist_m);
   long sL, sR; noInterrupts(); sL = encL_total; sR = encR_total; interrupts();
-  motorWriteLR_signed(+pwmAbs, +pwmAbs);qq
+  motorWriteLR_signed(+pwmAbs, +pwmAbs);
   while (true){
     if (!g_line_enabled){ motorsStop(); return false; }
     long cL, cR; noInterrupts(); cL = encL_total; cR = encR_total; interrupts();
@@ -343,6 +343,30 @@ void do_line_loop() {
   bool line_follow_active = isValidLineSample5(L2,L1,M,R1,R2) && !recovering && !avoiding;
   updateObstacleState();
 
+  // ===== AI Route: vật cản → báo Web, chờ tìm đường mới (KHÔNG tránh vật lý) =====
+  if (currentMode == MODE_AI_ROUTE && line_follow_active && obs_latched) {
+    motorsStop();
+    int robotNode = (currentPathIndex < pathLength) ? currentPath[currentPathIndex] : 0;
+    int obstacleNode = (currentPathIndex + 1 < pathLength) ? currentPath[currentPathIndex + 1] : robotNode;
+    
+    extern void wsBroadcast(const char*);
+    String msg = "{\"type\":\"OBSTACLE_DETECTED\","
+                 "\"robotNode\":" + String(robotNode) + ","
+                 "\"obstacleNode\":" + String(obstacleNode) + ","
+                 "\"robotDir\":" + String(currentDir) + ","
+                 "\"current_step\":" + String(currentPathIndex) + ","
+                 "\"distance_cm\":" + String(us_dist_cm, 1) + "}";
+    wsBroadcast(msg.c_str());
+    Serial.printf("[AI_ROUTE] OBSTACLE! robot@node%d → blocked@node%d (%.1fcm)\n", 
+                  robotNode, obstacleNode, us_dist_cm);
+    
+    // Dừng hoàn toàn — chờ Web gửi ROUTE mới
+    line_mode = false;
+    do_line_abort();
+    return;
+  }
+
+  // ===== Các mode khác: tránh vật cản vật lý =====
   if (line_follow_active && obs_latched){
     avoiding = true; motorsStop();
     noInterrupts(); encL_count = 0; encR_count = 0; interrupts();
