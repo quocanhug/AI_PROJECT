@@ -19,6 +19,7 @@
 extern void spin_left_deg(double deg, int pwmMax);
 extern void spin_right_deg(double deg, int pwmMax);
 extern void move_forward_distance(double dist_m, int pwmAbs);
+extern bool move_forward_distance_until_line(double dist_m, int pwmAbs);
 extern float readDistanceCM_Fast();
 extern void driveWheelLeft(float v_target, int pwm);
 extern void driveWheelRight(float v_target, int pwm);
@@ -255,6 +256,7 @@ void route_load(const char* json) {
 }
 
 // ==================== PID Line Following (for route mode) ====================
+// Logic ghép từ do_line_loop() đã được chứng minh ổn định trên robot thực tế
 void rt_pidLineFollow() {
   unsigned long now = millis();
   const unsigned long CTRL_DT_MS = 10;
@@ -264,32 +266,60 @@ void rt_pidLineFollow() {
   float dt_s = (now - rt_ctrl_prev) / 1000.0f;
   rt_ctrl_prev = now;
   
-  // Read line error
-  float lineErr = getLineError();
+  // Đọc cảm biến trực tiếp
+  bool L2 = rt_onLine(RT_L2_SENSOR);
+  bool L1 = rt_onLine(RT_L1_SENSOR);
+  bool M  = rt_onLine(RT_M_SENSOR);
+  bool R1 = rt_onLine(RT_R1_SENSOR);
+  bool R2 = rt_onLine(RT_R2_SENSOR);
   
-  // Compute target velocities based on line error
-  float v_boost = 0.06f;  // Giảm tương ứng v_base mới
+  float v_boost = 0.06f;
   float v_hard  = 0.08f;
-  float vL_tgt, vR_tgt;
+  float vL_tgt = v_base, vR_tgt = v_base;
   
-  float absErr = fabs(lineErr);
-  if (absErr < 0.5f) {
-    // On center
+  // === Logic từng case cảm biến (copy từ do_line.cpp đã tune) ===
+  if ( M && !L1 && !R1 && !L2 && !R2 ) {
+    // Đúng tâm — đi thẳng
     vL_tgt = v_base;
     vR_tgt = v_base;
-  } else if (absErr < 2.0f) {
-    // Light deviation
-    float correction = v_boost * (lineErr / 2.0f);
-    vL_tgt = v_base + correction;
-    vR_tgt = v_base - correction;
-  } else {
-    // Heavy deviation
-    float correction = v_hard * (lineErr / 4.0f);
-    vL_tgt = v_base + correction;
-    vR_tgt = v_base - correction;
+  }
+  else if ( L1 &&  M && !R1 ) {
+    // Lệch nhẹ trái
+    vL_tgt = v_base - v_boost;
+    vR_tgt = v_base + v_boost;
+  }
+  else if ( L1 && !M && !L2 ) {
+    // Lệch trái
+    vL_tgt = v_base - v_boost;
+    vR_tgt = v_base + v_boost;
+  }
+  else if ( L2 && (!R1 && !R2) ) {
+    // Lệch mạnh trái
+    vL_tgt = v_base - v_hard;
+    vR_tgt = v_base + v_hard;
+  }
+  else if ( R1 &&  M && !L1 ) {
+    // Lệch nhẹ phải
+    vL_tgt = v_base + v_boost;
+    vR_tgt = v_base - v_boost;
+  }
+  else if ( R1 && !M && !R2 ) {
+    // Lệch phải
+    vL_tgt = v_base + v_boost;
+    vR_tgt = v_base - v_boost;
+  }
+  else if ( R2 && (!L1 && !L2) ) {
+    // Lệch mạnh phải
+    vL_tgt = v_base + v_hard;
+    vR_tgt = v_base - v_hard;
+  }
+  else {
+    // Mất line hoặc trường hợp khác — giử tốc độ chậm chờ ổn định
+    vL_tgt = v_base * 0.7f;
+    vR_tgt = v_base * 0.7f;
   }
   
-  // Read encoder ticks
+  // Đọc encoder tính vận tốc
   noInterrupts();
   long cL = encL_count; encL_count = 0;
   long cR = encR_count; encR_count = 0;
@@ -474,25 +504,38 @@ void route_loop() {
       
       switch (cmd) {
         case 'F':
-          // Go straight through intersection
+          // Đi thẳng qua giao lộ — tiến thêm 1 chút để thoát vùng giao
+          move_forward_distance(0.06, 90);
           rt_advanceGridPos();
           break;
-        case 'L':
-          // Turn left 90 degrees
-          spin_left_deg(90.0, 180);
+        case 'L': {
+          // Quay trái — góc 85° (tune từ delivery mode, không phải 90° lý thuyết)
+          spin_left_deg(85.0, 160);
           motorsStop();
-          delay(100);
+          delay(80);
+          // Tìm lại line sau khi quay (tiến tối đa 8cm, dừng khi gặp line)
+          move_forward_distance_until_line(0.08, 90);
+          motorsStop();
+          delay(50);
           rt_updateDirAfterTurn('L');
           rt_advanceGridPos();
+          Serial.println("  >> Turned LEFT, re-acquired line");
           break;
-        case 'R':
-          // Turn right 90 degrees
-          spin_right_deg(90.0, 180);
+        }
+        case 'R': {
+          // Quay phải — góc 85°
+          spin_right_deg(85.0, 160);
           motorsStop();
-          delay(100);
+          delay(80);
+          // Tìm lại line sau khi quay
+          move_forward_distance_until_line(0.08, 90);
+          motorsStop();
+          delay(50);
           rt_updateDirAfterTurn('R');
           rt_advanceGridPos();
+          Serial.println("  >> Turned RIGHT, re-acquired line");
           break;
+        }
         default:
           Serial.printf("Unknown command: %c\n", cmd);
           break;
