@@ -32,6 +32,53 @@ let edgeSelFirst = null;
 // Animation state
 let anim = { steps:[], path:[], currentStep:0, playing:false, speed:300, timer:null, active:false };
 
+// ==================== Robot Direction Indicator ====================
+let robotIndicator = null;
+let robotCurrentNode = -1;
+let robotCurrentDir = 2;   // JS dirs: 0=up, 1=right, 2=down, 3=left
+let robotInitialDir = 2;   // Default: facing down (click arrow to cycle)
+const DIR_ROTATION = [0, 90, 180, 270];
+const JS_TO_CPP_DIR = [2, 1, 0, 3];  // JS→C++ direction mapping
+const CPP_TO_JS_DIR = [2, 1, 0, 3];  // C++→JS direction mapping
+const DIR_LABELS = ['⬆ Lên','➡ Phải','⬇ Xuống','⬅ Trái'];
+
+function createRobotIndicator(){
+  const layer=document.getElementById('robotLayer'); if(!layer) return;
+  layer.innerHTML='';
+  const g=document.createElementNS("http://www.w3.org/2000/svg","g");
+  g.id="robotArrow"; g.setAttribute("class","robot-indicator"); g.style.display="none";
+  const glow=document.createElementNS("http://www.w3.org/2000/svg","circle");
+  glow.setAttribute("cx","0"); glow.setAttribute("cy","0"); glow.setAttribute("r","18"); glow.setAttribute("class","robot-glow");
+  const arrow=document.createElementNS("http://www.w3.org/2000/svg","polygon");
+  arrow.setAttribute("points","0,-18 -10,10 10,10"); arrow.setAttribute("class","robot-arrow");
+  const dot=document.createElementNS("http://www.w3.org/2000/svg","circle");
+  dot.setAttribute("cx","0"); dot.setAttribute("cy","0"); dot.setAttribute("r","4"); dot.setAttribute("class","robot-center");
+  g.appendChild(glow); g.appendChild(arrow); g.appendChild(dot);
+  layer.appendChild(g);
+  g.addEventListener("click",(e)=>{
+    e.stopPropagation();
+    if(anim.active) return;
+    robotInitialDir=(robotInitialDir+1)%4;
+    robotCurrentDir=robotInitialDir;
+    updateRobotIndicator(robotCurrentNode, robotCurrentDir);
+    showToast(`Hướng đầu xe: ${DIR_LABELS[robotInitialDir]}`,"info");
+  });
+  robotIndicator=g;
+}
+function updateRobotIndicator(nodeId, dir){
+  if(!robotIndicator||nodeId<0||nodeId>=20) return;
+  const [x,y]=coords[nodeId]; const rot=DIR_ROTATION[dir];
+  robotIndicator.setAttribute("transform",`translate(${x},${y}) rotate(${rot})`);
+  robotIndicator.style.display="";
+  robotCurrentNode=nodeId; robotCurrentDir=dir;
+}
+function hideRobotIndicator(){ if(robotIndicator) robotIndicator.style.display="none"; robotCurrentNode=-1; }
+function getDirBetweenNodes(a,b){
+  const dx=Math.sign(coords[b][0]-coords[a][0]);
+  const dy=Math.sign(coords[b][1]-coords[a][1]);
+  if(dy<0) return 0; if(dx>0) return 1; if(dy>0) return 2; if(dx<0) return 3; return 2;
+}
+
 function heuristic(a,b){ return Math.abs(coords[a][0]-coords[b][0])+Math.abs(coords[a][1]-coords[b][1]); }
 function getEdgeWeight(a,b){ return edgeWeights[Math.min(a,b)+'-'+Math.max(a,b)]||1; }
 function setEdgeWeight(a,b,w){ edgeWeights[Math.min(a,b)+'-'+Math.max(a,b)]=w; }
@@ -105,7 +152,7 @@ function handleDynamicReroute(data){
     const algo = document.getElementById("algoSel").value;
     const result = findPathAnimated(robotNode, tarArr[0], algo);
     if(result){
-      const cmds = pathToCommands(result.path, 1);
+      const cmds = pathToCommands(result.path, robotCurrentDir);
       wsSend({type:"ROUTE",commands:cmds,total_steps:cmds.length,rerouted:true});
       // Animate the rerouted path
       animRunSingle(result, getAlgoName(algo), '🔄 Tái định tuyến');
@@ -150,6 +197,10 @@ function updateTelemetry(d){
   document.getElementById('autoObstacleVal').textContent=obs>200?'--':obs.toFixed(0);
   if(d.sensors){ for(let i=0;i<5;i++){ const el=document.getElementById('sm'+i); if(el) el.className='w-3 h-3 rounded-full '+(d.sensors[i]?'bg-primary shadow-[0_0_6px_rgba(0,90,180,0.5)]':'bg-surface-container'); } }
   if(d.state) updateRobotState(d.state);
+  if(d.robotNode!==undefined && d.robotNode>=0){
+    const jsDir=CPP_TO_JS_DIR[d.robotDir||0];
+    updateRobotIndicator(d.robotNode, jsDir);
+  }
 }
 function updateRobotState(s){
   const map={"IDLE":"IDLE","FOLLOWING_LINE":"DÒ LINE","AT_INTERSECTION":"GIAO LỘ","OBSTACLE":"VẬT CẢN","REROUTING":"TÁI ĐỊNH TUYẾN","DONE":"HOÀN THÀNH"};
@@ -310,6 +361,8 @@ function updateNodeVisuals(){
   }
   document.getElementById("autoStepsVal").innerHTML='— <span class="text-xs font-medium text-on-surface-variant italic">bước</span>';
   document.getElementById("autoVisitedVal").textContent='—';
+  // Show robot direction indicator at start node
+  updateRobotIndicator(sn, robotInitialDir);
 }
 
 // ==================== AI Algorithms (with step history + random neighbor order) ====================
@@ -678,6 +731,11 @@ function animShowFinalPath(){
   resEl.innerText=`✅ ${anim.algoName}: ${anim.fullPath.join(" → ")}  |  ${anim.resultSteps} bước  |  ${anim.resultExplored} node duyệt  |  Chi phí: ${anim.resultCost}`;
   resEl.className="p-4 text-sm text-center has-path font-bold";
   finalCalculatedPath=anim.fullPath;
+  // Move robot indicator to final position with computed direction
+  if(anim.fullPath.length>=2){
+    const lastDir=getDirBetweenNodes(anim.fullPath[anim.fullPath.length-2],anim.fullPath[anim.fullPath.length-1]);
+    updateRobotIndicator(anim.fullPath[anim.fullPath.length-1], lastDir);
+  }
   showToast(`✅ Hoàn thành! ${anim.resultSteps} bước — ${anim.resultExplored} node duyệt`+(anim.segCount>1?` (${anim.segCount} đoạn)`:''),"success");
 }
 
@@ -784,7 +842,7 @@ function pathToCommands(path,initialDir){
 // ==================== Deliver Button ====================
 document.getElementById("deliverBtn").addEventListener("click",async()=>{
   if(finalCalculatedPath.length<2) return showToast("Lộ trình không hợp lệ!","error");
-  const cmds=pathToCommands(finalCalculatedPath,1);
+  const cmds=pathToCommands(finalCalculatedPath,robotInitialDir);
   const algo=document.getElementById("algoSel").value;
   const btn=document.getElementById("deliverBtn");
   btn.innerHTML='⏳ ĐANG TRUYỀN...';
@@ -797,7 +855,7 @@ document.getElementById("deliverBtn").addEventListener("click",async()=>{
   icon.textContent='🚚'; icon.className='text-lg text-amber-600 animate-pulse';
   text.textContent=`🚚 Đang giao hàng... (Dự kiến: ~${deliveryExpectedTime}s)`; text.className='text-sm font-bold text-amber-700';
   if(ws&&ws.readyState===WebSocket.OPEN){
-    wsSend({type:"ROUTE",commands:cmds,total_steps:cmds.length,algorithm:algo,path:finalCalculatedPath});
+    wsSend({type:"ROUTE",commands:cmds,total_steps:cmds.length,algorithm:algo,path:finalCalculatedPath,startNode:parseInt(document.getElementById("startNode").value),initialDir:JS_TO_CPP_DIR[robotInitialDir]});
   } else { try{await fetch(`/deliver?dir=1&path=${finalCalculatedPath.join(",")}`);}catch(e){} }
   setTimeout(()=>{
     btn.innerHTML='✅ ĐÃ NẠP!';
@@ -875,5 +933,6 @@ document.getElementById("stopBtn").addEventListener("pointerdown",guard(e=>{e.pr
 // ==================== Init ====================
 initNodes();
 renderEdges();
+createRobotIndicator();
 updateNodeVisuals();
 setTimeout(()=>connectWebSocket(),1000);

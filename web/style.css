@@ -529,3 +529,29 @@
 #flowLayer {
   transition: opacity 0.3s;
 }
+
+/* ===== Robot Direction Indicator ===== */
+.robot-indicator {
+  cursor: pointer;
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: all;
+}
+.robot-glow {
+  fill: rgba(22, 163, 74, 0.15);
+  stroke: none;
+  animation: robotGlow 2s ease-in-out infinite;
+}
+.robot-arrow {
+  fill: #16a34a;
+  stroke: #15803d;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 2px 4px rgba(22, 163, 74, 0.5));
+}
+.robot-center {
+  fill: #15803d;
+}
+@keyframes robotGlow {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.12; }
+}

@@ -116,8 +116,9 @@ extern float ticksToVel(long ticks, float dt_s);
 
 // Check if all 5 sensors are on line (intersection)
 bool isIntersection() {
-  return rt_onLine(RT_L2_SENSOR) && rt_onLine(RT_L1_SENSOR) &&
-         rt_onLine(RT_M_SENSOR) && rt_onLine(RT_R1_SENSOR) && rt_onLine(RT_R2_SENSOR);
+  int cnt = (int)rt_onLine(RT_L2_SENSOR) + (int)rt_onLine(RT_L1_SENSOR) +
+            (int)rt_onLine(RT_M_SENSOR) + (int)rt_onLine(RT_R1_SENSOR) + (int)rt_onLine(RT_R2_SENSOR);
+  return cnt >= 4;  // Nới lỏng: ≥4 mắt ON = giao lộ (thay vì cả 5 — tránh miss)
 }
 
 // Get line error from 5 sensors: [-4, +4]
@@ -217,6 +218,15 @@ void route_load(const char* json) {
   
   bool isRerouted = doc["rerouted"] | false;
   
+  // Initialize grid position for intersection-based node tracking
+  // Node position is determined ONLY by counting intersections + turn commands,
+  // NOT by encoder distance (tolerant of uneven line spacing)
+  if (!isRerouted) {
+    int startNode = doc["startNode"] | 0;
+    int initialDir = doc["initialDir"] | 0; // C++ dir: 0=down, 1=right, 2=up, 3=left
+    rt_initGridPos(startNode / 5, startNode % 5, initialDir);
+  }
+  
   Serial.printf("Route loaded: %d commands", cmdTotal);
   if (isRerouted) Serial.print(" (rerouted)");
   Serial.println();
@@ -258,8 +268,8 @@ void rt_pidLineFollow() {
   float lineErr = getLineError();
   
   // Compute target velocities based on line error
-  float v_boost = 0.11f;
-  float v_hard  = 0.13f;
+  float v_boost = 0.06f;  // Giảm tương ứng v_base mới
+  float v_hard  = 0.08f;
   float vL_tgt, vR_tgt;
   
   float absErr = fabs(lineErr);
@@ -413,18 +423,26 @@ void route_loop() {
         break;
       }
       
-      // Check for intersection
+      // Check for intersection (≥4 sensors ON)
       bool isInter = isIntersection();
       if (isInter && !wasIntersection) {
-        // Rising edge: entered intersection
+        // Step 1: Dừng hẳn và chờ ổn định
         motorsStop();
-        delay(50);
+        delay(80);
         
-        // Move forward slightly to center on intersection (~2cm)
-        move_forward_distance(0.02, 100);
+        // Step 2: Đọc lại sensor để xác nhận (chống false positive)
+        if (!isIntersection()) {
+          // Không phải giao lộ thật — tiếp tục dò line
+          wasIntersection = false;
+          break;
+        }
+        
+        // Step 3: Đã xác nhận giao lộ — tiến thêm 3cm để căn tâm
+        move_forward_distance(0.03, 80);
         motorsStop();
-        delay(50);
+        delay(100);
         
+        Serial.printf(">> Intersection confirmed at step %d\n", cmdExecuted);
         currentState = RS_AT_INTERSECTION;
         wasIntersection = true;
         break;
@@ -584,6 +602,8 @@ String route_telemetry_json() {
                   String((int)rt_sensors[1]) + "," +
                   String((int)rt_sensors[2]) + "," +
                   String((int)rt_sensors[3]) + "," +
-                  String((int)rt_sensors[4]) + "]}";
+                  String((int)rt_sensors[4]) + "],"
+                "\"robotNode\":" + String(robotGridPos.row * 5 + robotGridPos.col) + ","
+                "\"robotDir\":" + String(robotGridPos.dir) + "}";
   return json;
 }

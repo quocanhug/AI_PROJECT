@@ -100,14 +100,14 @@ const float WHEEL_RADIUS_M = 0.0325f;
 const float CIRC = 2.0f * 3.1415926f * WHEEL_RADIUS_M; 
 const float TRACK_WIDTH_M = 0.1150f; 
 
-float v_base   = 0.4f;    
-float v_boost  = 0.11f;   
-float v_hard   = 0.13f;   
+float v_base   = 0.22f;   // Giảm tốc để nhận diện giao lộ chính xác (0.4→0.22)
+float v_boost  = 0.06f;   // Bù lệch nhẹ (giảm theo tỷ lệ)
+float v_hard   = 0.08f;   // Bù lệch mạnh
 float vF = v_base * 0.90f;
 
-// PID struct is defined in do_line.h
-PID pidL{300.0f, 8.0f, 0.00f, 0, 0, 0, 255};
-PID pidR{300.0f, 8.0f, 0.00f, 0, 0, 0, 255};
+// PID struct is defined in do_line.h  (Kp giảm 300→180 tương ứng tốc độ mới)
+PID pidL{180.0f, 8.0f, 0.00f, 0, 0, 0, 255};
+PID pidR{180.0f, 8.0f, 0.00f, 0, 0, 0, 255};
 
 const unsigned long CTRL_DT_MS = 10;
 volatile long encL_count = 0, encR_count = 0, encL_total = 0, encR_total = 0;
