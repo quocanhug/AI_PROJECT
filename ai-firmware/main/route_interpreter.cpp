@@ -70,136 +70,96 @@ inline float rt_clampf(float v, float lo, float hi) { return v < lo ? lo : (v > 
 
 static const int RT_PWM_MIN_RUN = 75;
 static const int RT_PWM_SLEW = 8;
-
 static inline int rt_shape_pwm(int target, int prev) {
-  int s = target;
-  if (s > 0 && s < RT_PWM_MIN_RUN) s = RT_PWM_MIN_RUN;
-  int d = s - prev;
-  if (d > RT_PWM_SLEW) s = prev + RT_PWM_SLEW;
-  if (d < -RT_PWM_SLEW) s = prev - RT_PWM_SLEW;
+  int s = target; if (s > 0 && s < RT_PWM_MIN_RUN) s = RT_PWM_MIN_RUN;
+  int d = s - prev; if (d > RT_PWM_SLEW) s = prev + RT_PWM_SLEW; if (d < -RT_PWM_SLEW) s = prev - RT_PWM_SLEW;
   return rt_clamp255(s);
 }
 
 extern float ticksToVel(long ticks, float dt_s);
 
-// ================= XÁC ĐỊNH NGÃ TƯ THÔNG MINH =================
+// ================= TỐI ƯU CẢM BIẾN 5 MẮT: Nhận diện chính xác tránh đếm nhầm =================
 bool isIntersection() {
   bool L2 = rt_onLine(RT_L2_SENSOR);
   bool L1 = rt_onLine(RT_L1_SENSOR);
   bool M  = rt_onLine(RT_M_SENSOR);
   bool R1 = rt_onLine(RT_R1_SENSOR);
   bool R2 = rt_onLine(RT_R2_SENSOR);
-  int onCount = (int)L2 + (int)L1 + (int)M + (int)R1 + (int)R2;
   
-  // Đảm bảo là Ngã tư hoặc Ngã 3 chữ T: Cần ít nhất 3 mắt sáng, trong đó phải có mắt Giữa và các mắt Rìa
-  if (onCount >= 3) {
-     if ((L2 || L1) && M && (R2 || R1)) return true; // Ngã tư hoặc ngã 3 hoàn chỉnh
-     if (L2 && L1 && M) return true; // Ngã 3 vuông góc trái
-     if (R2 && R1 && M) return true; // Ngã 3 vuông góc phải
-  }
+  // Bắt buộc mắt giữa và ít nhất 1 mắt rìa ngoài cùng sáng thì mới là ngã tư / ngã 3
+  if (M && L2 && R2) return true; // Ngã tư chữ thập
+  if (M && L2 && L1 && !R2) return true; // Ngã ba vuông góc bên trái
+  if (M && R2 && R1 && !L2) return true; // Ngã ba vuông góc bên phải
+  if (L2 && L1 && M && R1 && R2) return true; // Full toàn bộ vạch
+  
   return false;
 }
 
-// ================= CẢI TIẾN BÁM LINE CÓ BỘ NHỚ =================
-static float rt_last_line_err = 0.0f; // Bộ nhớ lưu hướng văng cuối cùng
+static float rt_last_line_err = 0.0f; // Nhớ hướng nếu bị văng
 
 float getLineError() {
-  bool L2 = rt_onLine(RT_L2_SENSOR);
-  bool L1 = rt_onLine(RT_L1_SENSOR);
-  bool M  = rt_onLine(RT_M_SENSOR);
-  bool R1 = rt_onLine(RT_R1_SENSOR);
-  bool R2 = rt_onLine(RT_R2_SENSOR);
+  bool L2 = rt_onLine(RT_L2_SENSOR); bool L1 = rt_onLine(RT_L1_SENSOR); bool M  = rt_onLine(RT_M_SENSOR);
+  bool R1 = rt_onLine(RT_R1_SENSOR); bool R2 = rt_onLine(RT_R2_SENSOR);
   
   int onCount = (int)L2 + (int)L1 + (int)M + (int)R1 + (int)R2;
   
-  // NẾU MẤT LINE HOÀN TOÀN -> Dùng bộ nhớ đánh lái gắt tìm lại line
-  if (onCount == 0) {
-    if (rt_last_line_err > 0) return 4.0f;  // Văng qua trái -> Đánh mạnh qua phải
-    if (rt_last_line_err < 0) return -4.0f; // Văng qua phải -> Đánh mạnh qua trái
+  if (onCount == 0) { // Mất line -> Tự động bẻ lái gắt tìm vạch theo trí nhớ
+    if (rt_last_line_err > 0) return 4.0f;  
+    if (rt_last_line_err < 0) return -4.0f; 
     return 0.0f;
   }
   
   float weighted = (-4.0f * L2) + (-2.0f * L1) + (0.0f * M) + (2.0f * R1) + (4.0f * R2);
-  rt_last_line_err = weighted / onCount; // Cập nhật lại bộ nhớ
+  rt_last_line_err = weighted / onCount; 
   return rt_last_line_err;
 }
 
-void rt_wsSend(const String& msg) {
-  if (wsSendCallback) { wsSendCallback(msg.c_str()); }
-  Serial.println(msg);
-}
+void rt_wsSend(const String& msg) { if (wsSendCallback) { wsSendCallback(msg.c_str()); } }
 
 void cmdQueueClear() { cmdHead = 0; cmdTail = 0; cmdTotal = 0; cmdExecuted = 0; }
 bool cmdQueueEmpty() { return cmdHead == cmdTail; }
 void cmdQueuePush(char cmd) { if (cmdTail < MAX_COMMANDS) { commandQueue[cmdTail++] = cmd; cmdTotal++; } }
 char cmdQueuePop() { if (cmdHead < cmdTail) { cmdExecuted++; return commandQueue[cmdHead++]; } return '\0'; }
-int cmdQueueSize() { return cmdTail - cmdHead; }
 
 struct GridPos { int row; int col; int dir; }; 
 static GridPos robotGridPos = {0, 0, 0};
-static int initialTargetNode = -1; 
 
 void rt_initGridPos(int startNode, int startDir) {
-  robotGridPos.row = startNode / 5;
-  robotGridPos.col = startNode % 5;
-  robotGridPos.dir = startDir;
+  robotGridPos.row = startNode / 5; robotGridPos.col = startNode % 5; robotGridPos.dir = startDir;
 }
-
 GridPos rt_getNextGridPos(GridPos pos) {
-  GridPos next = pos;
-  int dRow[] = {-1, 0, 1, 0}; 
-  int dCol[] = {0, 1, 0, -1};
-  next.row += dRow[pos.dir];
-  next.col += dCol[pos.dir];
-  return next;
+  GridPos next = pos; int dRow[] = {-1, 0, 1, 0}; int dCol[] = {0, 1, 0, -1};
+  next.row += dRow[pos.dir]; next.col += dCol[pos.dir]; return next;
 }
-
 void rt_updateDirAfterTurn(char cmd) {
   if (cmd == 'R') robotGridPos.dir = (robotGridPos.dir + 1) % 4;
   else if (cmd == 'L') robotGridPos.dir = (robotGridPos.dir + 3) % 4;
 }
-
 void rt_advanceGridPos() { robotGridPos = rt_getNextGridPos(robotGridPos); }
 
 void route_setup() {
-  currentState = RS_IDLE; cmdQueueClear();
-  intersectionCount = 0; wasIntersection = false;
-  rt_vL_ema = 0; rt_vR_ema = 0; rt_pwmL_prev = 0; rt_pwmR_prev = 0;
-  rt_ctrl_prev = millis(); rt_distance = 0;
+  currentState = RS_IDLE; cmdQueueClear(); intersectionCount = 0; wasIntersection = false;
+  rt_vL_ema = 0; rt_vR_ema = 0; rt_pwmL_prev = 0; rt_pwmR_prev = 0; rt_ctrl_prev = millis(); rt_distance = 0;
   noInterrupts(); rt_encL_start = encL_total; rt_encR_start = encR_total; interrupts();
 }
 
 void route_load(const char* json) {
-  StaticJsonDocument<1024> doc;
-  DeserializationError err = deserializeJson(doc, json);
-  if (err) { Serial.println("JSON parse error!"); return; }
-  
+  StaticJsonDocument<1024> doc; DeserializationError err = deserializeJson(doc, json);
+  if (err) { Serial.println("JSON error"); return; }
   if (!doc.containsKey("commands")) return;
   cmdQueueClear();
   JsonArray cmds = doc["commands"].as<JsonArray>();
-  for (JsonVariant v : cmds) {
-    const char* s = v.as<const char*>();
-    if (s && s[0]) cmdQueuePush(s[0]);
-  }
+  for (JsonVariant v : cmds) { const char* s = v.as<const char*>(); if (s && s[0]) cmdQueuePush(s[0]); }
   
-  int startNode = doc["startNode"] | 0;
-  int startDir = doc["initialDir"] | 2;
-  rt_initGridPos(startNode, startDir);
+  rt_initGridPos(doc["startNode"] | 0, doc["initialDir"] | 2);
   
-  JsonArray pathArr = doc["path"].as<JsonArray>();
-  if(pathArr.size() > 0) initialTargetNode = pathArr[pathArr.size() - 1];
-
-  currentState = RS_FOLLOWING_LINE;
-  intersectionCount = 0; wasIntersection = true; // Bắt đầu ở Node -> Đợi xe chạy ra khỏi node mới bắt đầu đếm
+  currentState = RS_FOLLOWING_LINE; intersectionCount = 0; 
+  wasIntersection = true; // Khóa không cho đếm điểm xuất phát (Kho)
   stateTimer = millis();
   
   pidL.i_term = 0; pidL.prev_err = 0; pidR.i_term = 0; pidR.prev_err = 0;
-  rt_vL_ema = 0; rt_vR_ema = 0; rt_pwmL_prev = 0; rt_pwmR_prev = 0;
-  rt_ctrl_prev = millis();
-  
-  noInterrupts();
-  encL_count = 0; encR_count = 0; rt_encL_start = encL_total; rt_encR_start = encR_total;
-  interrupts();
+  rt_vL_ema = 0; rt_vR_ema = 0; rt_pwmL_prev = 0; rt_pwmR_prev = 0; rt_ctrl_prev = millis();
+  noInterrupts(); encL_count = 0; encR_count = 0; rt_encL_start = encL_total; rt_encR_start = encR_total; interrupts();
   
   rt_wsSend("{\"type\":\"ROUTE_ACK\",\"commands\":" + String(cmdTotal) + "}");
 }
@@ -210,9 +170,8 @@ void rt_pidLineFollow() {
   float dt_s = (now - rt_ctrl_prev) / 1000.0f; rt_ctrl_prev = now;
   
   float lineErr = getLineError();
-  float v_boost = 0.08f; float v_hard  = 0.10f;
+  float v_boost = 0.10f; float v_hard  = 0.15f; 
   float vL_tgt, vR_tgt;
-  
   float absErr = fabs(lineErr);
   if (absErr < 0.5f) { vL_tgt = v_base; vR_tgt = v_base; } 
   else if (absErr < 2.0f) { float c = v_boost * (lineErr / 2.0f); vL_tgt = v_base + c; vR_tgt = v_base - c; } 
@@ -222,8 +181,7 @@ void rt_pidLineFollow() {
   float vL_meas = ticksToVel(cL, dt_s); float vR_meas = ticksToVel(cR, dt_s);
   
   const float EMA_B = 0.7f;
-  rt_vL_ema = EMA_B * rt_vL_ema + (1 - EMA_B) * vL_meas;
-  rt_vR_ema = EMA_B * rt_vR_ema + (1 - EMA_B) * vR_meas;
+  rt_vL_ema = EMA_B * rt_vL_ema + (1 - EMA_B) * vL_meas; rt_vR_ema = EMA_B * rt_vR_ema + (1 - EMA_B) * vR_meas;
   
   vL_tgt = rt_clampf(vL_tgt, 0, 1.5f); vR_tgt = rt_clampf(vR_tgt, 0, 1.5f);
   int pwmL = pidStep(pidL, vL_tgt, rt_vL_ema, dt_s); int pwmR = pidStep(pidR, vR_tgt, rt_vR_ema, dt_s);
@@ -243,23 +201,19 @@ void rt_readSensors() {
 static unsigned long rt_us_last = 0;
 float rt_checkObstacle() {
   if (millis() - rt_us_last < 30) return rt_obstacleDist;
-  rt_us_last = millis();
-  rt_obstacleDist = readDistanceCM_Fast();
-  return rt_obstacleDist;
+  rt_us_last = millis(); rt_obstacleDist = readDistanceCM_Fast(); return rt_obstacleDist;
 }
 
 void route_loop() {
   rt_readSensors();
   
   noInterrupts(); long totalL = encL_total - rt_encL_start; long totalR = encR_total - rt_encR_start; interrupts();
-  const float RT_CIRC = 2.0f * 3.1415926f * 0.0325f;  
-  const int RT_PPR = 20;  
+  const float RT_CIRC = 2.0f * 3.1415926f * 0.0325f;  const int RT_PPR = 20;  
   rt_distance = ((float)(totalL + totalR) / 2.0f / RT_PPR) * RT_CIRC * 100.0f;
   
   static unsigned long lastTel = 0;
   if (millis() - lastTel > 500 && currentState != RS_IDLE) {
-    lastTel = millis();
-    rt_wsSend(route_telemetry_json());
+    lastTel = millis(); rt_wsSend(route_telemetry_json());
   }
 
   switch (currentState) {
@@ -268,11 +222,8 @@ void route_loop() {
     case RS_FOLLOWING_LINE: {
       float dist = rt_checkObstacle();
       if (dist > 0 && dist < RT_OBSTACLE_TH_CM) {
-        motorsStop();
-        currentState = RS_OBSTACLE;
-        obstacleTimer = millis();
+        motorsStop(); currentState = RS_OBSTACLE; obstacleTimer = millis();
         GridPos obsPos = rt_getNextGridPos(robotGridPos);
-        
         String msg = "{\"type\":\"OBSTACLE_DETECTED\",\"position\":{\"row\":" + String(obsPos.row) + ",\"col\":" + String(obsPos.col) + "},\"robot_position\":{\"row\":" + String(robotGridPos.row) + ",\"col\":" + String(robotGridPos.col) + "},\"current_step\":" + String(cmdExecuted) + ",\"distance_cm\":" + String(dist, 1) + "}";
         rt_wsSend(msg);
         break;
@@ -281,15 +232,11 @@ void route_loop() {
       bool isInter = isIntersection();
       if (isInter && !wasIntersection) {
         motorsStop(); delay(50);
-        // ================= CĂN TÂM BÁNH XE CHUẨN XÁC =================
-        // Đẩy trục bánh xe tiến thêm 4.5cm để vào chính giữa ngã tư trước khi xoay
-        move_forward_distance(0.045, 120); 
-        motorsStop(); delay(50); 
         currentState = RS_AT_INTERSECTION;
         wasIntersection = true;
         break;
       }
-      wasIntersection = isInter;
+      wasIntersection = isInter; 
       rt_pidLineFollow();
       break;
     }
@@ -298,14 +245,27 @@ void route_loop() {
       if (cmdQueueEmpty()) { currentState = RS_DONE; break; }
       char cmd = cmdQueuePop();
       
+      // TỐI ƯU CƠ KHÍ: Đi lố qua ngã tư để tránh đếm đúp Node 
       switch (cmd) {
-        case 'F': rt_advanceGridPos(); break;
-        case 'L': spin_left_deg(90.0, 140); motorsStop(); delay(100); rt_updateDirAfterTurn('L'); rt_advanceGridPos(); break;
-        case 'R': spin_right_deg(90.0, 140); motorsStop(); delay(100); rt_updateDirAfterTurn('R'); rt_advanceGridPos(); break;
-        default: break;
+        case 'F': 
+          move_forward_distance(0.08, 120); // Phóng thẳng 8cm qua khỏi ngã tư
+          rt_advanceGridPos(); 
+          break;
+        case 'L': 
+          move_forward_distance(0.045, 120); // Đi vào tâm
+          spin_left_deg(90.0, 140); motorsStop(); delay(100); 
+          move_forward_distance(0.08, 120); // Trườn khỏi ngã tư
+          rt_updateDirAfterTurn('L'); rt_advanceGridPos(); 
+          break;
+        case 'R': 
+          move_forward_distance(0.045, 120); // Đi vào tâm
+          spin_right_deg(90.0, 140); motorsStop(); delay(100); 
+          move_forward_distance(0.08, 120); // Trườn khỏi ngã tư
+          rt_updateDirAfterTurn('R'); rt_advanceGridPos(); 
+          break;
       }
       
-      intersectionCount++; wasIntersection = false;
+      intersectionCount++; 
       
       pidL.i_term = 0; pidL.prev_err = 0; pidR.i_term = 0; pidR.prev_err = 0;
       rt_vL_ema = 0; rt_vR_ema = 0; rt_pwmL_prev = 0; rt_pwmR_prev = 0;
@@ -321,28 +281,20 @@ void route_loop() {
     
     case RS_OBSTACLE: {
       motorsStop();
-      if (millis() - obstacleTimer > OBSTACLE_TIMEOUT_MS) {
-        rt_wsSend("{\"type\":\"OBSTACLE_TIMEOUT\"}");
-        currentState = RS_IDLE;
-      }
+      if (millis() - obstacleTimer > OBSTACLE_TIMEOUT_MS) { rt_wsSend("{\"type\":\"OBSTACLE_TIMEOUT\"}"); currentState = RS_IDLE; }
       break;
     }
-    
     case RS_REROUTING: { currentState = RS_FOLLOWING_LINE; break; }
-    
     case RS_DONE: {
-      motorsStop();
-      gripOpen(); delay(1500); gripClose();
-      delivered_count++;
+      motorsStop(); gripOpen(); delay(1500); gripClose(); delivered_count++;
       rt_wsSend("{\"type\":\"COMPLETED\",\"intersections\":" + String(intersectionCount) + ",\"distance_cm\":" + String(rt_distance, 1) + "}");
-      currentState = RS_IDLE;
-      is_auto_running = false; 
+      currentState = RS_IDLE; is_auto_running = false; 
       break;
     }
   }
 }
 
-void route_abort() { motorsStop(); cmdQueueClear(); currentState = RS_IDLE; Serial.println("Route aborted"); }
+void route_abort() { motorsStop(); cmdQueueClear(); currentState = RS_IDLE; }
 bool route_is_done() { return currentState == RS_IDLE || currentState == RS_DONE; }
 
 const char* route_state_str() {
@@ -357,6 +309,5 @@ int route_total_steps() { return cmdTotal; }
 
 String route_telemetry_json() {
   int node = robotGridPos.row * 5 + robotGridPos.col;
-  String json = "{\"type\":\"TELEMETRY\",\"state\":\"" + String(route_state_str()) + "\",\"step\":" + String(cmdExecuted) + ",\"total\":" + String(cmdTotal) + ",\"speedL\":" + String(rt_speedL, 3) + ",\"speedR\":" + String(rt_speedR, 3) + ",\"distance\":" + String(rt_distance, 1) + ",\"obstacle\":" + String(rt_obstacleDist, 1) + ",\"robotNode\":" + String(node) + ",\"robotDir\":" + String(robotGridPos.dir) + ",\"sensors\":[" + String((int)rt_sensors[0]) + "," + String((int)rt_sensors[1]) + "," + String((int)rt_sensors[2]) + "," + String((int)rt_sensors[3]) + "," + String((int)rt_sensors[4]) + "]}";
-  return json;
+  return "{\"type\":\"TELEMETRY\",\"state\":\"" + String(route_state_str()) + "\",\"step\":" + String(cmdExecuted) + ",\"total\":" + String(cmdTotal) + ",\"speedL\":" + String(rt_speedL, 3) + ",\"speedR\":" + String(rt_speedR, 3) + ",\"distance\":" + String(rt_distance, 1) + ",\"obstacle\":" + String(rt_obstacleDist, 1) + ",\"robotNode\":" + String(node) + ",\"robotDir\":" + String(robotGridPos.dir) + ",\"sensors\":[" + String((int)rt_sensors[0]) + "," + String((int)rt_sensors[1]) + "," + String((int)rt_sensors[2]) + "," + String((int)rt_sensors[3]) + "," + String((int)rt_sensors[4]) + "]}";
 }

@@ -10,8 +10,8 @@ let deliveryStartTime = null;
 let deliveryExpectedTime = null;
 let deliveryInProgress = false;
 
-// ==================== Biến Khóa An Toàn (MỚI) ====================
-let isRouteValidated = false; // Bắt buộc phải mô phỏng trước khi nạp
+// ==================== Biến Khóa An Toàn ====================
+let isRouteValidated = false;
 
 function updateValidationUI(isValid) {
   isRouteValidated = isValid;
@@ -35,30 +35,29 @@ function updateValidationUI(isValid) {
       "w-full flex items-center justify-center gap-2 bg-gray-400 text-white px-4 py-3 rounded-xl text-sm font-bold shadow-lg cursor-not-allowed";
   }
 }
-// ================================================================
 
 // ==================== Graph Data ====================
 let graph = {
-  0: [1, 5],
-  1: [0, 6],
-  2: [3, 7],
-  3: [2, 4, 8],
-  4: [3],
-  5: [0, 6, 10],
-  6: [1, 5, 7],
-  7: [2, 6, 8, 12],
-  8: [3, 7, 9, 13],
-  9: [8, 14],
-  10: [5, 11, 15],
-  11: [10, 16],
-  12: [7, 13, 17],
-  13: [8, 12, 14, 18],
-  14: [9, 13],
-  15: [10, 16],
-  16: [11, 15],
-  17: [12, 18],
-  18: [13, 17, 19],
-  19: [18],
+  0: [],
+  1: [],
+  2: [],
+  3: [],
+  4: [],
+  5: [],
+  6: [],
+  7: [],
+  8: [],
+  9: [],
+  10: [],
+  11: [],
+  12: [],
+  13: [],
+  14: [],
+  15: [],
+  16: [],
+  17: [],
+  18: [],
+  19: [],
 };
 const edgeWeights = {};
 const coords = {
@@ -148,6 +147,10 @@ function createRobotIndicator() {
   g.addEventListener("click", (e) => {
     e.stopPropagation();
     if (anim.active) return;
+    if (currentMapTool === "edge" || currentMapTool === "weight") {
+      handleNodeClick(robotCurrentNode);
+      return;
+    }
     robotInitialDir = (robotInitialDir + 1) % 4;
     robotCurrentDir = robotInitialDir;
     updateRobotIndicator(robotCurrentNode, robotCurrentDir);
@@ -200,7 +203,6 @@ function getAlgoName(a) {
   );
 }
 
-// ==================== Clock & Toast ====================
 function updateClock() {
   const ts = new Date().toLocaleTimeString("en-US", {
     hour: "2-digit",
@@ -357,6 +359,11 @@ function handleDynamicReroute(data) {
 function handleDeliveryCompleted() {
   if (!deliveryInProgress) return;
   deliveryInProgress = false;
+
+  if (robotCurrentNode >= 0) {
+    document.getElementById("startNode").value = robotCurrentNode;
+  }
+
   const actualTime = ((Date.now() - deliveryStartTime) / 1000).toFixed(1);
   const banner = document.getElementById("deliveryStatusBanner");
   const icon = document.getElementById("deliveryStatusIcon");
@@ -428,7 +435,6 @@ function updateRobotState(s) {
   document.getElementById("teleStateVal").textContent = map[s] || s;
 }
 
-// ==================== Tab Switching ====================
 async function switchTab(tab) {
   document
     .querySelectorAll(".panel-view")
@@ -499,7 +505,61 @@ async function startLineOnly() {
   } catch (e) {}
 }
 
-// ==================== Map Config & Clicks ====================
+function renderEdges() {
+  const layer = document.querySelector(".track-lines");
+  layer.innerHTML = "";
+  const drawn = new Set();
+  for (const [nid, neighbors] of Object.entries(graph)) {
+    for (const nb of neighbors) {
+      const a = parseInt(nid),
+        b = nb;
+      const key = Math.min(a, b) + "-" + Math.max(a, b);
+      if (drawn.has(key)) continue;
+      drawn.add(key);
+      const [x1, y1] = coords[a],
+        [x2, y2] = coords[b];
+      const line = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "line",
+      );
+      line.setAttribute("x1", x1);
+      line.setAttribute("y1", y1);
+      line.setAttribute("x2", x2);
+      line.setAttribute("y2", y2);
+      layer.appendChild(line);
+      const w = getEdgeWeight(a, b);
+      if (w !== 1) {
+        const txt = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "text",
+        );
+        txt.setAttribute("x", (x1 + x2) / 2);
+        txt.setAttribute("y", (y1 + y2) / 2 - 8);
+        txt.setAttribute("class", "edge-weight-label");
+        txt.textContent = w;
+        layer.appendChild(txt);
+      }
+    }
+  }
+}
+
+function toggleEdge(a, b) {
+  if (a === b) return;
+  const has = graph[a].includes(b);
+  if (has) {
+    graph[a] = graph[a].filter((n) => n !== b);
+    graph[b] = graph[b].filter((n) => n !== a);
+    delete edgeWeights[Math.min(a, b) + "-" + Math.max(a, b)];
+  } else {
+    graph[a].push(b);
+    graph[b].push(a);
+  }
+  renderEdges();
+  updateNodeVisuals();
+  calculateOverallPath();
+  return !has;
+}
+
 function initNodes() {
   const startNodeEl = document.getElementById("startNode");
   for (let i = 0; i < 20; i++) {
@@ -539,6 +599,15 @@ function setMapTool(tool) {
     document.getElementById("tool" + t).className =
       tool === t.toLowerCase() ? "map-tool-btn active" : "map-tool-btn";
   });
+  updateEdgeSelUI();
+}
+function updateEdgeSelUI() {
+  for (let i = 0; i < 20; i++)
+    document.getElementById("svg-node-" + i).classList.remove("node-edge-sel");
+  if (edgeSelFirst !== null)
+    document
+      .getElementById("svg-node-" + edgeSelFirst)
+      .classList.add("node-edge-sel");
 }
 
 function handleNodeClick(nid) {
@@ -546,18 +615,67 @@ function handleNodeClick(nid) {
     animReset();
   }
   const sn = parseInt(document.getElementById("startNode").value);
-
-  updateValidationUI(false); // Map thay đổi -> Khóa nút nạp ngay lập tức
+  updateValidationUI(false);
 
   if (currentMapTool === "start") {
     targets.delete(nid);
     obstacles.delete(nid);
     document.getElementById("startNode").value = nid;
+    updateRobotIndicator(nid, robotCurrentDir);
     updateNodeVisuals();
     calculateOverallPath();
     return;
   }
-  if (nid === sn && currentMapTool !== "start") return;
+
+  if (currentMapTool === "edge") {
+    if (edgeSelFirst === null) {
+      edgeSelFirst = nid;
+      updateEdgeSelUI();
+      showToast(`Đã chọn Node ${nid} — Click node kề để nối dây`, "info");
+    } else {
+      if (edgeSelFirst !== nid) {
+        const added = toggleEdge(edgeSelFirst, nid);
+        showToast(
+          `Edge ${edgeSelFirst}↔${nid} ${added ? "đã nối" : "đã xóa"}`,
+          "success",
+        );
+      }
+      edgeSelFirst = null;
+      updateEdgeSelUI();
+    }
+    return;
+  }
+
+  if (currentMapTool === "weight") {
+    if (edgeSelFirst === null) {
+      edgeSelFirst = nid;
+      updateEdgeSelUI();
+      showToast(`Đã chọn Node ${nid} — Click node kề để đổi trọng số`, "info");
+    } else {
+      if (edgeSelFirst !== nid && graph[edgeSelFirst].includes(nid)) {
+        const cur = getEdgeWeight(edgeSelFirst, nid);
+        const nw = prompt(
+          `Trọng số edge ${edgeSelFirst}↔${nid} (hiện: ${cur}):`,
+          cur,
+        );
+        if (nw !== null && !isNaN(parseInt(nw)) && parseInt(nw) > 0) {
+          setEdgeWeight(edgeSelFirst, nid, parseInt(nw));
+          renderEdges();
+          updateNodeVisuals();
+          calculateOverallPath();
+          showToast(`Trọng số ${edgeSelFirst}↔${nid} = ${nw}`, "success");
+        }
+      } else if (edgeSelFirst !== nid) {
+        showToast("Không có kết nối giữa 2 node này!", "error");
+      }
+      edgeSelFirst = null;
+      updateEdgeSelUI();
+    }
+    return;
+  }
+
+  if (nid === sn) return;
+
   if (currentMapTool === "target") {
     obstacles.delete(nid);
     const mode = document.getElementById("orderModeSel").value;
@@ -589,7 +707,7 @@ function updateNodeVisuals() {
     let cls = "node-group";
     if (i === sn) cls += " node-start";
     else if (obstacles.has(i)) cls += " node-obstacle";
-    else if (targets.has(i)) cls += " target-1";
+    else if (targets.has(i)) cls += " target-1"; // Mặc định cho mọi target được đánh dấu
     document.getElementById("svg-node-" + i).setAttribute("class", cls);
   }
   document.getElementById("pathLayer").innerHTML = "";
@@ -597,7 +715,6 @@ function updateNodeVisuals() {
     document.getElementById("pathResult").innerText =
       "Chọn điểm xuất phát và điểm đến trên bản đồ";
   }
-  updateRobotIndicator(sn, robotInitialDir);
 }
 
 // ==================== Algorithms ====================
@@ -791,7 +908,6 @@ function findPath(start, end, algo) {
 function findPathToNearest(start, targetSet, algo) {
   if (obstacles.has(start)) return null;
   algo = algo || document.getElementById("algoSel").value;
-  // Giản lược: Tìm kiếm tất cả mục tiêu cùng lúc
   let bestR = null;
   let minLen = Infinity;
   let bestT = null;
@@ -829,7 +945,6 @@ function buildSegments(sn, tarArr, algo) {
     if (!r) break;
     ordered.push(r.foundTarget);
     remaining.delete(r.foundTarget);
-
     segs.push({
       steps: r.steps,
       path: r.path,
@@ -871,7 +986,6 @@ function flattenSegments(segs) {
   return all;
 }
 
-// ==================== Animation ====================
 const SEG_COLORS = [
   "#16a34a",
   "#0873df",
@@ -888,6 +1002,17 @@ function animStart() {
     showToast("Chọn điểm đích trước!", "error");
     return;
   }
+
+  let hasEdges = false;
+  for (let i = 0; i < 20; i++) if (graph[i].length > 0) hasEdges = true;
+  if (!hasEdges) {
+    showToast(
+      "Vui lòng dùng công cụ Edge nối các điểm lại với nhau trước!",
+      "error",
+    );
+    return;
+  }
+
   const algo = document.getElementById("algoSel").value;
   const {
     segs,
@@ -900,7 +1025,7 @@ function animStart() {
   } = buildSegments(sn, tarArr, algo);
 
   if (!segs.length) {
-    showToast("Khu vực bị cô lập hoàn toàn!", "error");
+    showToast("Không thể tìm đường (Bị cô lập hoặc chưa nối Edge)", "error");
     updateValidationUI(false);
     return;
   }
@@ -1097,11 +1222,6 @@ function animRenderStep(step) {
         .classList.remove("node-explored", "node-frontier", "node-current");
     flowLayer.innerHTML = "";
     anim.prevSegIdx = step.segIdx;
-    if (anim.segCount > 1)
-      showToast(
-        `🚚 Đoạn ${step.segIdx + 1}/${anim.segCount}: đang tìm đường...`,
-        "info",
-      );
   }
 
   flowLayer.querySelectorAll(".edge-current").forEach((el) => {
@@ -1173,8 +1293,11 @@ function animShowFinalPath() {
     let skippedArr = Array.from(anim.skippedTargets);
     msg += `\n⚠️ BỎ QUA ĐƠN: Node ${skippedArr.join(", ")} (Vướng vật cản)`;
     resEl.className = "p-4 text-sm text-center warn-msg font-bold";
+    // Tích hợp: Tự động gạch chéo đỏ ngay cả sau khi animation chạy xong
     skippedArr.forEach((t) =>
-      document.getElementById("svg-node-" + t).classList.add("node-skipped"),
+      document
+        .getElementById("svg-node-" + t)
+        .setAttribute("class", "node-group node-skipped"),
     );
     showToast(
       `✅ Đã chốt đường! Bỏ qua ${skippedArr.length} đơn bị kẹt`,
@@ -1184,19 +1307,9 @@ function animShowFinalPath() {
     resEl.className = "p-4 text-sm text-center has-path font-bold";
     showToast(`✅ Mô phỏng hoàn tất! Sẵn sàng nạp xuống xe.`, "success");
   }
-
   resEl.innerText = msg;
   finalCalculatedPath = anim.fullPath;
 
-  if (anim.fullPath.length >= 2) {
-    const lastDir = getDirBetweenNodes(
-      anim.fullPath[anim.fullPath.length - 2],
-      anim.fullPath[anim.fullPath.length - 1],
-    );
-    updateRobotIndicator(anim.fullPath[anim.fullPath.length - 1], lastDir);
-  }
-
-  // MỞ KHÓA NÚT NẠP
   updateValidationUI(true);
 }
 
@@ -1213,7 +1326,7 @@ function updateAnimUI() {
   }
 }
 
-// ==================== Background Calculation ====================
+// ==================== TÍNH TOÁN NỀN VÀ HIỂN THỊ TÌNH TRẠNG KẸT ====================
 function calculateOverallPath() {
   const sn = parseInt(document.getElementById("startNode").value);
   const deliveryMode = document.getElementById("deliveryModeSel").value;
@@ -1223,8 +1336,10 @@ function calculateOverallPath() {
     let cls = "node-group";
     if (i === sn) cls += " node-start";
     else if (obstacles.has(i)) cls += " node-obstacle";
+    else if (targets.has(i)) cls += " target-1"; // <--- LUÔN ĐỂ TARGET HIỆN LÊN ĐỂ BIẾT CHỖ CẦN GIAO
     document.getElementById("svg-node-" + i).setAttribute("class", cls);
   }
+
   const pathLayer = document.getElementById("pathLayer");
   pathLayer.innerHTML = "";
   const legendBox = document.getElementById("deliveryLegend");
@@ -1243,15 +1358,8 @@ function calculateOverallPath() {
   }
 
   const tarArr = Array.from(targets);
-  const {
-    segs,
-    fullPath,
-    ordered,
-    totalSteps,
-    totalExplored,
-    totalCost,
-    remaining,
-  } = buildSegments(sn, tarArr, algo);
+  const { segs, fullPath, ordered, totalSteps, totalExplored, remaining } =
+    buildSegments(sn, tarArr, algo); // Lấy ra những Node bị bỏ lại
 
   if (ordered.length) {
     orderInfoEl.textContent = ordered
@@ -1274,17 +1382,27 @@ function calculateOverallPath() {
     ordered.forEach((node, idx) => {
       let ci = Math.min(idx, 5),
         col = TARGET_COLORS[ci];
+      // Nếu có đường tới, override màu của nó theo thứ tự ưu tiên giao hàng
       document
         .getElementById("svg-node-" + node)
-        .classList.add("target-" + (ci + 1));
+        .setAttribute("class", "node-group target-" + (ci + 1));
       legHTML += `<span class="flex items-center gap-1 px-2 py-1 bg-surface-container rounded-lg"><span class="w-2 h-2 rounded-full" style="background:${col}"></span>Đơn ${idx + 1} (N${node})</span>`;
     });
     legendBox.innerHTML = legHTML;
     legendBox.classList.remove("hidden");
   } else {
-    orderInfoEl.textContent = "Không tìm được đường!";
+    orderInfoEl.textContent = "Cần Mô phỏng Thuật toán trước!";
     routeInfoEl.textContent = "—";
     legendBox.classList.add("hidden");
+  }
+
+  // <--- NẾU CÓ NHỮNG NODE KẸT ĐƯỜNG, ĐÁNH DẤU CHÉO ĐỎ (node-skipped) LÊN NGAY LẬP TỨC
+  if (remaining && remaining.size > 0) {
+    Array.from(remaining).forEach((t) => {
+      document
+        .getElementById("svg-node-" + t)
+        .setAttribute("class", "node-group node-skipped");
+    });
   }
 }
 
@@ -1326,10 +1444,7 @@ function pathToCommands(path, initialDir) {
 // ==================== NÚT NẠP LỘ TRÌNH ====================
 document.getElementById("deliverBtn").addEventListener("click", async () => {
   if (!isRouteValidated) {
-    showToast(
-      "Vui lòng ấn MÔ PHỎNG THUẬT TOÁN để hệ thống chốt đường đi an toàn trước khi nạp!",
-      "error",
-    );
+    showToast("Vui lòng ấn MÔ PHỎNG THUẬT TOÁN trước khi nạp!", "error");
     return;
   }
   if (!finalCalculatedPath || finalCalculatedPath.length < 2) {
@@ -1372,14 +1487,7 @@ document.getElementById("deliverBtn").addEventListener("click", async () => {
       startNode: parseInt(document.getElementById("startNode").value),
       initialDir: JS_TO_CPP_DIR[robotInitialDir],
     });
-  } else {
-    try {
-      await fetch(
-        `/deliver?dir=${JS_TO_CPP_DIR[robotInitialDir]}&path=${finalCalculatedPath.join(",")}`,
-      );
-    } catch (e) {}
   }
-
   setTimeout(() => {
     btn1.innerHTML = "✅ ĐÃ NẠP THÀNH CÔNG!";
     btn2.innerHTML = "✅ ĐÃ NẠP THÀNH CÔNG!";
@@ -1390,41 +1498,53 @@ document.getElementById("deliverBtn").addEventListener("click", async () => {
   }, 1000);
 });
 
-// ==================== LỆNH VỀ KHO TỰ ĐỘNG ====================
+// ==================== LỆNH VỀ KHO TỰ ĐỘNG (ĐÃ TỐI ƯU) ====================
 function returnHome() {
   const warehouseNode = 0;
-  let currentRobotNode = parseInt(document.getElementById("startNode").value);
 
-  if (finalCalculatedPath && finalCalculatedPath.length > 0) {
-    currentRobotNode = finalCalculatedPath[finalCalculatedPath.length - 1];
-    document.getElementById("startNode").value = currentRobotNode;
-  }
-  if (currentRobotNode === warehouseNode) {
-    showToast("Xe hiện đang ở kho rồi!", "info");
+  // 1. Lấy vị trí THỰC TẾ của xe hiện tại (ưu tiên Telemetry)
+  let startN =
+    robotCurrentNode >= 0
+      ? robotCurrentNode
+      : parseInt(document.getElementById("startNode").value);
+
+  // Nếu đã ở kho rồi thì thôi
+  if (startN === warehouseNode) {
+    showToast("Xe hiện đang ở kho (Node 0) rồi!", "info");
     return;
   }
 
+  // 2. Dọn dẹp bản đồ, chốt duy nhất 1 điểm đến là Node 0
   targets.clear();
   targets.add(warehouseNode);
+
+  // Cập nhật lại UI ô "Xuất phát" cho khớp với thực tế
+  document.getElementById("startNode").value = startN;
   updateNodeVisuals();
 
-  // Tính toán nhanh một lộ trình và đặc cách Mở Khóa Nạp
-  const { fullPath } = buildSegments(
-    currentRobotNode,
-    [warehouseNode],
-    "astar",
-  );
-  if (fullPath.length >= 2) {
+  // 3. Tính toán đường đi ngắn nhất về kho dựa trên thuật toán đang chọn
+  const algo = document.getElementById("algoSel").value;
+  const { fullPath } = buildSegments(startN, [warehouseNode], algo);
+
+  if (fullPath && fullPath.length >= 2) {
+    // Có đường về -> Chốt lộ trình và vẽ lên bản đồ
     finalCalculatedPath = fullPath;
-    updateValidationUI(true); // Mở khóa ép buộc cho tính năng Về Kho
+    calculateOverallPath(); // Vẽ đường hiển thị lên UI cho người dùng thấy
+
+    // Ép mở khóa nút Nạp và tự động click
+    updateValidationUI(true);
     document.getElementById("deliverBtn").click();
-    showToast("Tự động vẽ đường ngắn nhất quay về kho...", "success");
+    showToast("Đã tìm thấy đường về kho, đang tự động nạp...", "success");
   } else {
-    showToast("Kẹt đường! Không thể về kho.", "error");
+    // Không có đường về (Bị vật cản chặn kín)
+    calculateOverallPath(); // Cập nhật UI để hiện gạch chéo đỏ báo kẹt
+    showToast(
+      "Cảnh báo: Xe bị cô lập bởi vật cản! Không thể tự về kho.",
+      "error",
+    );
   }
 }
 
-// ==================== Event Listeners ====================
 document
   .querySelectorAll("#startNode,#algoSel,#orderModeSel,#deliveryModeSel")
   .forEach((el) =>
@@ -1438,7 +1558,9 @@ document
         targets.clear();
         targets.add(f);
       }
-      updateValidationUI(false); // Khóa nút nạp
+      if (el.id === "startNode")
+        updateRobotIndicator(parseInt(el.value), robotCurrentDir);
+      updateValidationUI(false);
       obstacles.delete(parseInt(document.getElementById("startNode").value));
       updateNodeVisuals();
       calculateOverallPath();
@@ -1448,6 +1570,12 @@ document.getElementById("animSpeedSlider").addEventListener("input", (e) => {
   const v = parseInt(e.target.value);
   const t = 1 - v / 100;
   anim.speed = Math.round(1500 * t * t + 30);
+});
+
+document.getElementById("robotSpeedSlider")?.addEventListener("input", (e) => {
+  const v = (e.target.value / 100).toFixed(2);
+  document.getElementById("robotSpeedVal").textContent = v;
+  wsSend({ type: "SPEED", v_base: parseFloat(v) });
 });
 
 async function sendCommand(cmd) {
@@ -1508,7 +1636,12 @@ document.getElementById("stopBtn").addEventListener(
 
 updateValidationUI(false);
 initNodes();
+renderEdges();
 createRobotIndicator();
+updateRobotIndicator(
+  parseInt(document.getElementById("startNode").value),
+  robotInitialDir,
+);
 updateNodeVisuals();
 calculateOverallPath();
 setTimeout(() => connectWebSocket(), 1000);

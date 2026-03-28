@@ -1,7 +1,6 @@
 #include <Arduino.h>
 #include "do_line.h"
 
-// CẤU HÌNH MỨC LOGIC CẢM BIẾN
 #define LINE_DETECT_STATE HIGH 
 inline bool onLine(int pin){ return digitalRead(pin) == LINE_DETECT_STATE; }
 
@@ -21,10 +20,9 @@ inline bool onLine(int pin){ return digitalRead(pin) == LINE_DETECT_STATE; }
 #define ENC_L 26
 #define ENC_R 22
 #define PULSES_PER_REV 20           
-#define PPR_EFFECTIVE PULSES_PER_REV  // SỬA: Đếm chuẩn 20 xung/vòng
-#define MIN_EDGE_US 500               // SỬA: Giảm xuống 500us
+#define PPR_EFFECTIVE PULSES_PER_REV  
+#define MIN_EDGE_US 500               
 
-// ================= HC-SR04 EMA (KHÔNG DELAY) =================
 #define TRIG_PIN 21
 #define ECHO_PIN 19
 const float OBSTACLE_TH_CM = 20.0f;     
@@ -52,13 +50,10 @@ float readDistanceCM_Fast(){
 static inline void updateObstacleState(){
   if (millis() - us_last_ms < 40) return; 
   us_last_ms = millis();
-  
   float d = readDistanceCM_Fast();
   if (d < 2.0f) d = 999.0f; 
-  
   us_ema = 0.6f * us_ema + 0.4f * d; 
   us_dist_cm = us_ema;
-
   if (!obs_latched){
     if (us_dist_cm > 0 && us_dist_cm <= OBSTACLE_ON_CM){
       if (++obs_hit >= OBS_HIT_N) obs_latched = true;
@@ -67,16 +62,14 @@ static inline void updateObstacleState(){
     if (us_dist_cm >= OBSTACLE_OFF_CM){ obs_latched = false; obs_hit = 0; }
   }
 }
-// =============================================================
 
 const float WHEEL_RADIUS_M = 0.0325f;
 const float CIRC = 2.0f * 3.1415926f * WHEEL_RADIUS_M; 
 const float TRACK_WIDTH_M = 0.1150f; 
 
-// ===== ĐÃ SỬA: TỐC ĐỘ CHUẨN =====
-float v_base   = 0.25f;    
-float v_boost  = 0.08f;   
-float v_hard   = 0.10f;   
+float v_base   = 0.22f;    
+float v_boost  = 0.10f;   
+float v_hard   = 0.15f;   
 float vF = v_base * 0.90f;
 
 PID pidL{300.0f, 8.0f, 0.00f, 0, 0, 0, 255};
@@ -92,14 +85,15 @@ const int PWM_MIN_RUN = 75;
 const int PWM_SLEW    = 8;  
 static int pwmL_prev=0, pwmR_prev=0;
 
+// ================= CÁC BIẾN TOÀN CỤC QUẢN LÝ TRẠNG THÁI (ĐÃ KHÔI PHỤC) =================
 enum Side {NONE, LEFT, RIGHT};
 Side last_seen = NONE;
 bool seen_line_ever = false;
 bool avoiding = false;
-static volatile bool g_line_enabled = true;
-bool recovering = false;
-unsigned long rec_t0 = 0;
-const unsigned long RECOV_TIME_MS = 6000; 
+volatile bool g_line_enabled = true; // Biến khóa an toàn dò line
+bool recovering = false;             // Biến cờ báo hiệu đang tìm line
+unsigned long rec_t0 = 0;            // Bộ đếm thời gian tìm line
+// =======================================================================================
 
 void IRAM_ATTR encL_isr(){
   uint32_t now = micros();
@@ -113,18 +107,9 @@ void IRAM_ATTR encR_isr(){
 inline int clamp255(int v){ return v<0?0:(v>255?255:v); }
 inline float clampf(float v, float lo, float hi){ return v<lo?lo:(v>hi?hi:v); }
 
-inline bool isValidLineSample5(bool L2,bool L1,bool M,bool R1,bool R2){
-  const int on = (int)L2 + L1 + M + R1 + R2;
-  return !(on==0 || on==5);
-}
-
 static inline int shape_pwm(int target, int prev){
-  int s = target;
-  if (s>0 && s<PWM_MIN_RUN) s = PWM_MIN_RUN;
-  if (s<0 && s>-PWM_MIN_RUN) s = -PWM_MIN_RUN;
-  int d = s - prev;
-  if (d >  PWM_SLEW) s = prev + PWM_SLEW;
-  if (d < -PWM_SLEW) s = prev - PWM_SLEW;
+  int s = target; if (s>0 && s<PWM_MIN_RUN) s = PWM_MIN_RUN; if (s<0 && s>-PWM_MIN_RUN) s = -PWM_MIN_RUN;
+  int d = s - prev; if (d > PWM_SLEW) s = prev + PWM_SLEW; if (d < -PWM_SLEW) s = prev - PWM_SLEW;
   return clamp255(s);
 }
 
@@ -141,8 +126,7 @@ void driveWheelLeft(float v_target, int pwm){
 }
 
 void motorsStop(){
-  digitalWrite(IN1, LOW); digitalWrite(IN2, LOW);
-  digitalWrite(IN3, LOW); digitalWrite(IN4, LOW);
+  digitalWrite(IN1, LOW); digitalWrite(IN2, LOW); digitalWrite(IN3, LOW); digitalWrite(IN4, LOW);
   analogWrite(ENA, 0); analogWrite(ENB, 0);
 }
 
@@ -150,12 +134,9 @@ float ticksToVel(long ticks, float dt_s){ return ((float)ticks / (float)PPR_EFFE
 
 int pidStep(PID &pid, float v_target, float v_meas, float dt_s){
   float err = v_target - v_meas;
-  pid.i_term += pid.Ki * err * dt_s;
-  pid.i_term = clampf(pid.i_term, pid.out_min, pid.out_max);
+  pid.i_term += pid.Ki * err * dt_s; pid.i_term = clampf(pid.i_term, pid.out_min, pid.out_max);
   float d = (err - pid.prev_err) / dt_s;
-  float u = pid.Kp * err + pid.i_term + pid.Kd * d;
-  pid.prev_err = err;
-  return clamp255((int)u);
+  float u = pid.Kp * err + pid.i_term + pid.Kd * d; pid.prev_err = err; return clamp255((int)u);
 }
 
 long countsForDistance(double dist_m){ return (long)(dist_m / CIRC * PPR_EFFECTIVE + 0.5); }
@@ -176,11 +157,13 @@ static inline double theta_from_counts(long dL, long dR, int signL, int signR){
 void spin_left_deg(double deg, int pwmMax){
   const double target = 1.5*deg * 3.141592653589793 / 180.0;
   const double deg_tol = 1.5 * 3.141592653589793 / 180.0; 
-  const double Kp_theta = 140.0;   
-  const double Kbal = 0.6;         
-  const int pwmMin = 150;
+  const double Kp_theta = 140.0; const double Kbal = 0.6; const int pwmMin = 150;
+  const unsigned long T_FAIL_MS = 4000;
+  
+  unsigned long t0 = millis();
   long L0, R0; noInterrupts(); L0 = encL_total; R0 = encR_total; interrupts();
   while (true){
+    if (millis() - t0 > T_FAIL_MS) break; 
     long L, R; noInterrupts(); L = encL_total; R = encR_total; interrupts();
     long dL = labs(L - L0), dR = labs(R - R0);
     double theta = theta_from_counts(dL, dR, -1, +1); 
@@ -192,8 +175,7 @@ void spin_left_deg(double deg, int pwmMax){
     int corr = (int)(Kbal * ( (double)dR - (double)dL ));
     int pwmL = base - corr; if (pwmL < pwmMin) pwmL = pwmMin;
     int pwmR = base + corr; if (pwmR < pwmMin) pwmR = pwmMin;
-    motorWriteLR_signed(-pwmL, +pwmR);
-    delay(2);
+    motorWriteLR_signed(-pwmL, +pwmR); delay(2);
   }
   motorsStop();
 }
@@ -201,27 +183,25 @@ void spin_left_deg(double deg, int pwmMax){
 void spin_right_deg(double deg, int pwmMax){
   const double target = -1.5 * (deg * 3.141592653589793 / 180.0);  
   const double deg_tol = 1.5 * 3.141592653589793 / 180.0;
-  const double Kp_theta = 140.0;
-  const double Kbal = 0.6;
-  const int pwmMin = 150;
-  const unsigned long T_FAIL_MS = 5000;                      
+  const double Kp_theta = 140.0; const double Kbal = 0.6; const int pwmMin = 150;
+  const unsigned long T_FAIL_MS = 4000;
+  
   unsigned long t0 = millis();
   long L0, R0; noInterrupts(); L0 = encL_total; R0 = encR_total; interrupts();
   while (true){
+    if (millis() - t0 > T_FAIL_MS) break;
     long L, R; noInterrupts(); L = encL_total; R = encR_total; interrupts();
     long dL = labs(L - L0), dR = labs(R - R0);
     double theta = theta_from_counts(dL, dR, +1, -1);
     double err = target - theta;
     if (fabs(err) <= deg_tol) break;
-    if (millis() - t0 > T_FAIL_MS) break;                    
     int pwmCap = (fabs(err) < 15.0*3.141592653589793/180.0) ? (pwmMax*0.5) : pwmMax;
     int base = (int)clamp255((int)(fabs(err)*Kp_theta));
     base = base < pwmMin ? pwmMin : (base > pwmCap ? pwmCap : base);
     int corr = (int)(Kbal * ( (double)dL - (double)dR ));
     int pwmL = base + corr; if (pwmL < pwmMin) pwmL = pwmMin;
     int pwmR = base - corr; if (pwmR < pwmMin) pwmR = pwmMin;
-    motorWriteLR_signed(+pwmL, -pwmR);
-    delay(2);
+    motorWriteLR_signed(+pwmL, -pwmR); delay(2);
   }
   motorsStop();
 }
@@ -230,8 +210,14 @@ void move_forward_distance(double dist_m, int pwmAbs){
   long target = countsForDistance(dist_m);
   long sL, sR; noInterrupts(); sL = encL_total; sR = encR_total; interrupts();
   motorWriteLR_signed(+pwmAbs, +pwmAbs);
+  
+  unsigned long t0 = millis();
+  unsigned long timeout = (unsigned long)((dist_m / 0.15) * 1000.0) + 2000; 
+  
   while (true){
     if (!g_line_enabled){ motorsStop(); return; }
+    if (millis() - t0 > timeout) break; 
+    
     long cL, cR; noInterrupts(); cL = encL_total; cR = encR_total; interrupts();
     bool left_done  = (labs(cL - sL) >= target);
     bool right_done = (labs(cR - sR) >= target);
@@ -247,8 +233,14 @@ bool move_forward_distance_until_line(double dist_m, int pwmAbs){
   long target = countsForDistance(dist_m);
   long sL, sR; noInterrupts(); sL = encL_total; sR = encR_total; interrupts();
   motorWriteLR_signed(+pwmAbs, +pwmAbs);
+  
+  unsigned long t0 = millis();
+  unsigned long timeout = (unsigned long)((dist_m / 0.15) * 1000.0) + 2000;
+  
   while (true){
     if (!g_line_enabled){ motorsStop(); return false; }
+    if (millis() - t0 > timeout) break; 
+    
     long cL, cR; noInterrupts(); cL = encL_total; cR = encR_total; interrupts();
     if (onLine(M_SENSOR)){ motorsStop(); return true; }
     bool left_done  = (labs(cL - sL) >= target);
@@ -276,145 +268,132 @@ void avoidObstacle(){
 }
 
 void do_line_setup() {
-  pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);
-  pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);
-  pinMode(L2_SENSOR, INPUT); pinMode(L1_SENSOR, INPUT);
-  pinMode(M_SENSOR,  INPUT); pinMode(R1_SENSOR, INPUT); pinMode(R2_SENSOR, INPUT);
+  pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT); pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);
+  pinMode(L2_SENSOR, INPUT); pinMode(L1_SENSOR, INPUT); pinMode(M_SENSOR,  INPUT); pinMode(R1_SENSOR, INPUT); pinMode(R2_SENSOR, INPUT);
   pinMode(ENC_L, INPUT_PULLUP); pinMode(ENC_R, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(ENC_L), encL_isr, RISING);
-  attachInterrupt(digitalPinToInterrupt(ENC_R), encR_isr, RISING);
+  attachInterrupt(digitalPinToInterrupt(ENC_L), encL_isr, RISING); attachInterrupt(digitalPinToInterrupt(ENC_R), encR_isr, RISING);
   pinMode(TRIG_PIN, OUTPUT); pinMode(ECHO_PIN, INPUT);
 
   g_line_enabled = true; seen_line_ever = false;
   vL_ema = 0.0f; vR_ema = 0.0f; pwmL_prev = 0; pwmR_prev = 0;
   us_last_ms = 0; us_dist_cm = 999.0f; obs_hit = 0; obs_latched = false;
   pidL.i_term = 0; pidL.prev_err = 0; pidR.i_term = 0; pidR.prev_err = 0;
+  recovering = false; last_seen = NONE;
   motorsStop();
 }
 
-// VÒNG LẶP CHỈ PHỤC VỤ DÒ LINE VÔ TẬN (MODE_LINE_ONLY)
+// ================= CẢI TIẾN: HÀM NHẬN DIỆN NGÃ TƯ RÕ RÀNG =================
+bool detectIntersection(bool L2, bool L1, bool M, bool R1, bool R2) {
+  if (L2 && L1 && M && R1 && R2) return true;
+  if (L2 && L1 && M && !R1 && !R2) return true;
+  if (!L2 && !L1 && M && R1 && R2) return true;
+  if (!L2 && L1 && M && R1 && !R2) return true;
+  return false;
+}
+
+// ================= VÒNG LẶP CHÍNH =================
 void do_line_loop() {
   if (!g_line_enabled) { motorsStop(); return; }
 
   static unsigned long t_prev = millis();
-  static unsigned long bad_t = 0; 
+  static unsigned long last_debug_ms = 0; 
 
-  bool L2 = onLine(L2_SENSOR), L1 = onLine(L1_SENSOR);
+  bool L2 = onLine(L2_SENSOR);
+  bool L1 = onLine(L1_SENSOR);
   bool M  = onLine(M_SENSOR);
-  bool R1 = onLine(R1_SENSOR), R2 = onLine(R2_SENSOR);
+  bool R1 = onLine(R1_SENSOR);
+  bool R2 = onLine(R2_SENSOR);
 
   if (L2 || L1 || M || R1 || R2) seen_line_ever = true;
 
-  bool bad = (L2&&L1&&M&&R1&&R2) || (!L2&&!L1&&!M&&!R1&&!R2);
-  if (bad) {
-    if (millis() - bad_t > 1000) {
-      recovering = false; avoiding = false; motorsStop();
-      noInterrupts(); encL_count = 0; encR_count = 0; interrupts();
-      t_prev = millis(); return;
-    }
-  } else { bad_t = millis(); }
+  if (millis() - last_debug_ms > 100) {
+    last_debug_ms = millis();
+    Serial.print("S: "); Serial.print(L2); Serial.print(" "); Serial.print(L1); Serial.print(" ");
+    Serial.print(M); Serial.print(" "); Serial.print(R1); Serial.print(" "); Serial.print(R2);
+    Serial.print(" | Rec: "); Serial.print(recovering);
+    Serial.print(" | LS: "); Serial.print(last_seen);
+  }
 
-  bool line_follow_active = isValidLineSample5(L2,L1,M,R1,R2) && !recovering && !avoiding;
   updateObstacleState();
+  bool line_follow_active = !recovering && !avoiding;
 
   if (line_follow_active && obs_latched){
-    avoiding = true; motorsStop();
-    noInterrupts(); encL_count = 0; encR_count = 0; interrupts();
-    t_prev = millis(); avoidObstacle(); motorsStop();
-    noInterrupts(); encL_count = 0; encR_count = 0; interrupts();
-    t_prev = millis(); avoiding = false; return;
+    avoiding = true; motorsStop(); noInterrupts(); encL_count = 0; encR_count = 0; interrupts(); t_prev = millis(); 
+    avoidObstacle(); motorsStop(); noInterrupts(); encL_count = 0; encR_count = 0; interrupts(); t_prev = millis(); avoiding = false; return;
   }
   if (avoiding) return;
 
   float vL_tgt = 0, vR_tgt = 0;
 
+  // XỬ LÝ RECOVER
   if (recovering) {
-    if (L2 || L1 || M || R1 || R2) { recovering = false; motorsStop(); } 
-    else if (millis() - rec_t0 >= RECOV_TIME_MS) {
-      recovering = false; motorsStop();
-      noInterrupts(); encL_count = 0; encR_count = 0; interrupts();
-      t_prev = millis(); return;
-    } else {
-      if (last_seen == LEFT)       { vL_tgt = -vF; vR_tgt =  vF; }
-      else if (last_seen == RIGHT) { vL_tgt =  vF; vR_tgt = -vF; }
-      else                         { vL_tgt =  vF; vR_tgt = -vF; } 
-    }
-  }
-
-  if (!recovering){
-    const int on_cnt = (int)L2 + L1 + M + R1 + R2;
-
-    if ( M && !L1 && !R1 && !L2 && !R2 ){ last_seen = NONE; vL_tgt = v_base; vR_tgt = v_base; }
-    else if ( L1 &&  M && !R1 ){ last_seen = LEFT; vL_tgt = v_base - v_boost; vR_tgt = v_base + v_boost; }
-    else if ( L1 && !M && !L2 ){ last_seen = LEFT; vL_tgt = v_base - v_boost; vR_tgt = v_base + v_boost; }
-    else if ( L2 && (!R1 && !R2) ){ last_seen = LEFT; vL_tgt = v_base - v_hard;  vR_tgt = v_base + v_hard; }
-    else if ( R1 &&  M && !L1 ){ last_seen = RIGHT; vL_tgt = v_base + v_boost; vR_tgt = v_base - v_boost; }
-    else if ( R1 && !M && !R2 ){ last_seen = RIGHT; vL_tgt = v_base + v_boost; vR_tgt = v_base - v_boost; }
-    else if ( R2 && (!L1 && !L2) ){ last_seen = RIGHT; vL_tgt = v_base + v_hard;  vR_tgt = v_base - v_hard; }
-    
-    // ================= XỬ LÝ NGÃ TƯ / NGÃ BA CHỮ T =================
-    else if (on_cnt >= 3){
-      motorsStop(); delay(200); 
-      
-      move_forward_distance(0.06, 120); 
-      
-      if (!onLine(M_SENSOR) && !onLine(L1_SENSOR) && !onLine(R1_SENSOR)) {
-        motorWriteLR_signed(130, -130); 
-        unsigned long t0 = millis();
-        while(millis() - t0 < 3500) {
-          if (onLine(M_SENSOR) || onLine(L1_SENSOR) || onLine(R1_SENSOR)) {
-            break; 
-          }
-          delay(5);
-        }
-        motorsStop();
-      }
-      
-      last_seen = NONE; 
-      recovering = false;
-    }
+    if (L2 || L1 || M || R1 || R2) { 
+      recovering = false; motorsStop(); 
+      noInterrupts(); encL_count = 0; encR_count = 0; interrupts(); t_prev = millis(); return; 
+    } 
+    else if (millis() - rec_t0 > 1000) {
+      recovering = false; motorsStop(); g_line_enabled = false; 
+      Serial.println("\n[ERROR] RECOVER TIMEOUT -> ROBOT STOPPED!"); return;
+    } 
     else {
-      if (!seen_line_ever){ vL_tgt = 0; vR_tgt = 0; }
+      int rec_pwm = 130; 
+      if (last_seen == LEFT) { driveWheelLeft(-vF, -rec_pwm); driveWheelRight(vF, rec_pwm); } 
+      else if (last_seen == RIGHT) { driveWheelLeft(vF, rec_pwm); driveWheelRight(-vF, -rec_pwm); } 
+      else { motorsStop(); }
+      return; 
+    }
+  }
+
+  // BÁM LINE VÀ NHẬN NGÃ TƯ
+  if (!recovering) {
+    if (detectIntersection(L2, L1, M, R1, R2)) {
+      motorsStop(); delay(50); 
+      move_forward_distance(0.045, 120); 
+      motorsStop(); delay(50);
+      last_seen = NONE; recovering = false;
+    } 
+    else {
+      if (!seen_line_ever) { vL_tgt = 0; vR_tgt = 0; }
+      else if (!L2 && !L1 && !M && !R1 && !R2) { recovering = true; rec_t0 = millis(); return; }
       else {
-        recovering = true; rec_t0 = millis();
-        if (last_seen == LEFT)       { vL_tgt = -vF; vR_tgt =  vF; }
-        else if (last_seen == RIGHT) { vL_tgt =  vF; vR_tgt = -vF; }
-        else                         { vL_tgt =  vF; vR_tgt = -vF; } 
+        if      (!L2 && !L1 &&  M && !R1 && !R2) { last_seen = NONE;  vL_tgt = v_base;           vR_tgt = v_base; }           
+        else if (!L2 &&  L1 &&  M && !R1 && !R2) { last_seen = LEFT;  vL_tgt = v_base - v_boost; vR_tgt = v_base + v_boost; } 
+        else if (!L2 &&  L1 && !M && !R1 && !R2) { last_seen = LEFT;  vL_tgt = v_base - v_boost; vR_tgt = v_base + v_boost; } 
+        else if ( L2 &&  L1 && !M && !R1 && !R2) { last_seen = LEFT;  vL_tgt = v_base - v_hard;  vR_tgt = v_base + v_hard; }  
+        else if ( L2 && !L1 && !M && !R1 && !R2) { last_seen = LEFT;  vL_tgt = v_base - v_hard;  vR_tgt = v_base + v_hard; }  
+        else if (!L2 && !L1 &&  M &&  R1 && !R2) { last_seen = RIGHT; vL_tgt = v_base + v_boost; vR_tgt = v_base - v_boost; } 
+        else if (!L2 && !L1 && !M &&  R1 && !R2) { last_seen = RIGHT; vL_tgt = v_base + v_boost; vR_tgt = v_base - v_boost; } 
+        else if (!L2 && !L1 && !M &&  R1 &&  R2) { last_seen = RIGHT; vL_tgt = v_base + v_hard;  vR_tgt = v_base - v_hard; }  
+        else if (!L2 && !L1 && !M && !R1 &&  R2) { last_seen = RIGHT; vL_tgt = v_base + v_hard;  vR_tgt = v_base - v_hard; }  
+        else { vL_tgt = v_base; vR_tgt = v_base; }
       }
     }
   }
 
+  // TÍNH TOÁN PID
   unsigned long now = millis();
   if (now - t_prev >= CTRL_DT_MS){
-    float dt_s = (now - t_prev) / 1000.0f;
-    t_prev = now;
+    float dt_s = (now - t_prev) / 1000.0f; t_prev = now;
+    noInterrupts(); long cL = encL_count; encL_count = 0; long cR = encR_count; encR_count = 0; interrupts();
 
-    noInterrupts();
-    long cL = encL_count; encL_count = 0;
-    long cR = encR_count; encR_count = 0;
-    interrupts();
-
-    float vL_meas_inst = ticksToVel(cL, dt_s) * (vL_tgt >= 0 ? 1.0f : -1.0f);
+    float vL_meas_inst = ticksToVel(cL, dt_s) * (vL_tgt >= 0 ? 1.0f : -1.0f); 
     float vR_meas_inst = ticksToVel(cR, dt_s) * (vR_tgt >= 0 ? 1.0f : -1.0f);
+    vL_ema = EMA_B*vL_ema + (1-EMA_B)*vL_meas_inst; vR_ema = EMA_B*vR_ema + (1-EMA_B)*vR_meas_inst;
 
-    vL_ema = EMA_B*vL_ema + (1-EMA_B)*vL_meas_inst;
-    vR_ema = EMA_B*vR_ema + (1-EMA_B)*vR_meas_inst;
+    const float V_MAX = 1.5f; 
+    vL_tgt = clampf(vL_tgt, -V_MAX, V_MAX); vR_tgt = clampf(vR_tgt, -V_MAX, V_MAX);
 
-    const float V_MAX = 1.5f;
-    vL_tgt = clampf(vL_tgt, -V_MAX, V_MAX);
-    vR_tgt = clampf(vR_tgt, -V_MAX, V_MAX);
+    if (millis() - last_debug_ms < 5) {
+      Serial.print(" | vL_tgt: "); Serial.print(vL_tgt); Serial.print(" | vR_tgt: "); Serial.println(vR_tgt);
+    }
 
-    int pwmL = pidStep(pidL, vL_tgt, vL_ema, dt_s);
+    int pwmL = pidStep(pidL, vL_tgt, vL_ema, dt_s); 
     int pwmR = pidStep(pidR, vR_tgt, vR_ema, dt_s);
-
-    int pwmL_cmd = shape_pwm((int)(1.0f*pwmL), pwmL_prev);
+    int pwmL_cmd = shape_pwm((int)(1.0f*pwmL), pwmL_prev); 
     int pwmR_cmd = shape_pwm((int)(1.0f*pwmR), pwmR_prev);
     pwmL_prev = pwmL_cmd; pwmR_prev = pwmR_cmd;
 
-    if (vL_tgt >=0  && vR_tgt < 0) { pwmR_cmd = pwmL_cmd; }
-    else if (vL_tgt < 0  && vR_tgt >= 0) { pwmL_cmd = pwmR_cmd; }
-    
-    driveWheelLeft (vL_tgt, pwmL_cmd);
+    driveWheelLeft(vL_tgt, pwmL_cmd); 
     driveWheelRight(vR_tgt, pwmR_cmd);
   }
 }
