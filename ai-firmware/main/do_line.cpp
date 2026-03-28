@@ -1,36 +1,9 @@
 #include <Arduino.h>
 #include "do_line.h"
 
-extern int currentPath[20];
-extern int pathLength;
-extern int currentPathIndex;
-extern int currentDir;
-extern volatile int delivered_count;
-extern bool line_mode;
-extern volatile UIMode currentMode; 
-extern void gripOpen();
-extern void gripClose();
-
 // CẤU HÌNH MỨC LOGIC CẢM BIẾN
 #define LINE_DETECT_STATE HIGH 
 inline bool onLine(int pin){ return digitalRead(pin) == LINE_DETECT_STATE; }
-
-const int node_coords[20][2] = {
-  {30, 30}, {100, 30}, {170, 30}, {240, 30}, {310, 30},
-  {30, 100}, {100, 100}, {170, 100}, {240, 100}, {310, 100},
-  {30, 170}, {100, 170}, {170, 170}, {240, 170}, {310, 170},
-  {30, 240}, {100, 240}, {170, 240}, {240, 240}, {310, 240}
-};
-
-int getTargetDirection(int nodeA, int nodeB) {
-  int dx = node_coords[nodeB][0] - node_coords[nodeA][0];
-  int dy = node_coords[nodeB][1] - node_coords[nodeA][1];
-  if (dy > 0) return 0; 
-  if (dx > 0) return 1; 
-  if (dy < 0) return 2; 
-  if (dx < 0) return 3; 
-  return -1;
-}
 
 #define IN1 12
 #define IN2 14
@@ -48,14 +21,14 @@ int getTargetDirection(int nodeA, int nodeB) {
 #define ENC_L 26
 #define ENC_R 22
 #define PULSES_PER_REV 20           
-#define PPR_EFFECTIVE (PULSES_PER_REV*3) 
-#define MIN_EDGE_US 1500
+#define PPR_EFFECTIVE PULSES_PER_REV  // SỬA: Đếm chuẩn 20 xung/vòng
+#define MIN_EDGE_US 500               // SỬA: Giảm xuống 500us
 
-// ================= HC-SR04 TỐI ƯU HÓA TỐC ĐỘ (KHÔNG DELAY) =================
+// ================= HC-SR04 EMA (KHÔNG DELAY) =================
 #define TRIG_PIN 21
 #define ECHO_PIN 19
 const float OBSTACLE_TH_CM = 20.0f;     
-const unsigned long US_TIMEOUT = 6000; // Ép timeout ngắn để không lag vòng lặp PID
+const unsigned long US_TIMEOUT = 6000; 
 
 static unsigned long us_last_ms = 0;
 static float us_dist_cm = 999.0f;
@@ -77,7 +50,7 @@ float readDistanceCM_Fast(){
 }
 
 static inline void updateObstacleState(){
-  if (millis() - us_last_ms < 40) return; // Chỉ quét siêu âm 25Hz để nhẹ CPU
+  if (millis() - us_last_ms < 40) return; 
   us_last_ms = millis();
   
   float d = readDistanceCM_Fast();
@@ -94,18 +67,18 @@ static inline void updateObstacleState(){
     if (us_dist_cm >= OBSTACLE_OFF_CM){ obs_latched = false; obs_hit = 0; }
   }
 }
-// =========================================================================
+// =============================================================
 
 const float WHEEL_RADIUS_M = 0.0325f;
 const float CIRC = 2.0f * 3.1415926f * WHEEL_RADIUS_M; 
 const float TRACK_WIDTH_M = 0.1150f; 
 
+// ===== ĐÃ SỬA: TỐC ĐỘ CHUẨN =====
 float v_base   = 0.25f;    
 float v_boost  = 0.08f;   
 float v_hard   = 0.10f;   
 float vF = v_base * 0.90f;
 
-struct PID { float Kp, Ki, Kd; float i_term; float prev_err; float out_min, out_max; };
 PID pidL{300.0f, 8.0f, 0.00f, 0, 0, 0, 255};
 PID pidR{300.0f, 8.0f, 0.00f, 0, 0, 0, 255};
 
@@ -319,6 +292,7 @@ void do_line_setup() {
   motorsStop();
 }
 
+// VÒNG LẶP CHỈ PHỤC VỤ DÒ LINE VÔ TẬN (MODE_LINE_ONLY)
 void do_line_loop() {
   if (!g_line_enabled) { motorsStop(); return; }
 
@@ -380,60 +354,24 @@ void do_line_loop() {
     
     // ================= XỬ LÝ NGÃ TƯ / NGÃ BA CHỮ T =================
     else if (on_cnt >= 3){
-      if (currentMode == MODE_LINE_ONLY) {
-        motorsStop(); delay(200); 
-        
-        move_forward_distance(0.06, 120); 
-        
-        if (!onLine(M_SENSOR) && !onLine(L1_SENSOR) && !onLine(R1_SENSOR)) {
-          motorWriteLR_signed(130, -130); 
-          unsigned long t0 = millis();
-          while(millis() - t0 < 3500) {
-            if (onLine(M_SENSOR) || onLine(L1_SENSOR) || onLine(R1_SENSOR)) {
-              break; 
-            }
-            delay(5);
+      motorsStop(); delay(200); 
+      
+      move_forward_distance(0.06, 120); 
+      
+      if (!onLine(M_SENSOR) && !onLine(L1_SENSOR) && !onLine(R1_SENSOR)) {
+        motorWriteLR_signed(130, -130); 
+        unsigned long t0 = millis();
+        while(millis() - t0 < 3500) {
+          if (onLine(M_SENSOR) || onLine(L1_SENSOR) || onLine(R1_SENSOR)) {
+            break; 
           }
-          motorsStop();
+          delay(5);
         }
-        
-        last_seen = NONE; 
-        recovering = false;
-      } 
-      else if (currentMode == MODE_DELIVERY) {
-        static unsigned long last_node_time = 0;
-        if (millis() - last_node_time < 1500) {
-          last_seen = NONE; vL_tgt = v_base * 0.8f; vR_tgt = v_base * 0.8f;
-        } else {
-          last_node_time = millis();
-          motorsStop(); delay(300);
-
-          if (pathLength > 0) {
-            currentPathIndex++; 
-            if (currentPathIndex >= pathLength - 1) {
-              gripOpen(); delay(1500); gripClose();      
-              delivered_count++; 
-              line_mode = false; do_line_abort(); 
-              return;
-            }
-
-            int currentNode = currentPath[currentPathIndex];
-            int nextNode = currentPath[currentPathIndex + 1];
-            int targetDir = getTargetDirection(currentNode, nextNode);
-            
-            if (targetDir != -1) {
-              int diff = (targetDir - currentDir + 4) % 4;
-              const int TURN_PWM = 160; 
-
-              if (diff == 1) spin_right_deg(85.0, TURN_PWM); 
-              else if (diff == 3) spin_left_deg(85.0, TURN_PWM);  
-              else if (diff == 2) spin_right_deg(175.0, TURN_PWM);
-              currentDir = targetDir; 
-            }
-            move_forward_distance(0.08, 120); 
-          }
-        }
+        motorsStop();
       }
+      
+      last_seen = NONE; 
+      recovering = false;
     }
     else {
       if (!seen_line_ever){ vL_tgt = 0; vR_tgt = 0; }

@@ -1,8 +1,10 @@
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
 #include <ESP32Servo.h>
-#include <LittleFS.h>     
-#include "do_line.h"     
+#include <LittleFS.h>
+#include <ArduinoJson.h>
+#include "do_line.h"
+#include "route_interpreter.h"
 
 const char* ssid = "ESP32-Car";
 const char* password = "12345678";
@@ -30,17 +32,12 @@ const int CLOSE_ANGLE = 175;
 Servo gripper;
 
 AsyncWebServer server(80);
+AsyncWebSocket ws("/ws");
 
-// ================= CÁC BIẾN QUẢN LÝ CHẾ ĐỘ =================
+// ================= BIẾN QUẢN LÝ CHẾ ĐỘ =================
 volatile UIMode currentMode = MODE_MANUAL;
 bool line_mode = false;
-bool is_auto_running = false; // KHÓA AN TOÀN TRẠNG THÁI CHẠY
-
-int currentPath[20]; 
-int pathLength = 0;
-int currentTargetNode = -1;
-int currentPathIndex = 0;
-int currentDir = 1; 
+bool is_auto_running = false;
 
 volatile int delivered_count = 0;
 volatile float avg_time_sec = 0.0;
@@ -54,6 +51,29 @@ void forwardLeft(); void forwardRight(); void backwardLeft(); void backwardRight
 void gripOpen(); void gripClose();
 void applyCurrentMotion();
 
+// ================= WEBSOCKET =================
+void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
+  if (type == WS_EVT_DATA) {
+    data[len] = 0;
+    String msg = (char*)data;
+    
+    // Nhận Lộ trình AI từ Web
+    if (msg.indexOf("\"type\":\"ROUTE\"") > 0) {
+      route_load((char*)data);
+      currentMode = MODE_AI_ROUTE;
+      line_mode = true;
+      is_auto_running = true;
+    } else if (msg.indexOf("\"type\":\"PING\"") > 0) {
+      client->text("{\"type\":\"PONG\"}");
+    }
+  }
+}
+
+void sendWsMessage(const char* msg) {
+  ws.textAll(msg);
+}
+
+// ================= SETUP =================
 void setup() {
   pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);
   pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);
@@ -74,57 +94,36 @@ void setup() {
   WiFi.softAP(ssid, password);
   Serial.print("Hotspot IP: "); Serial.println(WiFi.softAPIP());
 
+  // Kích hoạt WebSocket
+  ws.onEvent(onWsEvent);
+  server.addHandler(&ws);
+  route_set_ws_callback(sendWsMessage);
+
   server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
 
+  // Đổi chế độ
   server.on("/setMode", HTTP_GET, [](AsyncWebServerRequest* r){
     if (!r->hasParam("m")) { r->send(400,"text/plain","manual"); return; }
     String m = r->getParam("m")->value();
 
     if (m == "line_only") {
-      stopCar();
-      do_line_setup();
+      stopCar(); do_line_setup();
       currentMode = MODE_LINE_ONLY;
-      line_mode = true;
-      is_auto_running = true; // MỞ KHÓA CHẠY
+      line_mode = true; is_auto_running = true;
     } else if (m == "manual") {
-      do_line_abort();
-      stopCar();
+      do_line_abort(); route_abort(); stopCar();
       currentMode = MODE_MANUAL;
-      line_mode = false;
-      is_auto_running = false; // ĐÓNG KHÓA
+      line_mode = false; is_auto_running = false;
     }
     r->send(200,"text/plain", m);
   });
 
-  server.on("/deliver", HTTP_GET, [](AsyncWebServerRequest* r){
-    if (r->hasParam("dir")) currentDir = r->getParam("dir")->value().toInt();
-    currentPathIndex = 0; 
-    
-    if (r->hasParam("path")) {
-      String pathStr = r->getParam("path")->value();
-      pathLength = 0;
-      int startIdx = 0; int commaIdx = pathStr.indexOf(',');
-      while (commaIdx != -1 && pathLength < 20) {
-        currentPath[pathLength++] = pathStr.substring(startIdx, commaIdx).toInt();
-        startIdx = commaIdx + 1; commaIdx = pathStr.indexOf(',', startIdx);
-      }
-      if (startIdx < pathStr.length() && pathLength < 20) currentPath[pathLength++] = pathStr.substring(startIdx).toInt();
-      if(pathLength > 1) currentTargetNode = currentPath[1];
-    }
-    
-    stopCar();
-    do_line_setup();
-    currentMode = MODE_DELIVERY;
-    line_mode = true;
-    is_auto_running = true; // MỞ KHÓA CHẠY GIAO HÀNG
-    
-    r->send(200, "text/plain", "OK");
-  });
-
+  // Sự cố (E-Stop, Resume)
   server.on("/estop", HTTP_GET, [](AsyncWebServerRequest *r){
-    stopCar(); do_line_abort();
+    stopCar(); do_line_abort(); route_abort();
     currentMode = MODE_MANUAL; line_mode = false; is_auto_running = false;
-    r->send(200, "text/plain", "E-STOP ACTIVATED");
+    ws.textAll("{\"type\":\"TELEMETRY\",\"state\":\"IDLE\"}");
+    r->send(200, "text/plain", "E-STOP");
   });
 
   server.on("/resume", HTTP_GET, [](AsyncWebServerRequest *r){
@@ -135,19 +134,17 @@ void setup() {
     r->send(200, "text/plain", "RESUMED");
   });
 
-  server.on("/return_home", HTTP_GET, [](AsyncWebServerRequest *r){
-    r->send(200, "text/plain", "RETURNING HOME");
-  });
-
+  // API Cập nhật thống kê
   server.on("/api/stats", HTTP_GET, [](AsyncWebServerRequest *r){
     String json = "{";
     json += "\"delivered\":" + String(delivered_count) + ",";
     json += "\"avgTime\":" + String(avg_time_sec) + ",";
     json += "\"efficiency\":" + String(robot_efficiency) + ",";
-    json += "\"chart\":{\"labels\":[\"Đơn 1\",\"Đơn 2\",\"Đơn 3\"],\"expected\":[30, 45, 60],\"actual\":[32, 42, 65]}}";
+    json += "\"totalDistance\":0}";
     r->send(200, "application/json", json);
   });
 
+  // API Lái tay
   server.on("/forward",    HTTP_GET, [](AsyncWebServerRequest *r){ curMotion=FWD;        if(currentMode==MODE_MANUAL) forward();      r->send(200,"text/plain","OK"); });
   server.on("/backward",   HTTP_GET, [](AsyncWebServerRequest *r){ curMotion=BWD;        if(currentMode==MODE_MANUAL) backward();     r->send(200,"text/plain","OK"); });
   server.on("/left",       HTTP_GET, [](AsyncWebServerRequest *r){ curMotion=LEFT_TURN;  if(currentMode==MODE_MANUAL) left();         r->send(200,"text/plain","OK"); });
@@ -157,25 +154,29 @@ void setup() {
   server.on("/fwd_right",  HTTP_GET, [](AsyncWebServerRequest *r){ curMotion=FWD_RIGHT;  if(currentMode==MODE_MANUAL) forwardRight(); r->send(200,"text/plain","OK"); });
   server.on("/back_left",  HTTP_GET, [](AsyncWebServerRequest *r){ curMotion=BACK_LEFT;  if(currentMode==MODE_MANUAL) backwardLeft(); r->send(200,"text/plain","OK"); });
   server.on("/back_right", HTTP_GET, [](AsyncWebServerRequest *r){ curMotion=BACK_RIGHT; if(currentMode==MODE_MANUAL) backwardRight();r->send(200,"text/plain","OK"); });
-  server.on("/grip/open",  HTTP_GET, [](AsyncWebServerRequest *r){ if(currentMode==MODE_MANUAL) gripOpen();  r->send(200,"text/plain","OK"); });
-  server.on("/grip/close", HTTP_GET, [](AsyncWebServerRequest *r){ if(currentMode==MODE_MANUAL) gripClose(); r->send(200,"text/plain","OK"); });
-  server.on("/speed/lin/up",   HTTP_GET, [](AsyncWebServerRequest *r){ speed_linear = clamp(speed_linear+SPEED_STEP, SPEED_MIN, SPEED_MAX); if(currentMode==MODE_MANUAL) applyCurrentMotion(); r->send(200,"text/plain","OK"); });
-  server.on("/speed/lin/down", HTTP_GET, [](AsyncWebServerRequest *r){ speed_linear = clamp(speed_linear-SPEED_STEP, SPEED_MIN, SPEED_MAX); if(currentMode==MODE_MANUAL) applyCurrentMotion(); r->send(200,"text/plain","OK"); });
-  server.on("/speed/rot/up",   HTTP_GET, [](AsyncWebServerRequest *r){ speed_rot    = clamp(speed_rot+SPEED_STEP,    SPEED_MIN, SPEED_MAX); if(currentMode==MODE_MANUAL) applyCurrentMotion(); r->send(200,"text/plain","OK"); });
-  server.on("/speed/rot/down", HTTP_GET, [](AsyncWebServerRequest *r){ speed_rot    = clamp(speed_rot-SPEED_STEP,    SPEED_MIN, SPEED_MAX); if(currentMode==MODE_MANUAL) applyCurrentMotion(); r->send(200,"text/plain","OK"); });
+  server.on("/grip/open",  HTTP_GET, [](AsyncWebServerRequest *r){ gripOpen();  r->send(200,"text/plain","OK"); });
+  server.on("/grip/close", HTTP_GET, [](AsyncWebServerRequest *r){ gripClose(); r->send(200,"text/plain","OK"); });
 
   server.begin();
 }
 
+// ================= LOOP =================
 void loop() {
-  if ((currentMode == MODE_LINE_ONLY || currentMode == MODE_DELIVERY) && is_auto_running) {
-    do_line_loop();
+  ws.cleanupClients(); // Dọn dẹp rác WebSocket
+  
+  if (is_auto_running) {
+    if (currentMode == MODE_LINE_ONLY) {
+      do_line_loop(); // Chạy vô tận
+    } else if (currentMode == MODE_AI_ROUTE) {
+      route_loop();   // Chạy theo lộ trình
+    }
   } else {
     if (line_mode) { stopCar(); line_mode = false; }
     delay(5);
   }
 }
 
+// ================= MOTOR CONTROL (MANUAL) =================
 void applyCurrentMotion(){
   switch(curMotion){
     case FWD:        forward(); break;
