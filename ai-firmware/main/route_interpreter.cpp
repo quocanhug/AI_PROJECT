@@ -19,10 +19,10 @@
 extern void spin_left_deg(double deg, int pwmMax);
 extern void spin_right_deg(double deg, int pwmMax);
 extern void move_forward_distance(double dist_m, int pwmAbs);
-extern float readDistanceCM_filtered();
+extern float readDistanceCM_Fast();
 extern void driveWheelLeft(float v_target, int pwm);
 extern void driveWheelRight(float v_target, int pwm);
-extern int pidStep(struct PID &pid, float v_target, float v_meas, float dt_s);
+extern int pidStep(PID &pid, float v_target, float v_meas, float dt_s);
 
 // External encoder variables from do_line.cpp
 extern volatile long encL_count;
@@ -30,9 +30,9 @@ extern volatile long encR_count;
 extern volatile long encL_total;
 extern volatile long encR_total;
 
-// External PID structs
-extern struct PID pidL;
-extern struct PID pidR;
+// External PID structs (PID defined in do_line.h)
+extern PID pidL;
+extern PID pidR;
 
 // External speed parameters
 extern float v_base;
@@ -88,8 +88,7 @@ static unsigned long rt_ctrl_prev = 0;
 static long rt_encL_start = 0;
 static long rt_encR_start = 0;
 
-// WebSocket send callback (set by main.ino)
-typedef void (*WsSendFn)(const char* msg);
+// WebSocket send callback (set by main.ino, WsSendFn typedef in route_interpreter.h)
 static WsSendFn wsSendCallback = nullptr;
 
 void route_set_ws_callback(WsSendFn fn) {
@@ -97,7 +96,7 @@ void route_set_ws_callback(WsSendFn fn) {
 }
 
 // ==================== Utility ====================
-inline bool rt_onLine(int pin) { return digitalRead(pin) == LOW; }
+inline bool rt_onLine(int pin) { return digitalRead(pin) == HIGH; }  // Match LINE_DETECT_STATE in do_line.cpp
 inline int rt_clamp255(int v) { return v < 0 ? 0 : (v > 255 ? 255 : v); }
 inline float rt_clampf(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
@@ -328,7 +327,7 @@ static unsigned long rt_us_last = 0;
 float rt_checkObstacle() {
   if (millis() - rt_us_last < 30) return rt_obstacleDist;
   rt_us_last = millis();
-  rt_obstacleDist = readDistanceCM_filtered();
+  rt_obstacleDist = readDistanceCM_Fast();
   return rt_obstacleDist;
 }
 
@@ -337,7 +336,7 @@ float rt_checkObstacle() {
 struct GridPos {
   int row;
   int col;
-  int dir; // 0=down, 1=up, 2=right, 3=left
+  int dir; // 0=down(+Y), 1=right(+X), 2=up(-Y), 3=left(-X)  — matches do_line.cpp
 };
 
 static GridPos robotGridPos = {0, 0, 0};
@@ -350,22 +349,20 @@ void rt_initGridPos(int startRow, int startCol, int startDir) {
 
 GridPos rt_getNextGridPos(GridPos pos) {
   GridPos next = pos;
-  int dRow[] = {1, -1, 0, 0}; // down, up, right, left
-  int dCol[] = {0, 0, 1, -1};
+  int dRow[] = {1, 0, -1, 0}; // 0=down(+row), 1=right(+col), 2=up(-row), 3=left(-col)
+  int dCol[] = {0, 1, 0, -1};
   next.row += dRow[pos.dir];
   next.col += dCol[pos.dir];
   return next;
 }
 
 void rt_updateDirAfterTurn(char cmd) {
-  // Right turn mapping: down->left, left->up, up->right, right->down
-  // Left turn mapping: down->right, right->up, up->left, left->down
+  // dir: 0=down, 1=right, 2=up, 3=left
+  // Right turn: (dir+1)%4, Left turn: (dir+3)%4
   if (cmd == 'R') {
-    int rightMap[] = {3, 2, 0, 1}; // down->left, up->right, right->down, left->up
-    robotGridPos.dir = rightMap[robotGridPos.dir];
+    robotGridPos.dir = (robotGridPos.dir + 1) % 4;
   } else if (cmd == 'L') {
-    int leftMap[] = {2, 3, 1, 0}; // down->right, up->left, right->up, left->down
-    robotGridPos.dir = leftMap[robotGridPos.dir];
+    robotGridPos.dir = (robotGridPos.dir + 3) % 4;
   }
 }
 
@@ -382,9 +379,9 @@ void route_loop() {
   long totalL = encL_total - rt_encL_start;
   long totalR = encR_total - rt_encR_start;
   interrupts();
-  extern const float CIRC;
-  extern const int PPR_EFFECTIVE;
-  rt_distance = ((float)(totalL + totalR) / 2.0f / PPR_EFFECTIVE) * CIRC * 100.0f; // cm
+  const float RT_CIRC = 2.0f * 3.1415926f * 0.0325f;  // same as CIRC in do_line.cpp
+  const int RT_PPR = 60;  // same as PPR_EFFECTIVE in do_line.cpp
+  rt_distance = ((float)(totalL + totalR) / 2.0f / RT_PPR) * RT_CIRC * 100.0f; // cm
   
   switch (currentState) {
     

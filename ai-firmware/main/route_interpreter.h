@@ -40,3 +40,7 @@ int route_total_steps();
 
 // Get telemetry JSON string (caller must use before next call)
 String route_telemetry_json();
+
+// WebSocket broadcast callback (set by main.ino)
+typedef void (*WsSendFn)(const char* msg);
+void route_set_ws_callback(WsSendFn fn);

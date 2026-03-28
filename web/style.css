@@ -357,3 +357,175 @@
     transform: translateX(0);
   }
 }
+
+/* ===== Algorithm Animation Node States ===== */
+.node-explored .node-circle {
+  fill: #fef3c7;
+  stroke: #f59e0b;
+  stroke-width: 2.5;
+  transition: fill 0.15s, stroke 0.15s;
+}
+
+.node-explored .node-text {
+  fill: #92400e;
+}
+
+.node-frontier .node-circle {
+  fill: #dbeafe;
+  stroke: #3b82f6;
+  stroke-width: 2.5;
+  transition: fill 0.15s, stroke 0.15s;
+}
+
+.node-frontier .node-text {
+  fill: #1e40af;
+}
+
+.node-current .node-circle {
+  fill: #fb923c;
+  stroke: #ea580c;
+  stroke-width: 3;
+  filter: drop-shadow(0 0 8px rgba(234, 88, 12, 0.6));
+  animation: nodePulse 0.6s ease-in-out;
+}
+
+.node-current .node-text {
+  fill: #fff;
+}
+
+.node-final-path .node-circle {
+  fill: #bbf7d0;
+  stroke: #16a34a;
+  stroke-width: 3;
+  filter: drop-shadow(0 0 6px rgba(22, 163, 74, 0.4));
+}
+
+.node-final-path .node-text {
+  fill: #14532d;
+}
+
+.node-edge-sel .node-circle {
+  stroke: #7c3aed;
+  stroke-width: 3.5;
+  stroke-dasharray: 4 2;
+  filter: drop-shadow(0 0 8px rgba(124, 58, 237, 0.5));
+  animation: edgeSelPulse 1s ease-in-out infinite;
+}
+
+@keyframes nodePulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+@keyframes edgeSelPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Edge weight labels */
+.edge-weight-label {
+  fill: #7c3aed;
+  font-size: 9px;
+  font-weight: 800;
+  text-anchor: middle;
+  font-family: 'Inter', sans-serif;
+  pointer-events: none;
+  paint-order: stroke;
+  stroke: white;
+  stroke-width: 3px;
+}
+
+/* ===== Animation Controls ===== */
+.anim-ctrl-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid #c1c6d5;
+  background: white;
+  color: #414753;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  font-family: 'Inter', sans-serif;
+}
+
+.anim-ctrl-btn:hover {
+  background: #d6e3ff;
+  color: #005ab4;
+  border-color: #005ab4;
+}
+
+.anim-ctrl-btn:active {
+  transform: scale(0.92);
+}
+
+.anim-ctrl-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.anim-ctrl-btn.active {
+  background: #005ab4;
+  color: white;
+  border-color: #005ab4;
+}
+
+/* Animation speed slider */
+#animSpeedSlider {
+  -webkit-appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: #e1e3e4;
+  outline: none;
+}
+
+#animSpeedSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #005ab4;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 90, 180, 0.3);
+}
+
+/* Legend dots for animation */
+.anim-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* ===== Flow Edge Animation ===== */
+.flow-edge {
+  fill: none;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+.flow-edge.edge-current {
+  stroke: #ef4444;
+  stroke-width: 4.5;
+  opacity: 0.9;
+  filter: drop-shadow(0 0 5px rgba(239,68,68,0.6));
+}
+.flow-edge.edge-explored {
+  stroke: #f59e0b;
+  stroke-width: 3;
+  opacity: 0.55;
+  filter: none;
+}
+.flow-edge.edge-frontier {
+  stroke: #60a5fa;
+  stroke-width: 2;
+  opacity: 0.4;
+  stroke-dasharray: 5 4 !important;
+  stroke-dashoffset: 0 !important;
+}
+#flowLayer {
+  transition: opacity 0.3s;
+}

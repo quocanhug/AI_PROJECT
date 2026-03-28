@@ -342,12 +342,21 @@
               <span class="material-symbols-outlined text-primary">map</span>
               <h2 class="font-bold text-on-surface">Bản đồ Node Lưới — Khu vực Giao hàng</h2>
             </div>
-            <div class="flex bg-surface-container-low p-1 rounded-lg">
+            <div class="flex bg-surface-container-low p-1 rounded-lg flex-wrap gap-0.5">
+              <button class="map-tool-btn" id="toolStart" onclick="setMapTool('start')">
+                <span class="material-symbols-outlined text-sm">my_location</span> Xuất phát
+              </button>
               <button class="map-tool-btn active" id="toolTarget" onclick="setMapTool('target')">
-                <span class="material-symbols-outlined text-sm">location_on</span> Chọn điểm Giao hàng
+                <span class="material-symbols-outlined text-sm">location_on</span> Điểm giao
               </button>
               <button class="map-tool-btn" id="toolObstacle" onclick="setMapTool('obstacle')">
-                <span class="material-symbols-outlined text-sm">block</span> Đặt Vật cản
+                <span class="material-symbols-outlined text-sm">block</span> Vật cản
+              </button>
+              <button class="map-tool-btn" id="toolEdge" onclick="setMapTool('edge')">
+                <span class="material-symbols-outlined text-sm">timeline</span> Edge
+              </button>
+              <button class="map-tool-btn" id="toolWeight" onclick="setMapTool('weight')">
+                <span class="material-symbols-outlined text-sm">fitness_center</span> Trọng số
               </button>
             </div>
           </div>
@@ -373,6 +382,27 @@
             </svg>
           </div>
           <!-- Legend -->
+          <!-- Animation Controls -->
+          <div id="animationControls" class="hidden border-t border-outline-variant/5 p-3">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <div class="flex items-center gap-1">
+                <button onclick="animPlay()" id="animPlayBtn" class="anim-ctrl-btn" title="Play"><span class="material-symbols-outlined text-base">play_arrow</span></button>
+                <button onclick="animPause()" id="animPauseBtn" class="anim-ctrl-btn" title="Pause"><span class="material-symbols-outlined text-base">pause</span></button>
+                <button onclick="animStepFwd()" class="anim-ctrl-btn" title="Step"><span class="material-symbols-outlined text-base">skip_next</span></button>
+                <button onclick="animReset()" class="anim-ctrl-btn" title="Reset"><span class="material-symbols-outlined text-base">replay</span></button>
+              </div>
+              <div class="flex items-center gap-2 flex-1 max-w-[200px]">
+                <span class="text-[9px] font-bold text-on-surface-variant whitespace-nowrap">CHẬM</span>
+                <input type="range" id="animSpeedSlider" min="1" max="100" value="50" class="flex-1">
+                <span class="text-[9px] font-bold text-on-surface-variant whitespace-nowrap">NHANH</span>
+              </div>
+              <div class="flex items-center gap-3 text-[11px] font-semibold">
+                <span>Step: <b class="text-on-surface" id="animStepNum">0</b>/<b id="animTotalSteps">0</b></span>
+                <span class="flex items-center gap-1"><span class="anim-legend-dot" style="background:#f59e0b"></span> <b class="text-amber-700" id="animExploredCount">0</b></span>
+                <span class="flex items-center gap-1"><span class="anim-legend-dot" style="background:#3b82f6"></span> <b class="text-blue-700" id="animFrontierCount">0</b></span>
+              </div>
+            </div>
+          </div>
           <div id="deliveryLegend"
             class="hidden p-3 border-t border-outline-variant/5 flex flex-wrap gap-2 items-center justify-center text-xs font-semibold text-on-surface-variant">
           </div>
@@ -415,6 +445,11 @@
                   <option value="express">Hỏa tốc (Ưu tiên đơn cuối)</option>
                 </select>
               </div>
+            </div>
+            <div class="pt-2">
+              <button class="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-primary-container text-on-primary px-4 py-3 rounded-xl text-sm font-bold shadow-lg shadow-primary/20 hover:brightness-110 transition-all active:scale-[0.98]" onclick="animStart()">
+                <span class="material-symbols-outlined text-lg">slow_motion_video</span> MÔ PHỎNG THUẬT TOÁN
+              </button>
             </div>
           </div>
           <!-- Command Buttons -->

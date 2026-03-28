@@ -1,8 +1,10 @@
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
 #include <ESP32Servo.h>
-#include <LittleFS.h>     
-#include "do_line.h"     
+#include <LittleFS.h>
+#include <ArduinoJson.h>
+#include "do_line.h"
+#include "route_interpreter.h"
 
 const char* ssid = "ESP32-Car";
 const char* password = "12345678";
@@ -30,11 +32,12 @@ const int CLOSE_ANGLE = 175;
 Servo gripper;
 
 AsyncWebServer server(80);
+AsyncWebSocket ws("/ws");
 
-// ================= CÁC BIẾN QUẢN LÝ CHẾ ĐỘ =================
+// ================= QUẢN LÝ CHẾ ĐỘ =================
 volatile UIMode currentMode = MODE_MANUAL;
 bool line_mode = false;
-bool is_auto_running = false; // KHÓA AN TOÀN TRẠNG THÁI CHẠY
+bool is_auto_running = false;
 
 int currentPath[20]; 
 int pathLength = 0;
@@ -53,6 +56,88 @@ void forward(); void backward(); void left(); void right(); void stopCar();
 void forwardLeft(); void forwardRight(); void backwardLeft(); void backwardRight();
 void gripOpen(); void gripClose();
 void applyCurrentMotion();
+
+// ================= WebSocket Broadcast =================
+void wsBroadcast(const char* msg) {
+  ws.textAll(msg);
+}
+
+// ================= WebSocket Event Handler =================
+void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
+               AwsEventType type, void *arg, uint8_t *data, size_t len) {
+  switch(type) {
+    case WS_EVT_CONNECT:
+      Serial.printf("WS client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
+      client->text("{\"type\":\"WELCOME\",\"mode\":\"" + String(currentMode) + "\"}");
+      break;
+    case WS_EVT_DISCONNECT:
+      Serial.printf("WS client #%u disconnected\n", client->id());
+      break;
+    case WS_EVT_DATA: {
+      AwsFrameInfo *info = (AwsFrameInfo*)arg;
+      if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
+        data[len] = 0;
+        handleWsMessage(client, (char*)data);
+      }
+      break;
+    }
+    case WS_EVT_PONG:
+    case WS_EVT_ERROR:
+      break;
+  }
+}
+
+void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
+  StaticJsonDocument<1024> doc;
+  if (deserializeJson(doc, msg)) return;
+  
+  const char* type = doc["type"];
+  if (!type) return;
+  
+  if (strcmp(type, "PING") == 0) {
+    client->text("{\"type\":\"PONG\"}");
+  }
+  else if (strcmp(type, "ROUTE") == 0) {
+    // Switch to AI route mode
+    stopCar();
+    do_line_setup();
+    currentMode = MODE_AI_ROUTE;
+    line_mode = true;
+    is_auto_running = true;
+    route_setup();
+    route_load(msg);
+    Serial.println("AI Route mode activated via WebSocket");
+  }
+  else if (strcmp(type, "STOP") == 0 || strcmp(type, "ESTOP") == 0) {
+    stopCar();
+    do_line_abort();
+    route_abort();
+    currentMode = MODE_MANUAL;
+    line_mode = false;
+    is_auto_running = false;
+    client->text("{\"type\":\"ACK\",\"action\":\"STOPPED\"}");
+  }
+  else if (strcmp(type, "RESUME") == 0) {
+    if (currentMode == MODE_AI_ROUTE) {
+      do_line_setup();
+      line_mode = true;
+      is_auto_running = true;
+      client->text("{\"type\":\"ACK\",\"action\":\"RESUMED\"}");
+    }
+  }
+}
+
+// ================= Telemetry Timer =================
+static unsigned long lastTelemetryMs = 0;
+const unsigned long TELEMETRY_INTERVAL_MS = 200;
+
+void sendTelemetry() {
+  if (ws.count() == 0) return; // No clients connected
+  if (currentMode == MODE_AI_ROUTE) {
+    String json = route_telemetry_json();
+    ws.textAll(json);
+  }
+}
 
 void setup() {
   pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);
@@ -74,6 +159,13 @@ void setup() {
   WiFi.softAP(ssid, password);
   Serial.print("Hotspot IP: "); Serial.println(WiFi.softAPIP());
 
+  // WebSocket setup
+  ws.onEvent(onWsEvent);
+  server.addHandler(&ws);
+
+  // Route interpreter callback
+  route_set_ws_callback(wsBroadcast);
+
   server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
 
   server.on("/setMode", HTTP_GET, [](AsyncWebServerRequest* r){
@@ -85,13 +177,21 @@ void setup() {
       do_line_setup();
       currentMode = MODE_LINE_ONLY;
       line_mode = true;
-      is_auto_running = true; // MỞ KHÓA CHẠY
+      is_auto_running = true;
+    } else if (m == "ai_route") {
+      stopCar();
+      do_line_setup();
+      route_setup();
+      currentMode = MODE_AI_ROUTE;
+      line_mode = true;
+      is_auto_running = true;
     } else if (m == "manual") {
       do_line_abort();
+      route_abort();
       stopCar();
       currentMode = MODE_MANUAL;
       line_mode = false;
-      is_auto_running = false; // ĐÓNG KHÓA
+      is_auto_running = false;
     }
     r->send(200,"text/plain", m);
   });
@@ -116,13 +216,13 @@ void setup() {
     do_line_setup();
     currentMode = MODE_DELIVERY;
     line_mode = true;
-    is_auto_running = true; // MỞ KHÓA CHẠY GIAO HÀNG
+    is_auto_running = true;
     
     r->send(200, "text/plain", "OK");
   });
 
   server.on("/estop", HTTP_GET, [](AsyncWebServerRequest *r){
-    stopCar(); do_line_abort();
+    stopCar(); do_line_abort(); route_abort();
     currentMode = MODE_MANUAL; line_mode = false; is_auto_running = false;
     r->send(200, "text/plain", "E-STOP ACTIVATED");
   });
@@ -165,10 +265,23 @@ void setup() {
   server.on("/speed/rot/down", HTTP_GET, [](AsyncWebServerRequest *r){ speed_rot    = clamp(speed_rot-SPEED_STEP,    SPEED_MIN, SPEED_MAX); if(currentMode==MODE_MANUAL) applyCurrentMotion(); r->send(200,"text/plain","OK"); });
 
   server.begin();
+  Serial.println("Server started. WebSocket on /ws");
 }
 
 void loop() {
-  if ((currentMode == MODE_LINE_ONLY || currentMode == MODE_DELIVERY) && is_auto_running) {
+  // Cleanup disconnected WS clients periodically
+  static unsigned long lastCleanup = 0;
+  if (millis() - lastCleanup > 1000) { ws.cleanupClients(); lastCleanup = millis(); }
+
+  if (currentMode == MODE_AI_ROUTE && is_auto_running) {
+    // AI Route mode — use Route Interpreter state machine
+    route_loop();
+    // Send telemetry every 200ms
+    if (millis() - lastTelemetryMs >= TELEMETRY_INTERVAL_MS) {
+      lastTelemetryMs = millis();
+      sendTelemetry();
+    }
+  } else if ((currentMode == MODE_LINE_ONLY || currentMode == MODE_DELIVERY) && is_auto_running) {
     do_line_loop();
   } else {
     if (line_mode) { stopCar(); line_mode = false; }

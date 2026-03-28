@@ -1,10 +1,13 @@
 #pragma once
 #include <Arduino.h>
 
-// Định nghĩa 3 chế độ hoạt động của xe
-enum UIMode { MODE_MANUAL=0, MODE_LINE_ONLY=1, MODE_DELIVERY=2 };
+// Shared PID structure (used by do_line.cpp and route_interpreter.cpp)
+struct PID { float Kp, Ki, Kd; float i_term; float prev_err; float out_min, out_max; };
 
-// Biến khóa an toàn: Chỉ khi = true thì xe mới được phép lăn bánh
+// 4 operating modes
+enum UIMode { MODE_MANUAL=0, MODE_LINE_ONLY=1, MODE_DELIVERY=2, MODE_AI_ROUTE=3 };
+
+// Safety lock: robot only moves when true
 extern bool is_auto_running;
 
 void do_line_setup();

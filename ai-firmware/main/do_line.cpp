@@ -105,7 +105,7 @@ float v_boost  = 0.11f;
 float v_hard   = 0.13f;   
 float vF = v_base * 0.90f;
 
-struct PID { float Kp, Ki, Kd; float i_term; float prev_err; float out_min, out_max; };
+// PID struct is defined in do_line.h
 PID pidL{300.0f, 8.0f, 0.00f, 0, 0, 0, 255};
 PID pidR{300.0f, 8.0f, 0.00f, 0, 0, 0, 255};
 
