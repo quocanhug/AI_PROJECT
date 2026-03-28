@@ -19,10 +19,10 @@
 extern void spin_left_deg(double deg, int pwmMax);
 extern void spin_right_deg(double deg, int pwmMax);
 extern void move_forward_distance(double dist_m, int pwmAbs);
-extern float readDistanceCM_filtered();
+extern float readDistanceCM_Fast();
 extern void driveWheelLeft(float v_target, int pwm);
 extern void driveWheelRight(float v_target, int pwm);
-extern int pidStep(struct PID &pid, float v_target, float v_meas, float dt_s);
+extern int pidStep(PID &pid, float v_target, float v_meas, float dt_s);
 
 // External encoder variables from do_line.cpp
 extern volatile long encL_count;
@@ -30,9 +30,9 @@ extern volatile long encR_count;
 extern volatile long encL_total;
 extern volatile long encR_total;
 
-// External PID structs
-extern struct PID pidL;
-extern struct PID pidR;
+// External PID structs (PID defined in do_line.h)
+extern PID pidL;
+extern PID pidR;
 
 // External speed parameters
 extern float v_base;
@@ -88,8 +88,7 @@ static unsigned long rt_ctrl_prev = 0;
 static long rt_encL_start = 0;
 static long rt_encR_start = 0;
 
-// WebSocket send callback (set by main.ino)
-typedef void (*WsSendFn)(const char* msg);
+// WebSocket send callback (set by main.ino, WsSendFn typedef in route_interpreter.h)
 static WsSendFn wsSendCallback = nullptr;
 
 void route_set_ws_callback(WsSendFn fn) {
@@ -97,7 +96,7 @@ void route_set_ws_callback(WsSendFn fn) {
 }
 
 // ==================== Utility ====================
-inline bool rt_onLine(int pin) { return digitalRead(pin) == LOW; }
+inline bool rt_onLine(int pin) { return digitalRead(pin) == HIGH; }  
 inline int rt_clamp255(int v) { return v < 0 ? 0 : (v > 255 ? 255 : v); }
 inline float rt_clampf(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
@@ -328,16 +327,15 @@ static unsigned long rt_us_last = 0;
 float rt_checkObstacle() {
   if (millis() - rt_us_last < 30) return rt_obstacleDist;
   rt_us_last = millis();
-  rt_obstacleDist = readDistanceCM_filtered();
+  rt_obstacleDist = readDistanceCM_Fast();
   return rt_obstacleDist;
 }
 
 // ==================== Compute grid position ====================
-// Based on initial direction (down = +row) and command history
 struct GridPos {
   int row;
   int col;
-  int dir; // 0=down, 1=up, 2=right, 3=left
+  int dir; // 0=down(+Y), 1=right(+X), 2=up(-Y), 3=left(-X)
 };
 
 static GridPos robotGridPos = {0, 0, 0};
@@ -350,22 +348,18 @@ void rt_initGridPos(int startRow, int startCol, int startDir) {
 
 GridPos rt_getNextGridPos(GridPos pos) {
   GridPos next = pos;
-  int dRow[] = {1, -1, 0, 0}; // down, up, right, left
-  int dCol[] = {0, 0, 1, -1};
+  int dRow[] = {1, 0, -1, 0}; 
+  int dCol[] = {0, 1, 0, -1};
   next.row += dRow[pos.dir];
   next.col += dCol[pos.dir];
   return next;
 }
 
 void rt_updateDirAfterTurn(char cmd) {
-  // Right turn mapping: down->left, left->up, up->right, right->down
-  // Left turn mapping: down->right, right->up, up->left, left->down
   if (cmd == 'R') {
-    int rightMap[] = {3, 2, 0, 1}; // down->left, up->right, right->down, left->up
-    robotGridPos.dir = rightMap[robotGridPos.dir];
+    robotGridPos.dir = (robotGridPos.dir + 1) % 4;
   } else if (cmd == 'L') {
-    int leftMap[] = {2, 3, 1, 0}; // down->right, up->left, right->up, left->down
-    robotGridPos.dir = leftMap[robotGridPos.dir];
+    robotGridPos.dir = (robotGridPos.dir + 3) % 4;
   }
 }
 
@@ -382,9 +376,9 @@ void route_loop() {
   long totalL = encL_total - rt_encL_start;
   long totalR = encR_total - rt_encR_start;
   interrupts();
-  extern const float CIRC;
-  extern const int PPR_EFFECTIVE;
-  rt_distance = ((float)(totalL + totalR) / 2.0f / PPR_EFFECTIVE) * CIRC * 100.0f; // cm
+  const float RT_CIRC = 2.0f * 3.1415926f * 0.0325f;  
+  const int RT_PPR = 20;  // ĐÃ SỬA THÀNH 20 XUNG CHO KHỚP ENCODER
+  rt_distance = ((float)(totalL + totalR) / 2.0f / RT_PPR) * RT_CIRC * 100.0f; // cm
   
   switch (currentState) {
     
@@ -403,10 +397,8 @@ void route_loop() {
         obstacleTimer = millis();
         Serial.println("OBSTACLE detected, stopping!");
         
-        // Calculate obstacle grid position
         GridPos obsPos = rt_getNextGridPos(robotGridPos);
         
-        // Send obstacle notification
         String msg = "{\"type\":\"OBSTACLE_DETECTED\","
                      "\"position\":{\"row\":" + String(obsPos.row) + ",\"col\":" + String(obsPos.col) + "},"
                      "\"robot_position\":{\"row\":" + String(robotGridPos.row) + ",\"col\":" + String(robotGridPos.col) + "},"
@@ -419,11 +411,9 @@ void route_loop() {
       // Check for intersection
       bool isInter = isIntersection();
       if (isInter && !wasIntersection) {
-        // Rising edge: entered intersection
         motorsStop();
         delay(50);
         
-        // Move forward slightly to center on intersection (~2cm)
         move_forward_distance(0.02, 100);
         motorsStop();
         delay(50);
@@ -434,7 +424,6 @@ void route_loop() {
       }
       wasIntersection = isInter;
       
-      // Normal PID line following
       rt_pidLineFollow();
       break;
     }
@@ -442,7 +431,6 @@ void route_loop() {
     // ========== AT INTERSECTION ==========
     case RS_AT_INTERSECTION: {
       if (cmdQueueEmpty()) {
-        // No more commands -> DONE
         currentState = RS_DONE;
         break;
       }
@@ -451,7 +439,6 @@ void route_loop() {
       Serial.printf("Intersection #%d: command '%c' (step %d/%d)\n", 
                      intersectionCount + 1, cmd, cmdExecuted, cmdTotal);
       
-      // Send progress update
       String msg = "{\"type\":\"TELEMETRY\",\"state\":\"AT_INTERSECTION\","
                    "\"step\":" + String(cmdExecuted) + ",\"total\":" + String(cmdTotal) + ","
                    "\"command\":\"" + String(cmd) + "\"}";
@@ -459,20 +446,17 @@ void route_loop() {
       
       switch (cmd) {
         case 'F':
-          // Go straight through intersection
           rt_advanceGridPos();
           break;
         case 'L':
-          // Turn left 90 degrees
-          spin_left_deg(90.0, 180);
+          spin_left_deg(90.0, 140); // ĐÃ GIẢM LỰC XUỐNG 140
           motorsStop();
           delay(100);
           rt_updateDirAfterTurn('L');
           rt_advanceGridPos();
           break;
         case 'R':
-          // Turn right 90 degrees
-          spin_right_deg(90.0, 180);
+          spin_right_deg(90.0, 140); // ĐÃ GIẢM LỰC XUỐNG 140
           motorsStop();
           delay(100);
           rt_updateDirAfterTurn('R');
@@ -494,7 +478,6 @@ void route_loop() {
       noInterrupts(); encL_count = 0; encR_count = 0; interrupts();
       rt_ctrl_prev = millis();
       
-      // Check if that was the last command
       if (cmdQueueEmpty()) {
         currentState = RS_DONE;
       } else {
@@ -506,21 +489,16 @@ void route_loop() {
     // ========== OBSTACLE ==========
     case RS_OBSTACLE: {
       motorsStop();
-      
-      // Wait for new route from web (or timeout)
       if (millis() - obstacleTimer > OBSTACLE_TIMEOUT_MS) {
         Serial.println("Obstacle timeout! Entering safe mode.");
         rt_wsSend("{\"type\":\"OBSTACLE_TIMEOUT\"}");
         currentState = RS_IDLE;
       }
-      // Otherwise stay in OBSTACLE state, waiting for route_load() to be called
       break;
     }
     
     // ========== REROUTING ==========
     case RS_REROUTING: {
-      // This state is handled by route_load() which transitions to FOLLOWING_LINE
-      // Should not normally stay here
       currentState = RS_FOLLOWING_LINE;
       break;
     }

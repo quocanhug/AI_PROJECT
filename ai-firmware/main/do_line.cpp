@@ -100,9 +100,9 @@ const float WHEEL_RADIUS_M = 0.0325f;
 const float CIRC = 2.0f * 3.1415926f * WHEEL_RADIUS_M; 
 const float TRACK_WIDTH_M = 0.1150f; 
 
-float v_base   = 0.4f;    
-float v_boost  = 0.11f;   
-float v_hard   = 0.13f;   
+float v_base   = 0.25f;    
+float v_boost  = 0.08f;   
+float v_hard   = 0.10f;   
 float vF = v_base * 0.90f;
 
 struct PID { float Kp, Ki, Kd; float i_term; float prev_err; float out_min, out_max; };
