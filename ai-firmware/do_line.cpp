@@ -57,7 +57,7 @@ int getTargetDirection(int nodeA, int nodeB) {
 #define TRIG_PIN 21
 #define ECHO_PIN 19
 
-const float OBSTACLE_TH_CM = 20.0f;
+const float OBSTACLE_TH_CM = 25.0f;  // ★ Tăng từ 20→25cm: thêm khoảng cách phanh
 const unsigned long US_TIMEOUT = 8000;
 
 static unsigned long us_last_ms = 0;
@@ -67,7 +67,7 @@ static uint8_t obs_hit = 0;
 static bool obs_latched = false;
 
 const float OBSTACLE_ON_CM  = OBSTACLE_TH_CM;
-const float OBSTACLE_OFF_CM = 20.0f;
+const float OBSTACLE_OFF_CM = 30.0f;  // ★ Hysteresis: phải > 30cm mới xóa cờ vật cản
 const uint8_t OBS_HIT_N = 2;
 const unsigned long US_PERIOD_MS = 25;
 
@@ -91,10 +91,10 @@ const unsigned long CTRL_DT_MS = 10;
 volatile long encL_count = 0, encR_count = 0, encL_total = 0, encR_total = 0;
 volatile uint32_t encL_last_us=0, encR_last_us=0;
 float vL_ema=0.0f, vR_ema=0.0f;  // ★ non-static: extern bởi main.ino cho telemetry
-const float EMA_B = 0.7f;
+const float EMA_B = 0.5f;   // ★ Giảm từ 0.7: phản ứng nhanh hơn khi lệch
 
 const int PWM_MIN_RUN = 75;
-const int PWM_SLEW    = 8;
+const int PWM_SLEW    = 30;  // ★ Tăng từ 8: motor đáp ứng nhanh hơn khi sửa hướng
 static int pwmL_prev=0, pwmR_prev=0;
 
 enum Side {NONE, LEFT, RIGHT};
@@ -221,15 +221,16 @@ static inline double theta_from_counts(long dL, long dR, int signL, int signR){
   return ((double)dR / PPR_EFFECTIVE * CIRC * signR - (double)dL / PPR_EFFECTIVE * CIRC * signL) / TRACK_WIDTH_M;
 }
 
-// ================= Quay theo góc =================
-void spin_left_deg(double deg, int pwmMax){
+// ================= Quay theo góc (trả bool: true=OK, false=timeout) =================
+bool spin_left_deg(double deg, int pwmMax){
   const double target = 1.5*deg * 3.141592653589793 / 180.0;
   const double deg_tol = 1.5 * 3.141592653589793 / 180.0;
   const double Kp_theta = 140.0;
   const double Kbal = 0.6;
   const int pwmMin = 150;
-  const unsigned long T_FAIL_MS = 5000;  // ★ FIX: timeout 5s chống treo
+  const unsigned long T_FAIL_MS = 5000;
   unsigned long t0 = millis();
+  bool success = true;
   long L0, R0; noInterrupts(); L0 = encL_total; R0 = encR_total; interrupts();
   while (true){
     long L, R; noInterrupts(); L = encL_total; R = encR_total; interrupts();
@@ -237,7 +238,7 @@ void spin_left_deg(double deg, int pwmMax){
     double theta = theta_from_counts(dL, dR, -1, +1);
     double err = target - theta;
     if (fabs(err) <= deg_tol) break;
-    if (millis() - t0 > T_FAIL_MS) break;  // ★ FIX: thoát khi timeout
+    if (millis() - t0 > T_FAIL_MS) { success = false; Serial.println("[SPIN] LEFT TIMEOUT!"); break; }
     int pwmCap = (fabs(err) < 15.0*3.141592653589793/180.0) ? (pwmMax*0.5) : pwmMax;
     int base = (int)clamp255((int)(fabs(err)*Kp_theta));
     base = base < pwmMin ? pwmMin : (base > pwmCap ? pwmCap : base);
@@ -248,9 +249,10 @@ void spin_left_deg(double deg, int pwmMax){
     delay(2);
   }
   motorsStop();
+  return success;
 }
 
-void spin_right_deg(double deg, int pwmMax){
+bool spin_right_deg(double deg, int pwmMax){
   const double target = -1.5 * (deg * 3.141592653589793 / 180.0);
   const double deg_tol = 1.5 * 3.141592653589793 / 180.0;
   const double Kp_theta = 140.0;
@@ -258,6 +260,7 @@ void spin_right_deg(double deg, int pwmMax){
   const int pwmMin = 150;
   const unsigned long T_FAIL_MS = 5000;
   unsigned long t0 = millis();
+  bool success = true;
   long L0, R0; noInterrupts(); L0 = encL_total; R0 = encR_total; interrupts();
   while (true){
     long L, R; noInterrupts(); L = encL_total; R = encR_total; interrupts();
@@ -265,7 +268,7 @@ void spin_right_deg(double deg, int pwmMax){
     double theta = theta_from_counts(dL, dR, +1, -1);
     double err = target - theta;
     if (fabs(err) <= deg_tol) break;
-    if (millis() - t0 > T_FAIL_MS) break;
+    if (millis() - t0 > T_FAIL_MS) { success = false; Serial.println("[SPIN] RIGHT TIMEOUT!"); break; }
     int pwmCap = (fabs(err) < 15.0*3.141592653589793/180.0) ? (pwmMax*0.5) : pwmMax;
     int base = (int)clamp255((int)(fabs(err)*Kp_theta));
     base = base < pwmMin ? pwmMin : (base > pwmCap ? pwmCap : base);
@@ -276,6 +279,7 @@ void spin_right_deg(double deg, int pwmMax){
     delay(2);
   }
   motorsStop();
+  return success;
 }
 
 // ================= Tiến theo quãng đường =================
@@ -362,9 +366,13 @@ void do_line_loop() {
   if (L2 || L1 || M || R1 || R2) seen_line_ever = true;
 
   // Mất line hoàn toàn (5 mắt OFF) > 1s → dừng
+  // ★ FIX: KHÔNG dừng nếu đang tìm line lúc khởi đầu
   bool lost_all = !L2 && !L1 && !M && !R1 && !R2;
   if (lost_all) {
-    if (millis() - bad_t > 1000) {
+    if (!seen_line_ever && is_auto_running) {
+      // Đang bò tìm line → KHÔNG dừng, để code ở dưới xử lý
+      bad_t = millis();  // Reset timeout
+    } else if (millis() - bad_t > 1000) {
       recovering = false; avoiding = false; motorsStop();
       noInterrupts(); encL_count = 0; encR_count = 0; interrupts();
       t_prev = millis(); return;
@@ -436,7 +444,13 @@ void do_line_loop() {
     else if (currentMode == MODE_DELIVERY || currentMode == MODE_AI_ROUTE) {
       if (millis() - last_intersection_time > 1500) {
         last_intersection_time = millis();
-        motorsStop(); delay(300);
+        motorsStop(); delay(200);
+
+        // ★ FIX: Tiến ~5cm vào TÂM giao lộ TRƯỚC khi xoay
+        // Lý do: L2/R2 nằm ở đầu xe, nhưng trục quay nằm giữa 2 bánh
+        // Nếu xoay ngay → trục quay chưa ở tâm → xe lệch khỏi line sau rẽ
+        move_forward_distance(0.02, 100);
+        motorsStop(); delay(100);
 
         if (pathLength > 0) {
           // ★ Kiểm tra đã đến đích chưa
@@ -467,20 +481,23 @@ void do_line_loop() {
           if (targetDir != -1) {
             int diff = (targetDir - currentDir + 4) % 4;
             const int TURN_PWM = 160;
-            // ★ FIX: C++ dirs 0=down,1=right,2=up,3=left (non-CW order)
+            bool turnOk = true;
+            // ★ C++ dirs 0=down,1=right,2=up,3=left (non-CW order)
             //   diff=1 = 1 step CCW = quay TRÁI
             //   diff=3 = 1 step CW  = quay PHẢI
             //   Góc 62° × hệ số 1.5 trong spin_*_deg = ~93° thực tế
-            if (diff == 1) { spin_left_deg(62.0, TURN_PWM); Serial.println("  >> LEFT"); }
-            else if (diff == 3) { spin_right_deg(62.0, TURN_PWM); Serial.println("  >> RIGHT"); }
-            else if (diff == 2) { spin_right_deg(125.0, TURN_PWM); Serial.println("  >> U-TURN"); }
+            if (diff == 1) { turnOk = spin_left_deg(62.0, TURN_PWM); Serial.println("  >> LEFT"); }
+            else if (diff == 3) { turnOk = spin_right_deg(62.0, TURN_PWM); Serial.println("  >> RIGHT"); }
+            else if (diff == 2) { turnOk = spin_right_deg(125.0, TURN_PWM); Serial.println("  >> U-TURN"); }
             else { Serial.println("  >> STRAIGHT"); }
+            if (!turnOk) Serial.println("  ⚠️ TURN TIMEOUT — encoder issue?");
             currentDir = targetDir;
           }
 
           // ★ Tăng index SAU khi đã rẽ
           currentPathIndex++;
-          move_forward_distance(0.08, 120);
+          // ★ Tìm line thông minh: tiến tối đa 10cm, dừng ngay khi M chạm vạch
+          move_forward_distance_until_line(0.10, 120);
         }
         return;
       }
