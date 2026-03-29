@@ -8,6 +8,7 @@ extern int currentPathIndex;
 extern int currentDir;
 extern volatile int delivered_count;
 extern bool line_mode;
+extern bool is_auto_running;
 extern volatile UIMode currentMode;
 extern void gripOpen();
 extern void gripClose();
@@ -60,7 +61,7 @@ const float OBSTACLE_TH_CM = 20.0f;
 const unsigned long US_TIMEOUT = 8000;
 
 static unsigned long us_last_ms = 0;
-static float us_dist_cm = 999.0f;
+float us_dist_cm = 999.0f;  // ★ non-static: extern bởi main.ino cho telemetry
 
 static uint8_t obs_hit = 0;
 static bool obs_latched = false;
@@ -89,7 +90,7 @@ PID pidR{300.0f, 8.0f, 0.00f, 0, 0, 0, 255};
 const unsigned long CTRL_DT_MS = 10;
 volatile long encL_count = 0, encR_count = 0, encL_total = 0, encR_total = 0;
 volatile uint32_t encL_last_us=0, encR_last_us=0;
-static float vL_ema=0.0f, vR_ema=0.0f;
+float vL_ema=0.0f, vR_ema=0.0f;  // ★ non-static: extern bởi main.ino cho telemetry
 const float EMA_B = 0.7f;
 
 const int PWM_MIN_RUN = 75;
@@ -227,6 +228,8 @@ void spin_left_deg(double deg, int pwmMax){
   const double Kp_theta = 140.0;
   const double Kbal = 0.6;
   const int pwmMin = 150;
+  const unsigned long T_FAIL_MS = 5000;  // ★ FIX: timeout 5s chống treo
+  unsigned long t0 = millis();
   long L0, R0; noInterrupts(); L0 = encL_total; R0 = encR_total; interrupts();
   while (true){
     long L, R; noInterrupts(); L = encL_total; R = encR_total; interrupts();
@@ -234,6 +237,7 @@ void spin_left_deg(double deg, int pwmMax){
     double theta = theta_from_counts(dL, dR, -1, +1);
     double err = target - theta;
     if (fabs(err) <= deg_tol) break;
+    if (millis() - t0 > T_FAIL_MS) break;  // ★ FIX: thoát khi timeout
     int pwmCap = (fabs(err) < 15.0*3.141592653589793/180.0) ? (pwmMax*0.5) : pwmMax;
     int base = (int)clamp255((int)(fabs(err)*Kp_theta));
     base = base < pwmMin ? pwmMin : (base > pwmCap ? pwmCap : base);
@@ -348,7 +352,8 @@ void do_line_loop() {
   if (!g_line_enabled) { motorsStop(); return; }
 
   static unsigned long t_prev = millis();
-  static unsigned long bad_t = 0;
+  static unsigned long bad_t = millis();
+  static unsigned long last_intersection_time = 0;
 
   bool L2 = onLine(L2_SENSOR), L1 = onLine(L1_SENSOR);
   bool M  = onLine(M_SENSOR);
@@ -356,8 +361,9 @@ void do_line_loop() {
 
   if (L2 || L1 || M || R1 || R2) seen_line_ever = true;
 
-  bool bad = (L2&&L1&&M&&R1&&R2) || (!L2&&!L1&&!M&&!R1&&!R2);
-  if (bad) {
+  // Mất line hoàn toàn (5 mắt OFF) > 1s → dừng
+  bool lost_all = !L2 && !L1 && !M && !R1 && !R2;
+  if (lost_all) {
     if (millis() - bad_t > 1000) {
       recovering = false; avoiding = false; motorsStop();
       noInterrupts(); encL_count = 0; encR_count = 0; interrupts();
@@ -365,11 +371,10 @@ void do_line_loop() {
     }
   } else { bad_t = millis(); }
 
-  bool line_follow_active = isValidLineSample5(L2,L1,M,R1,R2) && !recovering && !avoiding;
   updateObstacleState();
 
-  // ===== AI Route: vật cản → báo Web, chờ tìm đường mới =====
-  if (currentMode == MODE_AI_ROUTE && line_follow_active && obs_latched) {
+  // ===== AI Route: vật cản → dừng, báo Web =====
+  if (currentMode == MODE_AI_ROUTE && obs_latched && !avoiding) {
     motorsStop();
     int robotNode = (currentPathIndex < pathLength) ? currentPath[currentPathIndex] : 0;
     int obstacleNode = (currentPathIndex + 1 < pathLength) ? currentPath[currentPathIndex + 1] : robotNode;
@@ -382,11 +387,13 @@ void do_line_loop() {
                  "\"distance_cm\":" + String(us_dist_cm, 1) + "}";
     wsBroadcast(msg.c_str());
     Serial.printf("[AI_ROUTE] OBSTACLE! robot@node%d blocked@node%d\n", robotNode, obstacleNode);
+    currentMode = MODE_MANUAL;
+    is_auto_running = false;
     line_mode = false; do_line_abort(); return;
   }
 
   // ===== Các mode khác: tránh vật cản vật lý =====
-  if (line_follow_active && obs_latched){
+  if (obs_latched && !avoiding && currentMode != MODE_AI_ROUTE) {
     avoiding = true; motorsStop();
     noInterrupts(); encL_count = 0; encR_count = 0; interrupts();
     t_prev = millis(); avoidObstacle(); motorsStop();
@@ -397,35 +404,17 @@ void do_line_loop() {
 
   float vL_tgt = 0, vR_tgt = 0;
 
-  if (recovering) {
-    if (L2 || L1 || M || R1 || R2) { recovering = false; motorsStop(); }
-    else if (millis() - rec_t0 >= RECOV_TIME_MS) {
-      recovering = false; motorsStop();
-      noInterrupts(); encL_count = 0; encR_count = 0; interrupts();
-      t_prev = millis(); return;
-    } else {
-      if (last_seen == LEFT)       { vL_tgt = -vF; vR_tgt =  vF; }
-      else if (last_seen == RIGHT) { vL_tgt =  vF; vR_tgt = -vF; }
-      else                         { vL_tgt = v_base; vR_tgt = v_base; }
-    }
-  }
+  // ============================================================
+  // ★ GIAO LỘ: L2 hoặc R2 phát hiện line ngang (perpendicular)
+  // ============================================================
+  bool at_intersection = (L2 || R2);
 
-  if (!recovering){
-    const int on_cnt = (int)L2 + L1 + M + R1 + R2;
+  if (at_intersection) {
 
-    if ( M && !L1 && !R1 && !L2 && !R2 ){ last_seen = NONE; vL_tgt = v_base; vR_tgt = v_base; }
-    else if ( L1 &&  M && !R1 ){ last_seen = LEFT; vL_tgt = v_base - v_boost; vR_tgt = v_base + v_boost; }
-    else if ( L1 && !M && !L2 ){ last_seen = LEFT; vL_tgt = v_base - v_boost; vR_tgt = v_base + v_boost; }
-    else if ( L2 && (!R1 && !R2) ){ last_seen = LEFT; vL_tgt = v_base - v_hard;  vR_tgt = v_base + v_hard; }
-    else if ( R1 &&  M && !L1 ){ last_seen = RIGHT; vL_tgt = v_base + v_boost; vR_tgt = v_base - v_boost; }
-    else if ( R1 && !M && !R2 ){ last_seen = RIGHT; vL_tgt = v_base + v_boost; vR_tgt = v_base - v_boost; }
-    else if ( R2 && (!L1 && !L2) ){ last_seen = RIGHT; vL_tgt = v_base + v_hard;  vR_tgt = v_base - v_hard; }
-
-    // ================= XỬ LÝ GIAO LỘ (≥3 mắt ON) =================
-    else if (on_cnt >= 3){
-
-      // --- MODE_LINE_ONLY: đi thẳng qua giao lộ ---
-      if (currentMode == MODE_LINE_ONLY) {
+    // --- MODE_LINE_ONLY: đi thẳng qua giao lộ ---
+    if (currentMode == MODE_LINE_ONLY) {
+      if (millis() - last_intersection_time > 1500) {
+        last_intersection_time = millis();
         motorsStop(); delay(200);
         move_forward_distance(0.06, 120);
         if (!onLine(M_SENSOR) && !onLine(L1_SENSOR) && !onLine(R1_SENSOR)) {
@@ -438,86 +427,103 @@ void do_line_loop() {
           motorsStop();
         }
         last_seen = NONE; recovering = false;
+        return;
       }
+      vL_tgt = v_base * 0.8f; vR_tgt = v_base * 0.8f;
+    }
 
-      // --- MODE_DELIVERY: rẽ theo path, gripper tại đích ---
-      else if (currentMode == MODE_DELIVERY) {
-        static unsigned long last_node_time = 0;
-        if (millis() - last_node_time < 1500) {
-          last_seen = NONE; vL_tgt = v_base * 0.8f; vR_tgt = v_base * 0.8f;
-        } else {
-          last_node_time = millis();
-          motorsStop(); delay(300);
-          if (pathLength > 0) {
-            currentPathIndex++;
-            if (currentPathIndex >= pathLength - 1) {
+    // --- MODE_DELIVERY / MODE_AI_ROUTE: xử lý node ---
+    else if (currentMode == MODE_DELIVERY || currentMode == MODE_AI_ROUTE) {
+      if (millis() - last_intersection_time > 1500) {
+        last_intersection_time = millis();
+        motorsStop(); delay(300);
+
+        if (pathLength > 0) {
+          // ★ Kiểm tra đã đến đích chưa
+          if (currentPathIndex >= pathLength - 1) {
+            motorsStop();
+            if (currentMode == MODE_DELIVERY) {
               gripOpen(); delay(1500); gripClose();
-              delivered_count++;
-              line_mode = false; do_line_abort(); return;
-            }
-            int currentNode = currentPath[currentPathIndex];
-            int nextNode = currentPath[currentPathIndex + 1];
-            int targetDir = getTargetDirection(currentNode, nextNode);
-            if (targetDir != -1) {
-              int diff = (targetDir - currentDir + 4) % 4;
-              const int TURN_PWM = 160;
-              if (diff == 1) spin_right_deg(85.0, TURN_PWM);
-              else if (diff == 3) spin_left_deg(85.0, TURN_PWM);
-              else if (diff == 2) spin_right_deg(175.0, TURN_PWM);
-              currentDir = targetDir;
-            }
-            move_forward_distance(0.08, 120);
-          }
-        }
-      }
-
-      // --- MODE_AI_ROUTE: rẽ theo path, KHÔNG gripper, gửi WS khi xong ---
-      else if (currentMode == MODE_AI_ROUTE) {
-        static unsigned long last_ai_node_time = 0;
-        if (millis() - last_ai_node_time < 1500) {
-          last_seen = NONE; vL_tgt = v_base * 0.8f; vR_tgt = v_base * 0.8f;
-        } else {
-          last_ai_node_time = millis();
-          motorsStop(); delay(300);
-          if (pathLength > 0) {
-            currentPathIndex++;
-            Serial.printf("[AI_ROUTE] Node %d/%d\n", currentPathIndex, pathLength-1);
-            if (currentPathIndex >= pathLength - 1) {
-              motorsStop();
+            } else {
               Serial.println("[AI_ROUTE] DESTINATION REACHED");
               extern void wsBroadcast(const char*);
               String msg = "{\"type\":\"COMPLETED\",\"robotNode\":" + String(currentPath[pathLength-1]) +
                            ",\"robotDir\":" + String(currentDir) + "}";
               wsBroadcast(msg.c_str());
-              delivered_count++;
-              line_mode = false; do_line_abort(); return;
             }
-            int currentNode = currentPath[currentPathIndex];
-            int nextNode = currentPath[currentPathIndex + 1];
-            int targetDir = getTargetDirection(currentNode, nextNode);
-            if (targetDir != -1) {
-              int diff = (targetDir - currentDir + 4) % 4;
-              const int TURN_PWM = 160;
-              if (diff == 1) { spin_right_deg(85.0, TURN_PWM); Serial.println("  >> RIGHT"); }
-              else if (diff == 3) { spin_left_deg(85.0, TURN_PWM); Serial.println("  >> LEFT"); }
-              else if (diff == 2) { spin_right_deg(175.0, TURN_PWM); Serial.println("  >> U-TURN"); }
-              else { Serial.println("  >> STRAIGHT"); }
-              currentDir = targetDir;
-            }
-            move_forward_distance(0.08, 120);
+            delivered_count++;
+            currentMode = MODE_MANUAL;
+            is_auto_running = false;
+            line_mode = false; do_line_abort(); return;
           }
-        }
-      }
 
-      // --- Mặc định (MODE_MANUAL hoặc khác): chậm lại ---
-      else {
-        last_seen = NONE; vL_tgt = v_base * 0.8f; vR_tgt = v_base * 0.8f;
+          // ★ FIX: Tính hướng rẽ TRƯỚC khi tăng index
+          int curNode = currentPath[currentPathIndex];
+          int nxtNode = currentPath[currentPathIndex + 1];
+          int targetDir = getTargetDirection(curNode, nxtNode);
+          Serial.printf("[NODE] path[%d]=node%d -> node%d, dir %d->%d\n",
+                        currentPathIndex, curNode, nxtNode, currentDir, targetDir);
+
+          if (targetDir != -1) {
+            int diff = (targetDir - currentDir + 4) % 4;
+            const int TURN_PWM = 160;
+            // ★ FIX: C++ dirs 0=down,1=right,2=up,3=left (non-CW order)
+            //   diff=1 = 1 step CCW = quay TRÁI
+            //   diff=3 = 1 step CW  = quay PHẢI
+            //   Góc 62° × hệ số 1.5 trong spin_*_deg = ~93° thực tế
+            if (diff == 1) { spin_left_deg(62.0, TURN_PWM); Serial.println("  >> LEFT"); }
+            else if (diff == 3) { spin_right_deg(62.0, TURN_PWM); Serial.println("  >> RIGHT"); }
+            else if (diff == 2) { spin_right_deg(125.0, TURN_PWM); Serial.println("  >> U-TURN"); }
+            else { Serial.println("  >> STRAIGHT"); }
+            currentDir = targetDir;
+          }
+
+          // ★ Tăng index SAU khi đã rẽ
+          currentPathIndex++;
+          move_forward_distance(0.08, 120);
+        }
+        return;
       }
+      // Debounce: chạy chậm qua vùng giao lộ
+      last_seen = NONE;
+      vL_tgt = v_base * 0.8f; vR_tgt = v_base * 0.8f;
     }
 
-    // ================= MẤT LINE =================
+    // --- Các mode khác ---
     else {
-      if (!seen_line_ever){ vL_tgt = 0; vR_tgt = 0; }
+      vL_tgt = v_base * 0.8f; vR_tgt = v_base * 0.8f;
+    }
+  }
+
+  // ============================================================
+  // ★ DÒ LINE: CHỈ dùng 3 mắt giữa L1, M, R1
+  // ============================================================
+  else if (recovering) {
+    if (L1 || M || R1) { recovering = false; motorsStop(); }
+    else if (millis() - rec_t0 >= RECOV_TIME_MS) {
+      recovering = false; motorsStop();
+      noInterrupts(); encL_count = 0; encR_count = 0; interrupts();
+      t_prev = millis(); return;
+    } else {
+      if (last_seen == LEFT)       { vL_tgt = -vF; vR_tgt =  vF; }
+      else if (last_seen == RIGHT) { vL_tgt =  vF; vR_tgt = -vF; }
+      else                         { vL_tgt = v_base; vR_tgt = v_base; }
+    }
+  }
+  else {
+    // ★ PID dò line: CHỈ 3 mắt giữa
+    if      ( M && !L1 && !R1) { last_seen = NONE;  vL_tgt = v_base;           vR_tgt = v_base; }
+    else if ( L1 &&  M && !R1) { last_seen = LEFT;  vL_tgt = v_base - v_boost; vR_tgt = v_base + v_boost; }
+    else if ( L1 && !M       ) { last_seen = LEFT;  vL_tgt = v_base - v_hard;  vR_tgt = v_base + v_hard; }
+    else if ( R1 &&  M && !L1) { last_seen = RIGHT; vL_tgt = v_base + v_boost; vR_tgt = v_base - v_boost; }
+    else if ( R1 && !M       ) { last_seen = RIGHT; vL_tgt = v_base + v_hard;  vR_tgt = v_base - v_hard; }
+    else if (!L1 && !M && !R1) {
+      // Mất line 3 mắt giữa
+      if (!seen_line_ever && is_auto_running) {
+        // ★ FIX: Xe đặt trước line → bò chậm tới khi tìm thấy
+        vL_tgt = v_search; vR_tgt = v_search;
+      }
+      else if (!seen_line_ever) { vL_tgt = 0; vR_tgt = 0; }
       else {
         recovering = true; rec_t0 = millis();
         if (last_seen == LEFT)       { vL_tgt = -vF; vR_tgt =  vF; }
@@ -525,6 +531,7 @@ void do_line_loop() {
         else                         { vL_tgt = v_base; vR_tgt = v_base; }
       }
     }
+    else { vL_tgt = v_base; vR_tgt = v_base; }
   }
 
   // ================= PID =================

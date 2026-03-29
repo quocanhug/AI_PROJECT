@@ -20,7 +20,7 @@ extern void spin_left_deg(double deg, int pwmMax);
 extern void spin_right_deg(double deg, int pwmMax);
 extern void move_forward_distance(double dist_m, int pwmAbs);
 extern bool move_forward_distance_until_line(double dist_m, int pwmAbs);
-extern float readDistanceCM_Fast();
+extern float readDistanceCM();  // ★ FIX: đúng tên hàm trong do_line.cpp
 extern void driveWheelLeft(float v_target, int pwm);
 extern void driveWheelRight(float v_target, int pwm);
 extern int pidStep(PID &pid, float v_target, float v_meas, float dt_s);
@@ -97,7 +97,7 @@ void route_set_ws_callback(WsSendFn fn) {
 }
 
 // ==================== Utility ====================
-inline bool rt_onLine(int pin) { return digitalRead(pin) == HIGH; }  // Match LINE_DETECT_STATE in do_line.cpp
+inline bool rt_onLine(int pin) { return digitalRead(pin) == LOW; }  // ★ FIX: LOW = trên vạch (khớp do_line.cpp)
 inline int rt_clamp255(int v) { return v < 0 ? 0 : (v > 255 ? 255 : v); }
 inline float rt_clampf(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
@@ -358,7 +358,7 @@ static unsigned long rt_us_last = 0;
 float rt_checkObstacle() {
   if (millis() - rt_us_last < 30) return rt_obstacleDist;
   rt_us_last = millis();
-  rt_obstacleDist = readDistanceCM_Fast();
+  rt_obstacleDist = readDistanceCM();  // ★ FIX: đúng tên hàm
   return rt_obstacleDist;
 }
 

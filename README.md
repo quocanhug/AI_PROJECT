@@ -1,455 +1,413 @@
-# 🤖 AI Robot Pathfinder — Hệ thống Xe Robot Giao hàng Tự hành
+# 🤖 AI Delivery Robot — Xe Robot Giao hàng Tự hành
 
-> **Đồ án Trí tuệ Nhân tạo** — Xe robot 4 bánh dò line tránh vật cản, điều khiển bằng thuật toán AI tìm kiếm qua giao diện Web Dashboard thời gian thực.
-
----
-
-## 📋 Tổng Quan
-
-Hệ thống **AI Robot Pathfinder** là dự án kết hợp giữa **thuật toán tìm kiếm AI** và **phần cứng robot thực tế**, gồm 2 thành phần chính:
-
-1. **Web Dashboard (RoboControl)** — Giao diện điều khiển & mô phỏng thuật toán AI tìm đường trên bản đồ đồ thị node, hỗ trợ vẽ bản đồ, animation từng bước, so sánh hiệu năng thuật toán, gửi lộ trình & giám sát telemetry.
-2. **Robot vật lý (ESP32)** — Xe 4 bánh tự hành dò line (5×TCRT5000), tránh vật cản (HC-SR04), thực thi lộ trình AI qua State Machine, giao tiếp Web bằng WebSocket + HTTP.
-
-### Tính năng chính
-
-| Tính năng | Mô tả |
-|-----------|-------|
-| 🧠 **5 thuật toán AI** | BFS, DFS, UCS, A*, Greedy Best-First với animation từng bước trên bản đồ đồ thị 20 node |
-| 📊 **So sánh thuật toán** | Benchmark tất cả 5 thuật toán trên cùng bản đồ — so sánh node duyệt, số bước, thời gian tính toán |
-| 🎮 **Điều khiển 8 hướng** | D-pad thủ công (Forward, Backward, Left, Right, 4 chéo) với hold-to-move |
-| 🔄 **Dynamic Re-routing** | Robot phát hiện vật cản → ESP32 gửi tọa độ → Web tính đường mới → Gửi route cập nhật |
-| 📡 **Telemetry real-time** | Tốc độ trái/phải, quãng đường, trạng thái 5 cảm biến, khoảng cách vật cản — cập nhật mỗi 200ms |
-| 🚚 **Giao hàng đa điểm** | Hỗ trợ giao tối đa 6 đơn liên tiếp, tự tìm thứ tự tối ưu (greedy nearest-first) |
-| 🌐 **Offline hoàn toàn** | Dashboard chạy local trên ESP32 (LittleFS) hoặc mở file HTML trực tiếp — không cần internet |
+> **Đồ án môn Trí tuệ Nhân tạo** — Ứng dụng thuật toán tìm kiếm AI (BFS, DFS, UCS, A\*, Greedy) điều khiển xe robot dò line giao hàng tự động trên lưới bản đồ 4×5.
 
 ---
 
-## 👥 Thành viên nhóm
+## 📑 Mục lục
 
-| Họ tên | MSSV |
-|--------|------|
-| Đinh Quốc Anh | 24133003 |
-| Nguyễn Chiến | 24133007 |
-| Lý Gia Hân | 24133016 |
-| Phan Tuấn Thanh | 24133054 |
+- [Tổng quan](#-tổng-quan)
+- [Demo](#-demo)
+- [Kiến trúc hệ thống](#-kiến-trúc-hệ-thống)
+- [Phần cứng](#-phần-cứng)
+- [Cấu trúc dự án](#-cấu-trúc-dự-án)
+- [Thuật toán AI](#-thuật-toán-ai)
+- [Firmware ESP32](#-firmware-esp32)
+- [Web Dashboard](#-web-dashboard)
+- [Giao tiếp Web ↔ ESP32](#-giao-tiếp-web--esp32)
+- [Hướng dẫn cài đặt](#-hướng-dẫn-cài-đặt)
+- [Hướng dẫn sử dụng](#-hướng-dẫn-sử-dụng)
+- [Thông số kỹ thuật](#-thông-số-kỹ-thuật)
+- [Xử lý sự cố](#-xử-lý-sự-cố)
+- [Thành viên nhóm](#-thành-viên-nhóm)
+- [Tài liệu tham khảo](#-tài-liệu-tham-khảo)
 
 ---
 
-## 🏗️ Kiến trúc Hệ thống
+## 🌟 Tổng quan
+
+Hệ thống gồm **2 thành phần chính**:
+
+1. **Web Dashboard** — Giao diện trực quan trên trình duyệt, chạy trên chính ESP32 (offline, không cần internet):
+   - Bản đồ lưới 4×5 (20 node) có thể tùy chỉnh (thêm/xóa cạnh, đặt vật cản, trọng số)
+   - Mô phỏng animation 5 thuật toán AI tìm đường
+   - So sánh hiệu năng thuật toán (biểu đồ + bảng)
+   - Giao hàng đơn/đa điểm với tối ưu thứ tự (Greedy nearest)
+   - Điều khiển thủ công (D-Pad 8 hướng)
+   - Telemetry real-time (tốc độ, cảm biến, vật cản)
+
+2. **Robot 4WD** — Xe dò line tự hành dùng ESP32:
+   - 5 cảm biến hồng ngoại TCRT5000 (L2, L1, M, R1, R2)
+   - PID line following (3 mắt giữa L1/M/R1)
+   - Phát hiện giao lộ (2 mắt ngoài L2/R2)
+   - Cảm biến siêu âm HC-SR04 tránh vật cản
+   - Encoder đo vận tốc + quãng đường
+   - Servo SG90 điều khiển gripper
+
+### Luồng hoạt động
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    KIẾN TRÚC HỆ THỐNG                          │
-│                                                                 │
-│  ┌──────────────────────┐        ┌──────────────────────────┐  │
-│  │   WEB BROWSER (UI)   │        │     ESP32 (Firmware)     │  │
-│  │                      │  WiFi  │                          │  │
-│  │  • SVG Node Graph    │◄──────►│  • AsyncWebServer        │  │
-│  │    (20 nodes, 4×5)   │  WS/   │  • WebSocket Server (/ws)│  │
-│  │  • AI Engine (JS)    │  HTTP  │  • Route Interpreter     │  │
-│  │    BFS/DFS/UCS/      │        │    State Machine         │  │
-│  │    A*/Greedy         │        │  • PID Line Following    │  │
-│  │  • Animation Engine  │        │  • Obstacle Detection    │  │
-│  │  • Telemetry Display │        │  • Encoder Odometry      │  │
-│  │  • Manual D-Pad      │        │  • LittleFS File Server  │  │
-│  │  • Chart.js Stats    │        │  • Servo Gripper Control │  │
-│  └──────────────────────┘        └────────────┬─────────────┘  │
-│                                               │ GPIO/PWM/ISR   │
-│                               ┌───────────────┴──────────────┐ │
-│                               │      PHẦN CỨNG ROBOT         │ │
-│                               │  • 4× DC Motor + L298N      │ │
-│                               │  • 5× TCRT5000 (dò line)    │ │
-│                               │  • HC-SR04 (siêu âm)        │ │
-│                               │  • 2× Encoder quang         │ │
-│                               │  • Servo SG90 (gripper)     │ │
-│                               │  • 2× LM2596 (nguồn)       │ │
-│                               └──────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
+Người dùng → Vẽ bản đồ trên Web → Chọn thuật toán AI → Mô phỏng
+    → Gửi lộ trình cho Robot (WebSocket) → Robot dò line + rẽ tại giao lộ
+    → Phát hiện vật cản → Gửi về Web → Web tính đường mới → Robot tiếp tục
 ```
 
 ---
 
-## 📁 Cấu trúc Dự án
+## 🎬 Demo
+
+### Giao diện Web Dashboard
+
+| Tab Tự động | Tab Thủ công |
+|:---:|:---:|
+| Bản đồ AI + animation thuật toán | D-Pad điều khiển + cảm biến |
+
+### Thuật toán AI trên Web
+
+- **BFS**: Duyệt theo lớp, tìm đường ngắn nhất (số bước)
+- **DFS**: Đi sâu trước, nhanh nhưng không tối ưu
+- **UCS**: Mở rộng chi phí nhỏ nhất, tối ưu khi có trọng số
+- **A\***: f(n) = g(n) + h(n), tối ưu + nhanh nhờ heuristic
+- **Greedy**: f(n) = h(n), nhanh nhưng không đảm bảo tối ưu
+
+---
+
+## 🏗 Kiến trúc hệ thống
 
 ```
-AI_PROJECT/
-├── web/                          # Giao diện Web Dashboard
-│   ├── index.html                # Trang chính — 3 panel: Thủ công, Tự động, Thống kê
-│   ├── style.css                 # Component styles: node animation, D-pad, toast, flow edges
-│   ├── script.js                 # Core logic: 5 thuật toán AI, animation engine, WebSocket, D-pad
-│   ├── tailwind.min.js           # TailwindCSS runtime (local, offline)
-│   └── chart.min.js              # Chart.js (local, offline) cho biểu đồ so sánh
+┌──────────────────────────────────────────────────────────────┐
+│                    TẦNG GIAO DIỆN (WEB)                      │
+│  ┌─────────────┐  ┌────────────────┐  ┌──────────────────┐   │
+│  │  Map Editor │  │ AI Algorithms  │  │   Dashboard      │   │
+│  │  (SVG Grid) │  │ BFS/DFS/UCS    │  │ Telemetry +      │   │
+│  │  Start/End  │  │ A*/Greedy      │  │ Manual Control   │   │
+│  │  Obstacles  │  │ Animation      │  │ D-Pad + Stats    │   │
+│  └─────────────┘  └────────────────┘  └──────────────────┘   │
+│                         │ WebSocket (Wi-Fi AP)               │
+├─────────────────────────┼────────────────────────────────────┤
+│                    TẦNG XỬ LÝ (ESP32)                        │
+│  ┌───────────-──┐  ┌────────────────┐  ┌──────────────────┐  │
+│  │  Web Server  │  │ Route Manager  │  │ Motion Control   │  │
+│  │  LittleFS    │  │ Path → Turn    │  │ PID + Encoder    │  │
+│  │  WebSocket   │  │ State Machine  │  │ Obstacle Detect  │  │
+│  └───────────-──┘  └────────────────┘  └──────────────────┘  │
+├──────────────────────────────────────────────────────────────┤
+│  TẦNG CHẤP HÀNH              │  TẦNG CẢM BIẾN                │
+│  • 4× DC Motor (L298N)       │  • 5× TCRT5000 (dò line)      │
+│  • Servo SG90 (gripper)      │  • HC-SR04 (siêu âm)          │ 
+│                              │  • 2× Encoder (quang)         │
+├──────────────────────────────────────────────────────────────┤
+│  TẦNG NGUỒN: 2× Pack 18650 → LM2596 → 5V (logic) + 7.4V      │
+└──────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🔧 Phần cứng
+
+| Thành phần | Linh kiện | Chức năng |
+|---|---|---|
+| Vi điều khiển | **ESP32-WROOM-32** | Dual-core 240MHz, Wi-Fi AP |
+| Động cơ | 4× DC Geared Motor 3-6V | Giảm tốc ~1:48 |
+| Driver | **L298N** Dual H-Bridge | Điều khiển 4 motor |
+| Cảm biến line | **5× TCRT5000** | L2, L1, M, R1, R2 |
+| Siêu âm | **HC-SR04** | Phát hiện vật cản 2-400cm |
+| Servo | **SG90** (0°-180°) | Gripper giao hàng |
+| Encoder | 2× Encoder quang | Đo vận tốc + quãng đường |
+| Nguồn | 2× Pack 18650 (3S) | 5V logic + 7.4V motor |
+| Khung | Tấm Mica 2 tầng | Tầng dưới: motor; Trên: ESP32 |
+
+### Sơ đồ chân GPIO
+
+| Chức năng | GPIO | Ghi chú |
+|---|---|---|
+| Motor Left: IN1/IN2/ENA | 12/14/13 | L298N kênh A |
+| Motor Right: IN3/IN4/ENB | 4/2/15 | L298N kênh B |
+| Line L2/L1/M/R1/R2 | 34/32/33/27/25 | TCRT5000 (LOW = trên line) |
+| Encoder Left/Right | 26/22 | Interrupt RISING |
+| HC-SR04 Trig/Echo | 21/19 | Siêu âm |
+| Servo Gripper | 18 | SG90 |
+
+---
+
+## 📁 Cấu trúc dự án
+
+```
+ai-final_project/
+├── README.md                    # Tài liệu này
+├── agents.md                    # Hướng dẫn cho AI assistant
+├── TEAM_TASKS.md                # Phân công nhóm
+├── de_cuong_do_an_AI.md         # Đề cương đồ án
 │
-├── ai-firmware/                  # Firmware ESP32 (Arduino Framework)
-│   └── main/
-│       ├── main.ino              # Entry point: WiFi AP, HTTP routes, WebSocket handler, game loop
-│       ├── do_line.cpp           # PID line following, encoder ISR, obstacle avoidance, spin/move
-│       ├── do_line.h             # API: PID struct, UIMode enum, do_line_setup/loop/abort
-│       ├── route_interpreter.cpp # AI Route state machine: IDLE→FOLLOW→INTERSECTION→OBSTACLE→DONE
-│       └── route_interpreter.h   # API: RouteState enum, route_setup/load/loop/abort/telemetry
-│
-├── de_cuong_do_an_AI.md          # Đề cương đồ án chi tiết (784 dòng)
-├── TEAM_TASKS.md                 # Phân công nhiệm vụ 4 thành viên — 2 tuần
-└── README.md                     # (File này)
+└── ai-firmware/                 # Arduino project (ESP32)
+    ├── ai-firmware.ino          # Main: WiFi AP, WebSocket, HTTP endpoints
+    ├── do_line.h                # Header: PID struct, UIMode enum
+    ├── do_line.cpp              # Core: PID line follow, intersection, turns
+    ├── route_interpreter.h      # Header: Route state machine API
+    ├── route_interpreter.cpp    # Route interpreter (legacy, chưa dùng)
+    │
+    └── data/                    # Web files (upload vào LittleFS)
+        ├── index.html           # Dashboard HTML (~34KB)
+        ├── script.js            # AI algorithms + UI logic (~58KB)
+        ├── style.css            # Custom CSS (~10KB)
+        ├── tailwind.min.js      # TailwindCSS runtime (~451KB)
+        └── chart.min.js         # Chart.js cho biểu đồ (~205KB)
 ```
 
 ---
 
 ## 🧠 Thuật toán AI
 
-Tất cả 5 thuật toán được triển khai bằng **JavaScript client-side** trong `script.js`, chạy trực tiếp trên trình duyệt.
+### 5 thuật toán tìm đường (chạy trên trình duyệt)
 
-| Thuật toán | Loại | Tối ưu? | Cấu trúc dữ liệu | Heuristic |
-|-----------|------|---------|-------------------|-----------|
-| **BFS** | Uninformed | ✅ (chi phí đều) | Queue (FIFO) | — |
-| **DFS** | Uninformed | ❌ | Stack (LIFO) | — |
-| **UCS** | Uninformed | ✅ | Priority Queue (sorted) | — |
-| **A*** | Informed | ✅ | Priority Queue (f = g + h) | Manhattan |
-| **Greedy** | Informed | ❌ | Priority Queue (f = h) | Manhattan |
+| Thuật toán | Loại | Tối ưu? | Cấu trúc DL | Đặc điểm |
+|---|---|---|---|---|
+| **BFS** | Uninformed | ✅ (đều bước) | Queue | Duyệt theo lớp |
+| **DFS** | Uninformed | ❌ | Stack | Đi sâu trước |
+| **UCS** | Uninformed | ✅ | Priority Queue | Chi phí nhỏ nhất |
+| **A\*** | Informed | ✅ | Priority Queue | g(n) + h(n) |
+| **Greedy** | Informed | ❌ | Priority Queue | h(n) only |
 
-**Heuristic function:** Manhattan Distance trên tọa độ SVG  
-`h(n) = |x₁ - x₂| + |y₁ - y₂|`
+**Heuristic**: Manhattan Distance — `h(n) = |x₁ - x₂| + |y₁ - y₂|`
 
-### Đặc điểm triển khai
+### Tính năng nâng cao
 
-- **Bản đồ đồ thị**: 20 node (grid 4×5) với tọa độ SVG cố định, adjacency list có thể chỉnh sửa
-- **Edge Editor**: Thêm/xóa cạnh nối, đặt trọng số tùy ý cho UCS/A*
-- **Randomized neighbor order**: Shuffle thứ tự duyệt neighbor → animation trực quan hơn
-- **Step history**: Ghi lại `{current, explored[], frontier[], from}` cho mỗi bước → phát lại animation
-- **Multi-target**: Tìm nearest target trước (greedy traversal), hỗ trợ tối đa 6 điểm giao
-- **Express mode**: Ưu tiên giao đơn cuối cùng trước
+- **Animation từng bước**: Hiển thị explored, frontier, current node
+- **So sánh 5 thuật toán**: Biểu đồ + bảng xếp hạng tự động
+- **Giao hàng đa điểm**: Greedy nearest-by-traversal (chạy algo, target nào tìm thấy trước → đi đó)
+- **Chế độ Hỏa tốc**: Ưu tiên giao đơn cuối cùng được chọn
+- **Dynamic Re-routing**: Gặp vật cản → tính đường mới tự động
 
 ---
 
-## ⚡ Luồng Hoạt Động
+## ⚙ Firmware ESP32
 
-### 1. Điều khiển thủ công (Manual Mode)
+### Cấu trúc mã nguồn
 
-```
-Người dùng nhấn D-Pad → HTTP GET /forward → ESP32 set motor PWM → Robot di chuyển
-Người dùng thả tay     → HTTP GET /stop    → ESP32 stop motors   → Robot dừng
-```
+#### `ai-firmware.ino` — Main Controller
+- WiFi Access Point (`ESP32-Car` / `12345678`)
+- AsyncWebServer + WebSocket (`/ws`)
+- HTTP endpoints: `/forward`, `/left`, `/stop`, `/estop`, `/deliver`, `/setMode`, `/api/stats`
+- Telemetry broadcasting (200ms interval)
+- Xử lý ROUTE, STOP, ESTOP, RESUME từ WebSocket
 
-Manual mode sử dụng **pointer events** (hold-to-move) với 8 hướng + nút dừng khẩn cấp.
+#### `do_line.cpp` — Motion Control Core
+- **PID Line Following**: 3 mắt giữa (L1, M, R1) cho dò line mượt
+- **Intersection Detection**: 2 mắt ngoài (L2 hoặc R2) phát hiện giao lộ
+- **Turn Logic**: Tính hướng rẽ từ node coords, diff-based turn (CW/CCW)
+- **Encoder PID**: Closed-loop velocity control (EMA filtered)
+- **Obstacle Detection**: HC-SR04 polling, latched obstacle flag
+- **Auto-search**: Bò chậm tìm line khi `is_auto_running && !seen_line_ever`
 
-### 2. AI Route Mode (Tự động)
-
-```
-Web: Chọn node đích trên SVG → Nhấn "MÔ PHỎNG" → Chạy thuật toán với animation
-     Nhấn "NẠP LỘ TRÌNH" → Convert path → commands [F, L, R]
-                                               │
-     WebSocket: {"type":"ROUTE", "commands":["F","R","F","L"]}
-                                               ▼
-ESP32: route_load() → Parse JSON → cmdQueue → State Machine:
-  RS_FOLLOWING_LINE:  PID dò line (5 mắt TCRT5000, 10ms loop)
-  RS_AT_INTERSECTION: 5 mắt đều ON → dequeue lệnh → F/L/R (spin 90° bằng encoder)
-  RS_OBSTACLE:        HC-SR04 < 15cm → dừng → gửi OBSTACLE_DETECTED
-  RS_DONE:            Hết queue → gửi COMPLETED
-```
-
-### 3. Dynamic Re-routing
+#### Hệ hướng (Direction System)
 
 ```
-ESP32 phát hiện vật cản → Gửi WS: {"type":"OBSTACLE_DETECTED",
-                                     "position":{"row":r,"col":c},
-                                     "robot_position":{...}}
-     │
-Web nhận → obstacles.add(obsNode)
-         → findPathAnimated(robotNode, target, algo)
-         → pathToCommands(newPath)
-         → wsSend({"type":"ROUTE", "commands":[...], "rerouted":true})
-     │
-ESP32 → route_load() thay queue → tiếp tục RS_FOLLOWING_LINE
+C++ directions: 0=down, 1=right, 2=up, 3=left
+JS directions:  0=up,   1=right, 2=down, 3=left
+
+Mapping:  JS_TO_CPP = [2, 1, 0, 3]
+          CPP_TO_JS = [2, 1, 0, 3]
+
+Turn calculation:
+  diff = (targetDir - currentDir + 4) % 4
+  diff == 1 → quay TRÁI (CCW)    // 1 step counterclockwise
+  diff == 3 → quay PHẢI (CW)     // 1 step clockwise
+  diff == 2 → quay 180° (U-turn)
+  diff == 0 → đi thẳng
 ```
 
-### 4. Telemetry (mỗi 200ms)
+### State Machine
 
-```json
-{
-  "type": "TELEMETRY",
-  "state": "FOLLOWING_LINE",
-  "step": 3, "total": 8,
-  "speedL": 0.38, "speedR": 0.40,
-  "distance": 128.5,
-  "obstacle": 45.2,
-  "sensors": [0, 1, 1, 0, 0]
-}
+```
+MODE_MANUAL ──(nhận ROUTE)──→ MODE_AI_ROUTE
+                                    │
+                                    ├── Dò line (PID L1/M/R1)
+                                    ├── Giao lộ (L2||R2) → Tính hướng → Rẽ → Tiến
+                                    ├── Vật cản (HC-SR04 < 20cm) → Dừng → Báo Web
+                                    └── Đích → COMPLETED → MODE_MANUAL
 ```
 
 ---
 
-## 🔧 Công nghệ & Phần cứng
+## 🌐 Web Dashboard
 
-### Phần cứng
+### 3 Tab chính
 
-| Linh kiện | Chức năng | Thông số |
-|-----------|-----------|----------|
-| **ESP32-WROOM-32** | Vi điều khiển chính | Dual-core 240MHz, WiFi 802.11 b/g/n |
-| **4× DC Geared Motor** | Bánh xe di chuyển | 3–6V, giảm tốc ~1:48 |
-| **L298N** | Driver động cơ | Dual H-Bridge, 2 kênh (L: IN1/IN2/ENA, R: IN3/IN4/ENB) |
-| **5× TCRT5000** | Cảm biến dò line | Hồng ngoại, PID 5 mắt, error [-4, +4] |
-| **HC-SR04** | Siêu âm tránh vật cản | Đo 25Hz, EMA filter (α=0.4), ngưỡng 15cm |
-| **2× Encoder quang** | Đo tốc độ & quãng đường | 20 PPR × 3 = 60 effective, ISR RISING |
-| **Servo SG90** | Gripper giao hàng | 120° mở, 175° đóng, chân GPIO 18 |
-| **2× LM2596** | DC-DC hạ áp | 5V (logic) + 7.4V (motor) |
+| Tab | Chức năng |
+|---|---|
+| **🤚 Thủ công** | D-Pad 8 hướng, điều chỉnh tốc độ, gripper, cảm biến real-time |
+| **🤖 Tự động** | Bản đồ AI, thuật toán, animation, giao hàng, so sánh |
+| **📊 Thống kê** | KPI: số đơn giao, thời gian TB, hiệu suất, biểu đồ |
 
-### Sơ đồ chân ESP32
+### Map Tools
 
-```
-Motor Left:   IN1=12, IN2=14, ENA=13
-Motor Right:  IN3=4,  IN4=2,  ENB=15
-Line Sensors: L2=34, L1=32, M=33, R1=27, R2=25
-Encoders:     ENC_L=26, ENC_R=22
-HC-SR04:      TRIG=21, ECHO=19
-Servo:        GPIO 18
-```
+| Tool | Biểu tượng | Chức năng |
+|---|---|---|
+| Xuất phát | ⭐ | Click node → đặt điểm xuất phát |
+| Điểm giao | 🔴 | Click node → thêm/xóa điểm đích (tối đa 6) |
+| Vật cản | 🚫 | Click node → toggle vật cản |
+| Edge | 🔗 | Click 2 node → thêm/xóa cạnh |
+| Trọng số | ⚖️ | Click 2 node kề → đặt chi phí tùy chỉnh |
 
-### Phần mềm
+### Robot Indicator (Mũi tên xanh)
 
-| Công nghệ | Mục đích |
-|-----------|----------|
-| **C/C++ (Arduino)** | Firmware ESP32 — PID, State Machine, WebSocket Server |
-| **HTML5 + TailwindCSS (local)** | Giao diện Dashboard — Material Design 3 color system |
-| **JavaScript (ES6+ Vanilla)** | Thuật toán AI, Animation Engine, WebSocket client |
-| **ESPAsyncWebServer** | HTTP server không đồng bộ + WebSocket handler |
-| **ArduinoJson** | Parse/serialize JSON cho route & telemetry |
-| **LittleFS** | Filesystem ESP32 — serve web files từ flash |
-| **Chart.js (local)** | Biểu đồ so sánh thuật toán (bar chart) |
-| **SVG** | Render bản đồ node graph + animation |
+- Click mũi tên → xoay hướng đầu xe (Lên/Phải/Xuống/Trái)
+- Tự động di chuyển theo telemetry khi robot đang chạy
+- Reset về start node khi: E-STOP, hoàn thành, thay đổi start node
 
 ---
 
-## 📊 Giao diện Dashboard
+## 📡 Giao tiếp Web ↔ ESP32
 
-Dashboard có **3 panel** chuyển đổi qua sidebar:
+### WebSocket Messages
 
-### Panel 1: Thủ công 🖐️
+| Direction | Type | Payload | Mô tả |
+|---|---|---|---|
+| Web → ESP | `ROUTE` | `{path, initialDir, commands}` | Gửi lộ trình |
+| Web → ESP | `ESTOP` | `{}` | Dừng khẩn cấp |
+| Web → ESP | `RESUME` | `{}` | Tiếp tục |
+| ESP → Web | `TELEMETRY` | `{speedL, speedR, obstacle, sensors, robotNode, robotDir}` | Dữ liệu cảm biến |
+| ESP → Web | `ROUTE_ACK` | `{commands: N}` | Xác nhận nạp route |
+| ESP → Web | `COMPLETED` | `{robotNode, robotDir}` | Hoàn thành lộ trình |
+| ESP → Web | `OBSTACLE_DETECTED` | `{obstacleNode, robotNode, robotDir}` | Phát hiện vật cản |
 
-- **D-Pad 8 hướng** — hold-to-move với pointer events, phản hồi HTTP tức thì
-- **Telemetry cards** — Vận tốc (m/s), Quãng đường (cm), Trạng thái máy, Bước/Tổng
-- **Sensor display** — 5 dot cảm biến line, khoảng cách sonar, trạng thái encoder
-
-### Panel 2: Tự động 🤖
-
-- **SVG Map** — 20 node, click để đặt Start/Target/Obstacle, kéo-thả edge & trọng số
-- **5 Map Tools** — Xuất phát, Điểm giao, Vật cản, Edge, Trọng số
-- **Animation Controls** — Play/Pause/Step/Reset, slider tốc độ, counter explored/frontier
-- **Config Panel** — Chọn thuật toán, chế độ giao (đơn/nhiều đơn), chế độ Hỏa tốc
-- **Route Table** — Bảng lộ trình, thứ tự giao đơn, nút "NẠP & CHO XE CHẠY"
-
-### Panel 3: Thống kê 📊
-
-- **KPI Cards** — Tổng quãng đường, Đơn thành công, Thời gian TB, Đã giao hôm nay
-- **Algorithm Comparison** — Chart.js bar chart: Số bước / Node duyệt / ms cho 5 thuật toán
-- **Ranking Table** — Xếp hạng 🥇🥈🥉 theo pathLen → visited → time
-- **Order History** — Bảng lịch sử đơn hàng: ID, Thuật toán, Lộ trình, Bước, Trạng thái
-
----
-
-## 📡 API Reference
-
-### HTTP Endpoints (từ `main.ino`)
-
-| Endpoint | Chức năng |
-|----------|-----------|
-| `GET /forward` | Tiến thẳng |
-| `GET /backward` | Lùi |
-| `GET /left` / `/right` | Quay trái/phải |
-| `GET /fwd_left` / `/fwd_right` | Tiến chéo trái/phải |
-| `GET /back_left` / `/back_right` | Lùi chéo trái/phải |
-| `GET /stop` | Dừng |
-| `GET /setMode?m=manual\|line_only\|ai_route` | Đổi chế độ |
-| `GET /deliver?dir=1&path=0,1,6,7` | Giao hàng (Delivery mode) |
-| `GET /estop` | Dừng khẩn cấp — abort tất cả |
-| `GET /resume` | Tiếp tục chạy |
-| `GET /return_home` | Về kho |
-| `GET /grip/open` / `/grip/close` | Mở/đóng gripper |
-| `GET /speed/lin/up` / `/speed/lin/down` | Tăng/giảm tốc độ thẳng (±10, range 60–255) |
-| `GET /speed/rot/up` / `/speed/rot/down` | Tăng/giảm tốc độ xoay |
-| `GET /api/stats` | Lấy thống kê JSON |
-| `GET /` | Serve `index.html` từ LittleFS |
-
-### WebSocket Messages (`/ws`)
-
-| Hướng | Type | Payload |
-|-------|------|---------|
-| Web → ESP32 | `ROUTE` | `{commands:["F","L","R"], total_steps, algorithm, rerouted?}` |
-| Web → ESP32 | `STOP` / `ESTOP` | `{}` — dừng & chuyển về Manual |
-| Web → ESP32 | `RESUME` | `{}` — tiếp tục AI route |
-| Web → ESP32 | `PING` | `{}` — heartbeat mỗi 5s |
-| ESP32 → Web | `WELCOME` | `{mode}` — khi client kết nối |
-| ESP32 → Web | `TELEMETRY` | `{state, step, total, speedL, speedR, distance, obstacle, sensors[5]}` |
-| ESP32 → Web | `OBSTACLE_DETECTED` | `{position:{row,col}, robot_position:{row,col}, current_step, distance_cm}` |
-| ESP32 → Web | `ROUTE_ACK` | `{commands: count}` |
-| ESP32 → Web | `COMPLETED` | `{intersections, distance_cm}` |
-| ESP32 → Web | `OBSTACLE_TIMEOUT` | — sau 10s không nhận route mới |
-| ESP32 → Web | `PONG` | — phản hồi heartbeat |
-
----
-
-## 📊 State Machine Firmware
+### Dynamic Re-routing Flow
 
 ```
-              ┌──────────────────┐
-              │     RS_IDLE      │ ← Chờ route từ Web
-              └────────┬─────────┘
-                       │ route_load() nhận JSON
-                       ▼
-              ┌──────────────────┐
-         ┌───►│ RS_FOLLOWING_LINE│◄────────────┐
-         │    │  PID dò line     │              │
-         │    │  (10ms loop)     │              │
-         │    └───┬──────────┬───┘              │
-         │        │          │                  │
-         │   5 mắt ON   HC-SR04 < 15cm         │
-         │   (rising     (EMA filter)           │
-         │    edge)          │                  │
-         │        │          │                  │
-         │        ▼          ▼                  │
-         │  ┌──────────┐ ┌──────────────┐      │
-         │  │AT_INTER- │ │ RS_OBSTACLE  │      │
-         │  │SECTION   │ │ Dừng motor   │      │
-         │  │          │ │ Gửi WS tọa độ│      │
-         │  │Dequeue:  │ │ Chờ 10s      │      │
-         │  │ F → thẳng│ │ timeout→IDLE │      │
-         │  │ L → 90°⟲ │ └──────┬───────┘      │
-         │  │ R → 90°⟳ │    route_load()       │
-         │  └────┬─────┘        │               │
-         │       │ (queue còn)  └───────────────┘
-         └───────┘
-
-              Queue rỗng → RS_DONE → gửi COMPLETED → RS_IDLE
+1. Robot đang chạy → HC-SR04 phát hiện vật cản < 20cm
+2. Robot dừng → Gửi OBSTACLE_DETECTED (kèm vị trí) về Web
+3. Web nhận → Đánh dấu vật cản trên bản đồ
+4. Web chạy lại thuật toán AI từ vị trí robot hiện tại
+5. Web gửi ROUTE mới (rerouted: true) cho ESP32
+6. Robot nhận → Xóa route cũ → Nạp route mới → Tiếp tục
 ```
-
-### PID Line Following (`do_line.cpp`)
-
-| Tham số | Giá trị | Mô tả |
-|---------|---------|-------|
-| `Kp` | 300.0 | Hệ số tỉ lệ |
-| `Ki` | 8.0 | Hệ số tích phân |
-| `Kd` | 0.00 | Hệ số vi phân |
-| `v_base` | 0.4 m/s | Vận tốc cơ sở |
-| `v_boost` | 0.11 m/s | Bù lệch nhẹ |
-| `v_hard` | 0.13 m/s | Bù lệch mạnh |
-| `CTRL_DT_MS` | 10ms | Chu kỳ PID |
-| `EMA_B` | 0.7 | Bộ lọc EMA vận tốc |
-| `PWM_SLEW` | 8 | Slew rate giới hạn |
-| `PWM_MIN_RUN` | 75 | PWM tối thiểu để motor quay |
-
-**Bảng mã hóa error (5 mắt):**
-
-| L2 | L1 | M | R1 | R2 | Trạng thái | Xử lý |
-|----|----|----|----|----|-----------|-------|
-| 0 | 0 | 1 | 0 | 0 | Đúng tâm | v_base đều |
-| 0 | 1 | 1 | 0 | 0 | Lệch nhẹ trái | -v_boost, +v_boost |
-| 1 | 0 | 0 | 0 | 0 | Lệch mạnh trái | -v_hard, +v_hard |
-| 0 | 0 | 1 | 1 | 0 | Lệch nhẹ phải | +v_boost, -v_boost |
-| 0 | 0 | 0 | 0 | 1 | Lệch mạnh phải | +v_hard, -v_hard |
-| 1 | 1 | 1 | 1 | 1 | **Giao lộ** | Dequeue lệnh F/L/R |
-| 0 | 0 | 0 | 0 | 0 | Mất line | Recovery: quay về phía cuối |
-
-### Xoay góc tại giao lộ
-
-- `spin_left_deg(90°)` / `spin_right_deg(90°)` — sử dụng encoder tính góc θ
-- Công thức: `θ = (dR × CIRC / PPR - dL × CIRC / PPR) / TRACK_WIDTH`
-- Dung sai: ±1.5° | PWM min: 150 | Timeout: 5s
-- Sau khi quay: `move_forward_distance(0.02m)` để tái lấy line
-
-### Tránh vật cản (HC-SR04)
-
-- Quét tần suất: 25Hz (40ms/lần)
-- EMA filter: α=0.4 → giảm nhiễu
-- Hysteresis: ON ≤ 20cm (2 hit liên tiếp), OFF ≥ 25cm
-- Lệnh tránh: Quay trái 40° → Tiến 20cm → Quay phải 40° → Tiến 15cm → Quay phải 50° → Tiến đến khi gặp line → Quay trái 15°
 
 ---
 
-## 🚀 Hướng dẫn Sử dụng
+## 🚀 Hướng dẫn cài đặt
 
-### Yêu cầu phần mềm
+### Yêu cầu
 
 - [Arduino IDE 2.x](https://www.arduino.cc/en/software) hoặc PlatformIO
-- **Board**: ESP32 Dev Module
-- **Thư viện cần cài**:
+- Board: **ESP32 Dev Module**
+- Thư viện Arduino:
+  - `WiFi.h` (built-in)
   - `ESPAsyncWebServer` + `AsyncTCP`
-  - `ArduinoJson` (v6+)
   - `ESP32Servo`
-  - `LittleFS` (tích hợp sẵn trong ESP32 core)
+  - `ArduinoJson` (v6+)
+  - `LittleFS` (built-in)
 
-### Bước 1 — Flash Firmware
+### Bước 1: Clone project
 
-1. Mở `ai-firmware/main/main.ino` trong Arduino IDE
+```bash
+git clone <repo-url>
+cd ai-final_project
+```
+
+### Bước 2: Upload Web files vào LittleFS
+
+1. Cài plugin **ESP32 Sketch Data Upload** cho Arduino IDE
+2. Đảm bảo thư mục `ai-firmware/data/` chứa: `index.html`, `script.js`, `style.css`, `tailwind.min.js`, `chart.min.js`
+3. Menu: **Tools → ESP32 Sketch Data Upload** → chờ upload hoàn tất
+
+### Bước 3: Upload Firmware
+
+1. Mở `ai-firmware/ai-firmware.ino` trong Arduino IDE
 2. Chọn Board: **ESP32 Dev Module**
-3. Upload code
+3. Partition Scheme: **Default 4MB with spiffs** (hoặc tương đương)
+4. Upload Speed: 921600
+5. Nhấn **Upload**
 
-### Bước 2 — Upload Web Files vào LittleFS
+### Bước 4: Kết nối
 
-Upload các file trong thư mục `web/` vào LittleFS partition:
-- `index.html`
-- `style.css`
-- `script.js`
-- `tailwind.min.js`
-- `chart.min.js`
-
-> Sử dụng plugin [Arduino ESP32 LittleFS Uploader](https://github.com/lorol/arduino-esp32fs-plugin) hoặc PlatformIO `uploadfs`
-
-### Bước 3 — Kết nối & Sử dụng
-
-1. Bật nguồn robot → ESP32 tạo WiFi AP: **`ESP32-Car`** (mật khẩu: `12345678`)
-2. Kết nối điện thoại/laptop vào WiFi `ESP32-Car`
-3. Mở trình duyệt → **`http://192.168.4.1`**
-
-> **Hoặc** mở file `web/index.html` trực tiếp trên máy tính để dùng phần mô phỏng thuật toán (offline, không cần robot).
-
-### Hướng dẫn nhanh trên Dashboard
-
-| Bước | Hành động |
-|------|-----------|
-| 1 | Chuyển sang tab **Tự động** (🤖) |
-| 2 | Click tool **📌 Xuất phát** → click node trên bản đồ |
-| 3 | Click tool **📍 Điểm giao** → click node(s) đích (tối đa 6 đơn) |
-| 4 | Chọn thuật toán (A*, BFS, DFS, UCS, Greedy) |
-| 5 | Nhấn **⏯ MÔ PHỎNG THUẬT TOÁN** → xem animation từng bước |
-| 6 | Nhấn **🚀 NẠP LỘ TRÌNH & CHO XE CHẠY** → gửi route cho ESP32 |
-| 7 | Theo dõi trạng thái robot trên panel Telemetry |
+1. Kết nối WiFi: **`ESP32-Car`** / mật khẩu: **`12345678`**
+2. Mở trình duyệt → **`http://192.168.4.1`**
+3. Dashboard sẽ hiển thị → kiểm tra trạng thái "Trực tuyến" ở góc dưới trái
 
 ---
 
-## 🔌 Chế độ Hoạt động (UIMode enum)
+## 📖 Hướng dẫn sử dụng
 
-| Mode | Giá trị | Mô tả |
-|------|---------|-------|
-| `MODE_MANUAL` | 0 | D-pad HTTP → motor trực tiếp |
-| `MODE_LINE_ONLY` | 1 | PID dò line liên tục, tự xử lý giao lộ |
-| `MODE_DELIVERY` | 2 | Dò line theo path node, gripper open/close tại đích |
-| `MODE_AI_ROUTE` | 3 | Route Interpreter state machine — nhận lệnh F/L/R từ Web |
+### Chế độ Tự động (AI Route)
 
----
+1. **Chọn điểm xuất phát**: Dropdown "Vị trí xuất phát" hoặc click tool ⭐ → click node
+2. **Đặt điểm giao**: Click tool 🔴 → click các node đích (tối đa 6 đơn)
+3. **Chọn thuật toán**: Dropdown (A\*, BFS, DFS, UCS, Greedy)
+4. **Mô phỏng**: Nhấn `MÔ PHỎNG THUẬT TOÁN` → xem animation từng bước
+5. **Đặt hướng xe**: Click mũi tên xanh trên bản đồ → xoay đến hướng mong muốn
+6. **Đặt xe lên track**: Đặt xe phía dưới node xuất phát, cùng hướng đã chọn
+7. **Gửi lộ trình**: Nhấn `NẠP LỘ TRÌNH & CHO XE CHẠY`
+8. **Xe sẽ**:
+   - Bò chậm tìm line → PID dò line → Phát hiện giao lộ → Rẽ đúng hướng → Tiếp tục
+   - Đến đích → Dừng → Gửi COMPLETED → Mũi tên reset về start
 
-## 📐 Thông số Cơ khí (từ code)
+### Chế độ Thủ công
 
-| Tham số | Giá trị | Đơn vị |
-|---------|---------|--------|
-| Bán kính bánh xe | 32.5 | mm |
-| Chu vi bánh | 204.2 | mm |
-| Khoảng cách 2 bánh (track width) | 115.0 | mm |
-| Xung encoder / vòng (effective) | 60 | pulses |
-| Tốc độ linear mặc định | 130 | PWM (0-255) |
-| Tốc độ rotation mặc định | 110 | PWM |
-| Tỉ lệ chéo (diagonal scale) | 70% | |
-| Góc quay tại giao lộ | 85° | (85 thay vì 90 để bù trượt) |
+- D-Pad 8 hướng điều khiển trực tiếp
+- Nút gripper Open/Close
+- Điều chỉnh tốc độ tịnh tiến / xoay
 
----
+### Dừng khẩn cấp
 
-## 📚 Tài liệu Tham khảo
-
-1. **Russell, S. & Norvig, P.** (2021). *Artificial Intelligence: A Modern Approach* (4th ed.) — Chương 3, 4: Search Algorithms
-2. **Hart, P.E., Nilsson, N.J. & Raphael, B.** (1968). "A Formal Basis for the Heuristic Determination of Minimum Cost Paths." *IEEE Trans. SSC*
-3. **Espressif Systems.** *ESP32 Technical Reference Manual*
-4. **ESPAsyncWebServer** — [github.com/me-no-dev/ESPAsyncWebServer](https://github.com/me-no-dev/ESPAsyncWebServer)
-5. **Pathfinding Visualizer** — [clementmihailescu.github.io](https://clementmihailescu.github.io/Pathfinding-Visualizer/) (tham khảo UX)
+- Nút **E-STOP** (đỏ lớn) → dừng mọi thứ, reset về manual
 
 ---
 
-*Đồ án Trí tuệ Nhân tạo — Học kỳ 2, 2026*
+## 📊 Thông số kỹ thuật
+
+| Thông số | Giá trị |
+|---|---|
+| Bản đồ | 4×5 grid = 20 node |
+| Khoảng cách giữa 2 giao lộ | ~20-30cm |
+| Tốc độ dò line | ~0.3-0.5 m/s |
+| PID gains | Kp=300, Ki=8, Kd=0 (tune theo track) |
+| Góc rẽ | 62° × 1.5 hệ số ≈ 93° thực tế |
+| Ngưỡng vật cản | 20cm (HC-SR04) |
+| Debounce giao lộ | 1500ms |
+| Telemetry interval | 200ms |
+| WebSocket timeout | Auto-reconnect 3s |
+| ESP32 AP IP | `192.168.4.1` |
+| Tổng dung lượng web | ~759KB (LittleFS) |
+
+---
+
+## 🔍 Xử lý sự cố
+
+| Vấn đề | Nguyên nhân | Giải pháp |
+|---|---|---|
+| Không vào được web | Sai IP hoặc chưa kết nối WiFi | Kết nối WiFi `ESP32-Car`, truy cập `192.168.4.1` |
+| Web trắng/load chậm | LittleFS chưa upload | Upload lại data folder qua Sketch Data Upload |
+| Xe không chạy khi đặt xuống | Chưa thấy line | Đặt xe gần line hơn hoặc chờ xe bò chậm tìm |
+| Rẽ sai hướng | Hướng ban đầu trên web không khớp thực tế | Click mũi tên xanh xoay đúng hướng xe đang hướng |
+| Rẽ quá nhiều/ít | Góc spin chưa đúng | Tăng/giảm `62.0` trong `do_line.cpp` dòng ~472 |
+| Mũi tên bị kẹt | Sau animation `anim.active` = true | Nhấn E-STOP hoặc click node trên bản đồ để reset |
+| Mất kết nối WS | ESP32 quá tải | Kiểm tra Serial monitor, restart ESP32 |
+
+---
+
+## 👨‍💻 Thành viên nhóm
+
+| Thành viên | MSSV | Vai trò |
+|---|---|---|
+| Đinh Quốc Anh | 24133003 | Web Dashboard & Giao tiếp |
+| Nguyễn Chiến | 24133007 | Firmware ESP32 & WebSocket |
+| Lý Gia Hân | 24133016 | Robot Control (PID & Sensors) |
+| Phan Tuấn Thanh | 24133054 | AI Algorithms Engine |
+
+---
+
+## 📚 Tài liệu tham khảo
+
+1. **Russell, S. & Norvig, P.** (2021). *Artificial Intelligence: A Modern Approach* (4th ed.) — Chương 3-4: Search Algorithms.
+2. **Hart, P.E., Nilsson, N.J. & Raphael, B.** (1968). "A Formal Basis for the Heuristic Determination of Minimum Cost Paths." — Bài báo gốc A\*.
+3. **Espressif Systems.** ESP32 Technical Reference Manual.
+4. **ESPAsyncWebServer** — [GitHub](https://github.com/me-no-dev/ESPAsyncWebServer)
+5. **ArduinoJson** — [GitHub](https://github.com/bblanchon/ArduinoJson)
+
+---
+
+## 📄 License
+
+Dự án phục vụ mục đích học tập — Đồ án môn Trí tuệ Nhân tạo.
+
+> *Ngày cập nhật: 29/03/2026*

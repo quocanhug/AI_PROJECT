@@ -151,17 +151,38 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
 static unsigned long lastTelemetryMs = 0;
 const unsigned long TELEMETRY_INTERVAL_MS = 200;
 
+// ★ Extern sensor/speed data từ do_line.cpp để gửi telemetry đầy đủ
+extern float us_dist_cm;
+extern float vL_ema, vR_ema;
+
+// Sensor pins (dùng đọc trạng thái cho telemetry)
+#define TELE_L2 34
+#define TELE_L1 32
+#define TELE_M  33
+#define TELE_R1 27
+#define TELE_R2 25
+
 void sendTelemetry() {
   if (ws.count() == 0) return;
-  if (currentMode == MODE_AI_ROUTE) {
-    // Gửi telemetry với vị trí node hiện tại (intersection-based)
+  if (currentMode == MODE_AI_ROUTE && is_auto_running) {
     int robotNode = (currentPathIndex < pathLength) ? currentPath[currentPathIndex] : currentPath[pathLength-1];
-    String json = "{\"type\":\"TELEMETRY\",\"state\":\"";
-    json += is_auto_running ? "FOLLOWING_LINE" : "IDLE";
-    json += "\",\"step\":" + String(currentPathIndex);
+    
+    // ★ Đọc cảm biến line (LOW = trên vạch)
+    int s0 = digitalRead(TELE_L2) == LOW ? 1 : 0;
+    int s1 = digitalRead(TELE_L1) == LOW ? 1 : 0;
+    int s2 = digitalRead(TELE_M)  == LOW ? 1 : 0;
+    int s3 = digitalRead(TELE_R1) == LOW ? 1 : 0;
+    int s4 = digitalRead(TELE_R2) == LOW ? 1 : 0;
+    
+    String json = "{\"type\":\"TELEMETRY\",\"state\":\"FOLLOWING_LINE\"";
+    json += ",\"step\":" + String(currentPathIndex);
     json += ",\"total\":" + String(pathLength);
     json += ",\"robotNode\":" + String(robotNode);
-    json += ",\"robotDir\":" + String(currentDir) + "}";
+    json += ",\"robotDir\":" + String(currentDir);
+    json += ",\"speedL\":" + String(vL_ema, 3);
+    json += ",\"speedR\":" + String(vR_ema, 3);
+    json += ",\"obstacle\":" + String(us_dist_cm, 1);
+    json += ",\"sensors\":[" + String(s0) + "," + String(s1) + "," + String(s2) + "," + String(s3) + "," + String(s4) + "]}";
     ws.textAll(json);
   }
 }
