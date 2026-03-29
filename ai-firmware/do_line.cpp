@@ -221,7 +221,7 @@ static inline double theta_from_counts(long dL, long dR, int signL, int signR){
   return ((double)dR / PPR_EFFECTIVE * CIRC * signR - (double)dL / PPR_EFFECTIVE * CIRC * signL) / TRACK_WIDTH_M;
 }
 
-// ================= Quay theo góc (trả bool: true=OK, false=timeout) =================
+// ================= Quay theo góc (trả bool: true=OK, false=timeout/abort) =================
 bool spin_left_deg(double deg, int pwmMax){
   const double target = 1.5*deg * 3.141592653589793 / 180.0;
   const double deg_tol = 1.5 * 3.141592653589793 / 180.0;
@@ -233,6 +233,8 @@ bool spin_left_deg(double deg, int pwmMax){
   bool success = true;
   long L0, R0; noInterrupts(); L0 = encL_total; R0 = encR_total; interrupts();
   while (true){
+    // ★ FIX: Kiểm tra abort mỗi vòng lặp — E-STOP có tác dụng ngay
+    if (!g_line_enabled) { motorsStop(); return false; }
     long L, R; noInterrupts(); L = encL_total; R = encR_total; interrupts();
     long dL = labs(L - L0), dR = labs(R - R0);
     double theta = theta_from_counts(dL, dR, -1, +1);
@@ -263,6 +265,8 @@ bool spin_right_deg(double deg, int pwmMax){
   bool success = true;
   long L0, R0; noInterrupts(); L0 = encL_total; R0 = encR_total; interrupts();
   while (true){
+    // ★ FIX: Kiểm tra abort mỗi vòng lặp — E-STOP có tác dụng ngay
+    if (!g_line_enabled) { motorsStop(); return false; }
     long L, R; noInterrupts(); L = encL_total; R = encR_total; interrupts();
     long dL = labs(L - L0), dR = labs(R - R0);
     double theta = theta_from_counts(dL, dR, +1, -1);
@@ -483,14 +487,26 @@ void do_line_loop() {
             const int TURN_PWM = 160;
             bool turnOk = true;
             // ★ C++ dirs 0=down,1=right,2=up,3=left (non-CW order)
-            //   diff=1 = 1 step CCW = quay TRÁI
-            //   diff=3 = 1 step CW  = quay PHẢI
-            //   Góc 62° × hệ số 1.5 trong spin_*_deg = ~93° thực tế
             if (diff == 1) { turnOk = spin_left_deg(62.0, TURN_PWM); Serial.println("  >> LEFT"); }
             else if (diff == 3) { turnOk = spin_right_deg(62.0, TURN_PWM); Serial.println("  >> RIGHT"); }
             else if (diff == 2) { turnOk = spin_right_deg(125.0, TURN_PWM); Serial.println("  >> U-TURN"); }
             else { Serial.println("  >> STRAIGHT"); }
-            if (!turnOk) Serial.println("  ⚠️ TURN TIMEOUT — encoder issue?");
+
+            // ★ FIX: Xử lý spin thất bại (timeout hoặc abort)
+            if (!turnOk) {
+              Serial.println("  ❗ TURN FAILED — dừng route, báo Web");
+              motorsStop();
+              extern void wsBroadcast(const char*);
+              int robotNode = currentPath[currentPathIndex];
+              String msg = "{\"type\":\"OBSTACLE_DETECTED\","
+                           "\"robotNode\":" + String(robotNode) + ","
+                           "\"robotDir\":" + String(currentDir) + ","
+                           "\"reason\":\"TURN_FAILED\"}";
+              wsBroadcast(msg.c_str());
+              currentMode = MODE_MANUAL;
+              is_auto_running = false;
+              line_mode = false; do_line_abort(); return;
+            }
             currentDir = targetDir;
           }
 
