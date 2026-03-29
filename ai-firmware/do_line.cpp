@@ -78,8 +78,8 @@ const float TRACK_WIDTH_M = 0.1150f;
 
 // ================= Tham số điều khiển (GIÁ TRỊ GỐC ĐÃ CHẠY TỐT) =================
 float v_base   = 0.4f;
-float v_boost  = 0.11f;
-float v_hard   = 0.13f;
+float v_boost  = 0.18f;  // ★ Tăng từ 0.11: sửa lệch mạnh hơn khi L1+M hoặc R1+M
+float v_hard   = 0.25f;  // ★ Tăng từ 0.13: sửa lệch rất mạnh khi chỉ L1 hoặc R1 (không M)
 float v_search = 0.2f;
 float vF = v_base * 0.90f;
 
@@ -459,14 +459,33 @@ void do_line_loop() {
         if (pathLength > 0) {
           // ★ Kiểm tra đã đến đích chưa
           if (currentPathIndex >= pathLength - 1) {
-            Serial.printf("[AI_ROUTE] ARRIVED at node %d\n", currentPath[pathLength-1]);
+            motorsStop(); delay(200);
+            int destNode = currentPath[pathLength - 1];
+            Serial.printf("[AI_ROUTE] ARRIVED at node %d\n", destNode);
+
+            // ★ QUAY XE về hướng đường quay về (hướng từ đích → node trước)
+            if (pathLength >= 2) {
+              int prevNode = currentPath[pathLength - 2];
+              extern int getTargetDirection(int, int);
+              int returnDir = getTargetDirection(destNode, prevNode);
+              if (returnDir != -1 && returnDir != currentDir) {
+                int diff = (returnDir - currentDir + 4) % 4;
+                const int TURN_PWM = 160;
+                Serial.printf("  Rotating to return dir: %d -> %d (diff=%d)\n", currentDir, returnDir, diff);
+                if (diff == 1) spin_left_deg(57.0, TURN_PWM);
+                else if (diff == 3) spin_right_deg(57.0, TURN_PWM);
+                else if (diff == 2) spin_right_deg(115.0, TURN_PWM);
+                currentDir = returnDir;
+                motorsStop(); delay(200);
+              }
+            }
 
             if (currentMode == MODE_DELIVERY) {
               gripOpen(); delay(1500); gripClose();
             } else {
               Serial.println("[AI_ROUTE] DESTINATION REACHED — COMPLETED");
               extern void wsBroadcast(const char*);
-              String msg = "{\"type\":\"COMPLETED\",\"robotNode\":" + String(currentPath[pathLength-1]) +
+              String msg = "{\"type\":\"COMPLETED\",\"robotNode\":" + String(destNode) +
                            ",\"robotDir\":" + String(currentDir) + "}";
               wsBroadcast(msg.c_str());
             }

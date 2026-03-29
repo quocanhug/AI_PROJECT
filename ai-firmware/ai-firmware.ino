@@ -145,6 +145,72 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
       client->text("{\"type\":\"ACK\",\"action\":\"RESUMED\"}");
     }
   }
+  else if (strcmp(type, "RETURN_HOME") == 0) {
+    String result = handleReturnHome();
+    client->text(result);
+  }
+}
+
+// ================= RETURN HOME: Đảo path và chạy về kho =================
+String handleReturnHome() {
+  if (pathLength < 2) {
+    return "{\"type\":\"ACK\",\"action\":\"NO_ROUTE\"}";
+  }
+
+  // Dừng mọi thứ trước
+  stopCar(); do_line_abort();
+  currentMode = MODE_MANUAL;
+  line_mode = false;
+  is_auto_running = false;
+
+  // Robot hiện ở node nào?
+  int robotNode = currentPath[pathLength - 1];  // Đang ở đích cuối
+  int homeNode  = currentPath[0];               // Kho = node đầu tiên
+
+  if (robotNode == homeNode) {
+    return "{\"type\":\"ACK\",\"action\":\"ALREADY_HOME\"}";
+  }
+
+  // ★ ĐẢO NGƯỢC path: đích → kho
+  int reversedPath[20];
+  int reverseLen = pathLength;
+  for (int i = 0; i < pathLength; i++) {
+    reversedPath[i] = currentPath[pathLength - 1 - i];
+  }
+
+  // Nạp path đảo vào currentPath
+  for (int i = 0; i < reverseLen; i++) {
+    currentPath[i] = reversedPath[i];
+  }
+  pathLength = reverseLen;
+  currentPathIndex = 0;
+
+  // Tính hướng ban đầu (robot đã quay về hướng return ở đích)
+  extern int getTargetDirection(int, int);
+  if (pathLength >= 2) {
+    int calcDir = getTargetDirection(currentPath[0], currentPath[1]);
+    if (calcDir != -1) currentDir = calcDir;
+  }
+
+  // Khởi động route
+  do_line_setup();
+  currentMode = MODE_AI_ROUTE;
+  line_mode = true;
+  is_auto_running = true;
+
+  Serial.printf("[RETURN_HOME] Reversed path: ");
+  for (int i = 0; i < pathLength; i++) Serial.printf("%d%s", currentPath[i], i < pathLength-1 ? " -> " : "\n");
+  Serial.printf("  Dir=%d, %d nodes\n", currentDir, pathLength);
+
+  String msg = "{\"type\":\"RETURN_HOME_ACK\",\"path\":[";
+  for (int i = 0; i < pathLength; i++) {
+    if (i > 0) msg += ",";
+    msg += String(currentPath[i]);
+  }
+  msg += "],\"dir\":" + String(currentDir) + "}";
+  ws.textAll(msg);
+
+  return msg;
 }
 
 // ================= Telemetry Timer =================
@@ -276,15 +342,24 @@ void setup() {
   });
 
   server.on("/resume", HTTP_GET, [](AsyncWebServerRequest *r){
-    if(currentMode != MODE_MANUAL) {
-      stopCar(); do_line_setup();
-      line_mode = true; is_auto_running = true;
+    if (currentMode == MODE_AI_ROUTE || pathLength > 0) {
+      // Re-enable route execution from current position
+      do_line_setup();
+      currentMode = MODE_AI_ROUTE;
+      line_mode = true;
+      is_auto_running = true;
+      Serial.printf("[RESUME] Resuming from pathIndex=%d, dir=%d\n", currentPathIndex, currentDir);
+      r->send(200, "application/json", 
+        "{\"status\":\"RESUMED\",\"pathIndex\":" + String(currentPathIndex) + 
+        ",\"robotDir\":" + String(currentDir) + "}");
+    } else {
+      r->send(200, "application/json", "{\"status\":\"NO_ROUTE\"}");
     }
-    r->send(200, "text/plain", "RESUMED");
   });
 
   server.on("/return_home", HTTP_GET, [](AsyncWebServerRequest *r){
-    r->send(200, "text/plain", "RETURNING HOME");
+    String result = handleReturnHome();
+    r->send(200, "application/json", result);
   });
 
   server.on("/api/stats", HTTP_GET, [](AsyncWebServerRequest *r){

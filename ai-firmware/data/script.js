@@ -150,12 +150,27 @@ function handleWsMessage(data) {
   else if (data.type === "COMPLETED") {
     showToast(`✅ Hoàn thành lộ trình!`, "success");
     updateRobotState("DONE");
-    // ★ FIX: Reset trạng thái để mũi tên có thể di chuyển lại
+    // ★ FIX: KHÔNG reset mũi tên về start — giữ nguyên tại node đích
+    //   để tính năng "Về kho" biết robot đang ở đâu
     anim.active = false;
     deliveryInProgress = false;
     handleDeliveryCompleted();
-    // Di chuyển mũi tên về start node sau khi hoàn thành
-    resetRobotToStart();
+    // Cập nhật mũi tên tại NODE ĐÍCH (không phải start)
+    if (data.robotNode !== undefined) {
+      const jsDir = CPP_TO_JS_DIR[data.robotDir || 0];
+      updateRobotIndicator(data.robotNode, jsDir);
+    }
+  }
+  else if (data.type === "RETURN_HOME_ACK") {
+    // ★ Firmware đã đảo path và bắt đầu chạy về kho
+    if (data.path && data.path.length >= 2) {
+      finalCalculatedPath = data.path;
+      deliveryInProgress = true;
+      deliveryStartTime = Date.now();
+      const jsDir = CPP_TO_JS_DIR[data.dir || 0];
+      updateRobotIndicator(data.path[0], jsDir);
+      showToast(`🏭 Về kho: ${data.path.join(' → ')}`, "success");
+    }
   }
   else if (data.type === "PONG" || data.type === "PING") { }
 }
@@ -972,12 +987,73 @@ document.getElementById("animSpeedSlider").addEventListener("input", (e) => {
 
 // ==================== Manual D-Pad ====================
 async function sendCommand(cmd) {
+  if (cmd === '/return_home') {
+    returnHome();
+    return;
+  }
+  if (cmd === '/resume') {
+    resumeRoute();
+    return;
+  }
   try { await fetch(cmd); } catch (e) { }
-  if (cmd === '/estop' || cmd === '/return_home') {
+  if (cmd === '/estop') {
     wsSend({ type: "ESTOP" });
     resetRobotToStart();
+    showToast("🛑 E-STOP — Robot đã dừng", "error");
+    return;
   }
   showToast("Lệnh: " + cmd, "info");
+}
+
+// ==================== VỀ KHO: Gửi lệnh RETURN_HOME cho ESP32 ====================
+function returnHome() {
+  if (!finalCalculatedPath || finalCalculatedPath.length < 2) {
+    showToast("⚠️ Chưa có lộ trình để quay về!", "error");
+    return;
+  }
+  wsSend({ type: "RETURN_HOME" });
+  showToast("🏭 Đang quay về kho...", "info");
+}
+
+// ==================== TIẾP TỤC: Resume route bị dừng ====================
+function resumeRoute() {
+  if (!finalCalculatedPath || finalCalculatedPath.length < 2) {
+    showToast("⚠️ Chưa có lộ trình để tiếp tục!", "error");
+    return;
+  }
+
+  const currentNode = robotCurrentNode >= 0 ? robotCurrentNode : parseInt(document.getElementById("startNode").value);
+
+  // Tìm vị trí robot trong path đã tính
+  let resumeIdx = finalCalculatedPath.indexOf(currentNode);
+  if (resumeIdx < 0) {
+    // Robot không nằm trên path cũ → tính đường mới từ vị trí hiện tại đến đích cuối
+    const lastTarget = finalCalculatedPath[finalCalculatedPath.length - 1];
+    const algo = document.getElementById("algoSel").value;
+    const result = findPathAnimated(currentNode, lastTarget, algo);
+    if (!result || !result.path || result.path.length < 2) {
+      showToast("❌ Không tìm được đường tiếp tục!", "error");
+      return;
+    }
+    const cppDir = JS_TO_CPP_DIR[robotCurrentDir];
+    wsSend({ type: "ROUTE", path: result.path, initialDir: cppDir, rerouted: true });
+    animRunSingle(result, getAlgoName(algo), '⏭ Tiếp tục');
+    finalCalculatedPath = result.path;
+    showToast(`⏭ Tính đường mới: ${result.path.join(' → ')}`, "success");
+  } else {
+    // Robot nằm trên path cũ → gửi phần còn lại
+    const remainingPath = finalCalculatedPath.slice(resumeIdx);
+    if (remainingPath.length < 2) {
+      showToast("✅ Robot đã ở đích!", "info");
+      return;
+    }
+    const cppDir = JS_TO_CPP_DIR[robotCurrentDir];
+    wsSend({ type: "ROUTE", path: remainingPath, initialDir: cppDir, rerouted: true });
+    showToast(`⏭ Tiếp tục: ${remainingPath.join(' → ')}`, "success");
+  }
+
+  deliveryInProgress = true;
+  deliveryStartTime = Date.now();
 }
 async function send(path) { try { await fetch(path); } catch (e) { } }
 let activeHold = { btn: null, pid: null };
