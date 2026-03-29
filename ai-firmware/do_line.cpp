@@ -417,9 +417,9 @@ void do_line_loop() {
   float vL_tgt = 0, vR_tgt = 0;
 
   // ============================================================
-  // ★ GIAO LỘ: L2 hoặc R2 phát hiện line ngang (perpendicular)
+  // ★ GIAO LỘ: Cả L2 VÀ R2 đều thấy vạch ngang (chống nhận nhầm khi xe lệch)
   // ============================================================
-  bool at_intersection = (L2 || R2);
+  bool at_intersection = (L2 && R2);
 
   if (at_intersection) {
 
@@ -453,17 +453,18 @@ void do_line_loop() {
         // ★ FIX: Tiến ~5cm vào TÂM giao lộ TRƯỚC khi xoay
         // Lý do: L2/R2 nằm ở đầu xe, nhưng trục quay nằm giữa 2 bánh
         // Nếu xoay ngay → trục quay chưa ở tâm → xe lệch khỏi line sau rẽ
-        move_forward_distance(0.02, 100);
+        move_forward_distance(0.03, 100);
         motorsStop(); delay(100);
 
         if (pathLength > 0) {
           // ★ Kiểm tra đã đến đích chưa
           if (currentPathIndex >= pathLength - 1) {
-            motorsStop();
+            Serial.printf("[AI_ROUTE] ARRIVED at node %d\n", currentPath[pathLength-1]);
+
             if (currentMode == MODE_DELIVERY) {
               gripOpen(); delay(1500); gripClose();
             } else {
-              Serial.println("[AI_ROUTE] DESTINATION REACHED");
+              Serial.println("[AI_ROUTE] DESTINATION REACHED — COMPLETED");
               extern void wsBroadcast(const char*);
               String msg = "{\"type\":\"COMPLETED\",\"robotNode\":" + String(currentPath[pathLength-1]) +
                            ",\"robotDir\":" + String(currentDir) + "}";
@@ -486,10 +487,10 @@ void do_line_loop() {
             int diff = (targetDir - currentDir + 4) % 4;
             const int TURN_PWM = 160;
             bool turnOk = true;
-            // ★ C++ dirs 0=down,1=right,2=up,3=left (non-CW order)
-            if (diff == 1) { turnOk = spin_left_deg(62.0, TURN_PWM); Serial.println("  >> LEFT"); }
-            else if (diff == 3) { turnOk = spin_right_deg(62.0, TURN_PWM); Serial.println("  >> RIGHT"); }
-            else if (diff == 2) { turnOk = spin_right_deg(125.0, TURN_PWM); Serial.println("  >> U-TURN"); }
+            // ★ Góc 60° × hệ số 1.5 = ~90° thực tế
+            if (diff == 1) { turnOk = spin_left_deg(60.0, TURN_PWM); Serial.println("  >> LEFT"); }
+            else if (diff == 3) { turnOk = spin_right_deg(60.0, TURN_PWM); Serial.println("  >> RIGHT"); }
+            else if (diff == 2) { turnOk = spin_right_deg(115.0, TURN_PWM); Serial.println("  >> U-TURN"); }
             else { Serial.println("  >> STRAIGHT"); }
 
             // ★ FIX: Xử lý spin thất bại (timeout hoặc abort)
