@@ -2,11 +2,7 @@
 /* Tailwind handles the design system; this file adds component-level polish */
 
 .material-symbols-outlined {
-  font-variation-settings:
-    "FILL" 0,
-    "wght" 400,
-    "GRAD" 0,
-    "opsz" 24;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
   vertical-align: middle;
 }
 
@@ -106,7 +102,7 @@
   font-weight: 500;
   padding: 0.75rem 1rem;
   color: #191c1d;
-  font-family: "Inter", sans-serif;
+  font-family: 'Inter', sans-serif;
   outline: none;
   cursor: pointer;
 }
@@ -129,7 +125,7 @@
   background: transparent;
   border: none;
   transition: all 0.15s;
-  font-family: "Inter", sans-serif;
+  font-family: 'Inter', sans-serif;
 }
 
 .map-tool-btn:hover {
@@ -175,7 +171,7 @@
   text-anchor: middle;
   dominant-baseline: central;
   pointer-events: none;
-  font-family: "Inter", sans-serif;
+  font-family: 'Inter', sans-serif;
 }
 
 /* Node states */
@@ -297,7 +293,7 @@
 
 /* ===== Path Result ===== */
 #pathResult.has-path {
-  font-family: "Inter", monospace;
+  font-family: 'Inter', monospace;
   font-weight: 600;
   background: rgba(0, 90, 180, 0.05);
   color: #005ab4;
@@ -350,10 +346,6 @@
   border-left: 4px solid #005ab4;
 }
 
-.toast.warning {
-  border-left: 4px solid #d97706;
-}
-
 @keyframes toastIn {
   from {
     opacity: 0;
@@ -371,9 +363,7 @@
   fill: #fef3c7;
   stroke: #f59e0b;
   stroke-width: 2.5;
-  transition:
-    fill 0.15s,
-    stroke 0.15s;
+  transition: fill 0.15s, stroke 0.15s;
 }
 
 .node-explored .node-text {
@@ -384,9 +374,7 @@
   fill: #dbeafe;
   stroke: #3b82f6;
   stroke-width: 2.5;
-  transition:
-    fill 0.15s,
-    stroke 0.15s;
+  transition: fill 0.15s, stroke 0.15s;
 }
 
 .node-frontier .node-text {
@@ -425,25 +413,14 @@
 }
 
 @keyframes nodePulse {
-  0% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.15);
-  }
-  100% {
-    transform: scale(1);
-  }
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
 }
 
 @keyframes edgeSelPulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.7;
-  }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
 }
 
 /* Edge weight labels */
@@ -452,7 +429,7 @@
   font-size: 9px;
   font-weight: 800;
   text-anchor: middle;
-  font-family: "Inter", sans-serif;
+  font-family: 'Inter', sans-serif;
   pointer-events: none;
   paint-order: stroke;
   stroke: white;
@@ -473,7 +450,7 @@
   align-items: center;
   justify-content: center;
   transition: all 0.15s;
-  font-family: "Inter", sans-serif;
+  font-family: 'Inter', sans-serif;
 }
 
 .anim-ctrl-btn:hover {
@@ -534,7 +511,7 @@
   stroke: #ef4444;
   stroke-width: 4.5;
   opacity: 0.9;
-  filter: drop-shadow(0 0 5px rgba(239, 68, 68, 0.6));
+  filter: drop-shadow(0 0 5px rgba(239,68,68,0.6));
 }
 .flow-edge.edge-explored {
   stroke: #f59e0b;
@@ -575,11 +552,6 @@
   fill: #15803d;
 }
 @keyframes robotGlow {
-  0%,
-  100% {
-    opacity: 0.3;
-  }
-  50% {
-    opacity: 0.12;
-  }
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.12; }
 }

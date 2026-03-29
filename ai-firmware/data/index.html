@@ -1,0 +1,605 @@
+<!doctype html>
+<html class="light" lang="vi">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RoboControl — Hệ thống Điều khiển Robot AI</title>
+  <meta name="description"
+    content="AI Robot Pathfinder Dashboard — Hệ thống xe robot giao hàng với thuật toán tìm kiếm AI" />
+  <script src="tailwind.min.js"></script>
+  <script src="chart.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#005ab4",
+            "primary-container": "#0873df",
+            "on-primary": "#ffffff",
+            "on-primary-container": "#fefcff",
+            "primary-fixed": "#d6e3ff",
+            "primary-fixed-dim": "#aac7ff",
+            "secondary": "#465f89",
+            "secondary-container": "#b7cfff",
+            "on-secondary": "#ffffff",
+            "on-secondary-container": "#405882",
+            "secondary-fixed": "#d6e3ff",
+            "tertiary": "#964400",
+            "tertiary-container": "#bd5700",
+            "on-tertiary": "#ffffff",
+            "tertiary-fixed": "#ffdbc9",
+            "error": "#ba1a1a",
+            "error-container": "#ffdad6",
+            "on-error": "#ffffff",
+            "on-error-container": "#93000a",
+            "surface": "#f8f9fa",
+            "surface-dim": "#d9dadb",
+            "surface-bright": "#f8f9fa",
+            "surface-container-lowest": "#ffffff",
+            "surface-container-low": "#f3f4f5",
+            "surface-container": "#edeeef",
+            "surface-container-high": "#e7e8e9",
+            "surface-container-highest": "#e1e3e4",
+            "surface-variant": "#e1e3e4",
+            "on-surface": "#191c1d",
+            "on-surface-variant": "#414753",
+            "outline": "#717785",
+            "outline-variant": "#c1c6d5",
+            "inverse-surface": "#2e3132",
+            "inverse-on-surface": "#f0f1f2",
+            "inverse-primary": "#aac7ff",
+          },
+          fontFamily: { "headline": ["system-ui","sans-serif"], "body": ["system-ui","sans-serif"], "label": ["system-ui","sans-serif"] },
+          borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" },
+        },
+      },
+    }
+  </script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body class="bg-surface font-body text-on-surface flex h-screen overflow-hidden antialiased">
+
+  <!-- ===== SIDEBAR ===== -->
+  <aside class="w-72 bg-surface-container-low flex flex-col border-r border-outline-variant/20 z-20 shrink-0">
+    <!-- Brand + Group Info -->
+    <div class="p-6">
+      <div class="flex items-center gap-2 mb-6">
+        <span class="text-primary text-2xl">🤖</span>
+        <h1 class="font-black tracking-tighter text-xl text-primary uppercase">RoboControl</h1>
+      </div>
+      <div class="bg-surface-container-lowest rounded-xl p-4 shadow-sm">
+        <p class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-3">Thành viên nhóm</p>
+        <ul class="space-y-3">
+          <li class="flex flex-col"><span class="text-sm font-bold text-on-surface">Đinh Quốc Anh</span><span
+              class="text-xs text-on-surface-variant">MSSV: 24133003</span></li>
+          <li class="flex flex-col"><span class="text-sm font-bold text-on-surface">Nguyễn Chiến</span><span
+              class="text-xs text-on-surface-variant">MSSV: 24133007</span></li>
+          <li class="flex flex-col"><span class="text-sm font-bold text-on-surface">Lý Gia Hân</span><span
+              class="text-xs text-on-surface-variant">MSSV: 24133016</span></li>
+          <li class="flex flex-col"><span class="text-sm font-bold text-on-surface">Phan Tuấn Thanh</span><span
+              class="text-xs text-on-surface-variant">MSSV: 24133054</span></li>
+        </ul>
+      </div>
+    </div>
+    <!-- Navigation -->
+    <div class="mt-auto p-4 space-y-1">
+      <nav class="space-y-1 mb-8">
+        <a class="nav-link active-nav" id="nav-manual" onclick="switchTab('manual')" href="#">
+          <span style="font-size:1.2rem">🖐️</span>
+          <span class="text-sm font-bold uppercase tracking-wide">Thủ công</span>
+        </a>
+        <a class="nav-link" id="nav-auto" onclick="switchTab('auto')" href="#">
+          <span style="font-size:1.2rem">🤖</span>
+          <span class="text-sm font-bold uppercase tracking-wide">Tự động</span>
+        </a>
+        <a class="nav-link" id="nav-stats" onclick="switchTab('stats')" href="#">
+          <span style="font-size:1.2rem">📊</span>
+          <span class="text-sm font-bold uppercase tracking-wide">Thống kê</span>
+        </a>
+      </nav>
+      <div class="pt-4 border-t border-outline-variant/30 space-y-1">
+        <a class="flex items-center gap-3 px-4 py-2 rounded-xl text-on-surface-variant hover:text-primary transition-all"
+          href="#">
+          <span style="font-size:1.1rem">⚙️</span><span class="text-sm font-medium">Cài
+            đặt</span>
+        </a>
+        <a class="flex items-center gap-3 px-4 py-2 rounded-xl text-on-surface-variant hover:text-primary transition-all"
+          href="#">
+          <span style="font-size:1.1rem">❓</span><span class="text-sm font-medium">Trợ giúp</span>
+        </a>
+      </div>
+      <!-- System Status -->
+      <div class="mt-4 p-4 bg-primary rounded-2xl text-white">
+        <p class="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-2">Hệ thống</p>
+        <div class="flex items-center justify-between">
+          <span class="text-sm font-medium" id="wsStatusText">Đang kết nối...</span>
+          <div class="w-2 h-2 rounded-full bg-yellow-400" id="wsStatusDot"></div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===== MAIN CONTENT WRAPPER ===== -->
+  <div class="flex-1 flex flex-col relative overflow-hidden">
+    <!-- TopAppBar -->
+    <header
+      class="h-16 flex justify-between items-center px-8 bg-surface/80 backdrop-blur-md z-10 border-b border-slate-100 shrink-0">
+      <div class="flex items-center gap-4">
+        <span
+          class="px-3 py-1 bg-primary text-on-primary text-[10px] font-black rounded-full uppercase tracking-tighter shadow-sm"
+          id="headerBadge">Live Status</span>
+        <h2 class="font-headline font-bold text-on-surface tracking-tight" id="headerTitle">Hệ thống: Vận hành Thủ công
+        </h2>
+      </div>
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2 bg-surface-container-high px-4 py-2 rounded-full">
+          <span class="text-primary text-sm">🕐</span>
+          <span class="text-sm font-black text-on-surface tracking-tight" id="real-time-clock">--:--:-- --</span>
+        </div>
+        <div
+          class="w-10 h-10 rounded-full bg-primary-fixed flex items-center justify-center border-2 border-surface shadow-sm">
+          <span class="text-primary">🤖</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ================================================ -->
+    <!-- ===== MANUAL PANEL ===== -->
+    <!-- ================================================ -->
+    <main id="panel-manual" class="panel-view active flex-1 p-8 grid grid-cols-12 gap-8 overflow-y-auto hide-scrollbar">
+      <!-- D-Pad Section -->
+      <section class="col-span-12 lg:col-span-7 flex flex-col gap-8">
+        <div
+          class="bg-surface-container-lowest p-8 rounded-[2rem] shadow-sm border border-outline-variant/30 flex flex-col items-center">
+          <div class="flex items-center justify-between w-full mb-8">
+            <div class="flex items-center gap-3">
+              <span class="text-primary text-2xl">🎮</span>
+              <h3 class="text-lg font-black uppercase tracking-widest text-on-surface">Bộ điều hướng</h3>
+            </div>
+            <span
+              class="px-3 py-1 bg-green-100 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-widest border border-green-200"
+              id="connBadge">Đang kết nối...</span>
+          </div>
+          <!-- Large D-Pad -->
+          <div class="grid grid-cols-3 grid-rows-3 gap-6 w-full max-w-md aspect-square">
+            <button class="dpad-btn hold" data-path="/fwd_left"><span
+                class="rotate-[-45deg] text-3xl group-hover:text-primary">⬆</span></button>
+            <button class="dpad-btn hold" data-path="/forward"><span
+                class="text-4xl group-hover:text-primary">⬆</span></button>
+            <button class="dpad-btn hold" data-path="/fwd_right"><span
+                class="rotate-[45deg] text-3xl group-hover:text-primary">⬆</span></button>
+            <button class="dpad-btn hold" data-path="/left"><span
+                class="text-4xl group-hover:text-primary">⬅</span></button>
+            <button
+              class="bg-error text-on-error hover:brightness-110 transition-all rounded-[2rem] flex items-center justify-center shadow-xl shadow-error/20 active:scale-90 duration-150"
+              id="stopBtn" data-path="/stop"><span class="font-black tracking-tighter text-sm uppercase">Dừng
+                khẩn</span></button>
+            <button class="dpad-btn hold" data-path="/right"><span
+                class="text-4xl group-hover:text-primary">➡</span></button>
+            <button class="dpad-btn hold" data-path="/back_left"><span
+                class="rotate-[-135deg] text-3xl group-hover:text-primary">⬆</span></button>
+            <button class="dpad-btn hold" data-path="/backward"><span
+                class="text-4xl group-hover:text-primary">⬇</span></button>
+            <button class="dpad-btn hold" data-path="/back_right"><span
+                class="rotate-[135deg] text-3xl group-hover:text-primary">⬆</span></button>
+          </div>
+          <div class="mt-8 flex gap-4 w-full justify-center">
+            <button
+              class="bg-primary text-on-primary px-8 py-4 rounded-2xl shadow-lg shadow-primary/20 hover:brightness-110 transition-all font-bold text-sm uppercase tracking-widest flex items-center gap-2"
+              onclick="sendCommand('/return_home')">
+              🏠 Về điểm xuất phát
+            </button>
+          </div>
+        </div>
+        <!-- Sensor Cards -->
+        <div class="grid grid-cols-3 gap-6">
+          <div
+            class="bg-surface-container-lowest p-6 rounded-3xl shadow-sm border border-outline-variant/20 flex flex-col items-center gap-2">
+            <span class="text-primary text-3xl">📡</span>
+            <span class="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Cảm biến line</span>
+            <div class="flex gap-1 mt-1" id="sensorDotsManual">
+              <span class="w-3 h-3 rounded-full bg-surface-container" id="sm0"></span>
+              <span class="w-3 h-3 rounded-full bg-surface-container" id="sm1"></span>
+              <span class="w-3 h-3 rounded-full bg-surface-container" id="sm2"></span>
+              <span class="w-3 h-3 rounded-full bg-surface-container" id="sm3"></span>
+              <span class="w-3 h-3 rounded-full bg-surface-container" id="sm4"></span>
+            </div>
+          </div>
+          <div
+            class="bg-surface-container-lowest p-6 rounded-3xl shadow-sm border border-outline-variant/20 flex flex-col items-center gap-2">
+            <span class="text-primary text-3xl">📏</span>
+            <span class="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Sonar
+              (HC-SR04)</span>
+            <span class="text-xs font-bold" id="sonarStatus">-- cm</span>
+          </div>
+          <div
+            class="bg-surface-container-lowest p-6 rounded-3xl shadow-sm border border-outline-variant/20 flex flex-col items-center gap-2">
+            <span class="text-primary text-3xl">⚡</span>
+            <span class="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Encoder</span>
+            <span class="text-xs font-bold text-green-600" id="encoderStatus">Hoạt động</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Telemetry Panel -->
+      <aside class="col-span-12 lg:col-span-5 flex flex-col gap-6">
+        <!-- Speed -->
+        <div class="bg-surface-container-lowest p-8 rounded-3xl shadow-sm border border-outline-variant/10">
+          <div class="flex justify-between items-start mb-4">
+            <div>
+              <p class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Vận tốc hiện tại
+              </p>
+              <h3 class="text-5xl font-black text-on-surface tracking-tighter"><span id="teleSpeedVal">0.0</span> <span
+                  class="text-xl text-on-surface-variant font-medium">m/s</span></h3>
+            </div>
+            <div class="bg-primary-fixed w-12 h-12 rounded-2xl flex items-center justify-center">
+              <span class="text-primary text-2xl">⚡</span>
+            </div>
+          </div>
+          <div class="h-2 bg-surface-container rounded-full overflow-hidden">
+            <div class="h-full bg-primary shadow-[0_0_10px_rgba(0,90,180,0.5)] transition-all duration-500"
+              id="speedBar" style="width:0%"></div>
+          </div>
+        </div>
+        <!-- Distance -->
+        <div class="bg-surface-container-lowest p-8 rounded-3xl shadow-sm border border-outline-variant/10">
+          <div class="flex justify-between items-start mb-4">
+            <div>
+              <p class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Quãng đường đã đi
+              </p>
+              <h3 class="text-5xl font-black text-on-surface tracking-tighter"><span id="teleDistVal">0</span> <span
+                  class="text-xl text-on-surface-variant font-medium">cm</span></h3>
+            </div>
+            <div class="bg-green-100 w-12 h-12 rounded-2xl flex items-center justify-center">
+              <span class="text-green-600 text-2xl">📐</span>
+            </div>
+          </div>
+        </div>
+        <!-- Robot State/Step -->
+        <section class="bg-surface-container-lowest p-8 rounded-[2rem] shadow-sm border border-primary/20 flex-1">
+          <div class="flex items-center gap-3 mb-6">
+            <div class="bg-primary/10 p-2 rounded-xl"><span
+                class="text-primary">📍</span></div>
+            <h3 class="text-lg font-black uppercase tracking-widest text-on-surface">Trạng thái Robot</h3>
+          </div>
+          <div class="space-y-4">
+            <div class="bg-surface p-6 rounded-2xl border border-outline-variant/30">
+              <span class="text-xs font-bold text-on-surface-variant uppercase tracking-tighter block mb-1">Trạng thái
+                máy</span>
+              <span class="font-mono text-3xl font-black text-primary block" id="teleStateVal">IDLE</span>
+            </div>
+            <div class="bg-surface p-6 rounded-2xl border border-outline-variant/30">
+              <span class="text-xs font-bold text-on-surface-variant uppercase tracking-tighter block mb-1">Bước / Tổng
+                lệnh</span>
+              <span class="font-mono text-3xl font-black text-primary block" id="teleStepVal">0 / 0</span>
+            </div>
+          </div>
+          <div class="mt-8 flex flex-col gap-2">
+            <p
+              class="text-[10px] text-center text-on-surface-variant font-medium flex items-center justify-center gap-1 uppercase tracking-widest">
+              <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span> Cập nhật thời gian thực
+            </p>
+            <p class="text-[9px] text-center text-on-surface-variant opacity-50 uppercase" id="footer-update-time">
+              --:--:-- (GMT+7)</p>
+          </div>
+        </section>
+      </aside>
+    </main>
+
+    <!-- ================================================ -->
+    <!-- ===== AUTO PANEL ===== -->
+    <!-- ================================================ -->
+    <main id="panel-auto" class="panel-view flex-1 flex flex-col bg-surface p-6 gap-6 overflow-y-auto hide-scrollbar">
+      <!-- Top Status Row -->
+      <div class="grid grid-cols-5 gap-4">
+        <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm border border-outline-variant/10">
+          <span class="text-[10px] font-bold text-on-surface-variant tracking-widest uppercase block mb-1">Thứ tự
+            giao</span>
+          <span class="text-2xl font-black text-primary" id="autoOrderNum">#--/--</span>
+        </div>
+        <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm border border-outline-variant/10">
+          <span class="text-[10px] font-bold text-on-surface-variant tracking-widest uppercase block mb-1">Số bước di
+            chuyển</span>
+          <span class="text-2xl font-black text-on-surface" id="autoStepsVal">0 <span
+              class="text-xs font-medium text-on-surface-variant italic">bước</span></span>
+        </div>
+        <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm border border-outline-variant/10">
+          <span class="text-[10px] font-bold text-on-surface-variant tracking-widest uppercase block mb-1">Node đã
+            duyệt</span>
+          <span class="text-2xl font-black text-on-surface" id="autoVisitedVal">0</span>
+        </div>
+        <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm border border-outline-variant/10">
+          <span class="text-[10px] font-bold text-on-surface-variant tracking-widest uppercase block mb-1">Vận
+            tốc</span>
+          <div class="flex items-baseline gap-1">
+            <span class="text-2xl font-black text-on-surface" id="autoSpeedVal">0.0</span>
+            <span class="text-xs font-bold text-on-surface-variant italic">m/s</span>
+          </div>
+        </div>
+        <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm border border-outline-variant/10">
+          <span class="text-[10px] font-bold text-on-surface-variant tracking-widest uppercase block mb-1">Vật
+            cản</span>
+          <div class="flex items-center gap-2">
+            <span class="text-2xl font-black text-on-surface" id="autoObstacleVal">--</span>
+            <span class="text-xs font-bold text-on-surface-variant italic">cm</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Central Grid: Map + Config -->
+      <div class="grid grid-cols-12 gap-6 flex-1">
+        <!-- Map Section -->
+        <div
+          class="col-span-8 bg-surface-container-lowest rounded-2xl shadow-sm overflow-hidden flex flex-col border border-outline-variant/10 min-h-[500px]">
+          <div class="p-4 border-b border-outline-variant/5 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+              <span class="text-primary">🗺️</span>
+              <h2 class="font-bold text-on-surface">Bản đồ Node Lưới — Khu vực Giao hàng</h2>
+            </div>
+            <div class="flex bg-surface-container-low p-1 rounded-lg flex-wrap gap-0.5">
+              <button class="map-tool-btn" id="toolStart" onclick="setMapTool('start')">
+                📌 Xuất phát
+              </button>
+              <button class="map-tool-btn active" id="toolTarget" onclick="setMapTool('target')">
+                📍 Điểm giao
+              </button>
+              <button class="map-tool-btn" id="toolObstacle" onclick="setMapTool('obstacle')">
+                🚫 Vật cản
+              </button>
+              <button class="map-tool-btn" id="toolEdge" onclick="setMapTool('edge')">
+                🔗 Edge
+              </button>
+              <button class="map-tool-btn" id="toolWeight" onclick="setMapTool('weight')">
+                ⚖️ Trọng số
+              </button>
+            </div>
+          </div>
+          <div class="flex-1 relative bg-slate-50 overflow-hidden p-4">
+            <svg id="agvMap" viewBox="0 0 340 270" class="w-full h-full">
+              <g class="track-lines">
+              </g>
+              <g id="pathLayer"></g>
+              <g id="nodeLayer"></g>
+              <g id="robotLayer"></g>
+            </svg>
+          </div>
+          <!-- Legend -->
+          <!-- Animation Controls -->
+          <div id="animationControls" class="hidden border-t border-outline-variant/5 p-3">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <div class="flex items-center gap-1">
+                <button onclick="animPlay()" id="animPlayBtn" class="anim-ctrl-btn" title="Play">▶</button>
+                <button onclick="animPause()" id="animPauseBtn" class="anim-ctrl-btn" title="Pause">⏸</button>
+                <button onclick="animStepFwd()" class="anim-ctrl-btn" title="Step">⏭</button>
+                <button onclick="animReset()" class="anim-ctrl-btn" title="Reset">🔄</button>
+              </div>
+              <div class="flex items-center gap-2 flex-1 max-w-[200px]">
+                <span class="text-[9px] font-bold text-on-surface-variant whitespace-nowrap">CHẬM</span>
+                <input type="range" id="animSpeedSlider" min="1" max="100" value="50" class="flex-1">
+                <span class="text-[9px] font-bold text-on-surface-variant whitespace-nowrap">NHANH</span>
+              </div>
+              <div class="flex items-center gap-3 text-[11px] font-semibold">
+                <span>Step: <b class="text-on-surface" id="animStepNum">0</b>/<b id="animTotalSteps">0</b></span>
+                <span class="flex items-center gap-1"><span class="anim-legend-dot" style="background:#f59e0b"></span> <b class="text-amber-700" id="animExploredCount">0</b></span>
+                <span class="flex items-center gap-1"><span class="anim-legend-dot" style="background:#3b82f6"></span> <b class="text-blue-700" id="animFrontierCount">0</b></span>
+              </div>
+            </div>
+          </div>
+          <div id="deliveryLegend"
+            class="hidden p-3 border-t border-outline-variant/5 flex flex-wrap gap-2 items-center justify-center text-xs font-semibold text-on-surface-variant">
+          </div>
+        </div>
+
+        <!-- Config & Commands -->
+        <div class="col-span-4 flex flex-col gap-6">
+          <!-- Algorithm Config -->
+          <div class="bg-surface-container-lowest p-5 rounded-2xl shadow-sm border border-outline-variant/10">
+            <div class="flex items-center gap-2 mb-4">
+              <span class="text-primary text-xl">⚙️</span>
+              <h3 class="font-bold text-on-surface">Cấu hình thuật toán</h3>
+            </div>
+            <div class="space-y-4">
+              <div>
+                <label class="config-label">Thuật toán tìm đường</label>
+                <select class="config-select" id="algoSel">
+                  <option value="astar">A* (Heuristic Tối ưu)</option>
+                  <option value="bfs">BFS (Loang theo lớp)</option>
+                  <option value="dfs">DFS (Đi sâu trước)</option>
+                  <option value="ucs">UCS (Chi phí đều)</option>
+                  <option value="greedy">Greedy Best-First</option>
+                </select>
+              </div>
+              <div>
+                <label class="config-label">Chế độ giao</label>
+                <select class="config-select" id="orderModeSel">
+                  <option value="single">Giao 1 đơn (Điểm đến)</option>
+                  <option value="multi">Giao nhiều đơn (Tối đa 6)</option>
+                </select>
+              </div>
+              <div>
+                <label class="config-label">Vị trí xuất phát (Kho)</label>
+                <select class="config-select" id="startNode"></select>
+              </div>
+              <div>
+                <label class="config-label">Chế độ giao</label>
+                <select class="config-select" id="deliveryModeSel">
+                  <option value="normal">Bình thường (Theo thuật toán)</option>
+                  <option value="express">Hỏa tốc (Ưu tiên đơn cuối)</option>
+                </select>
+              </div>
+            </div>
+            <div class="pt-2 space-y-2">
+              <button class="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-primary-container text-on-primary px-4 py-3 rounded-xl text-sm font-bold shadow-lg shadow-primary/20 hover:brightness-110 transition-all active:scale-[0.98]" onclick="animStart()">
+                ⏯ MÔ PHỎNG THUẬT TOÁN
+              </button>
+              <button class="w-full flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-3 rounded-xl text-sm font-bold shadow-lg shadow-green-600/20 hover:bg-green-700 transition-all active:scale-[0.98]" id="deliverBtn2" onclick="document.getElementById('deliverBtn').click()">
+                🚀 NẠP LỘ TRÌNH & CHO XE CHẠY
+              </button>
+            </div>
+          </div>
+          <!-- Command Buttons -->
+          <div class="grid grid-cols-2 gap-3">
+            <button
+              class="flex flex-col items-center justify-center p-4 bg-white border border-outline-variant/20 rounded-xl hover:bg-slate-50 transition-colors group"
+              onclick="sendCommand('/return_home')">
+              <span
+                class="text-primary mb-1 group-active:scale-90 transition-transform text-xl">🏭</span>
+              <span class="text-xs font-bold text-primary">VỀ KHO</span>
+            </button>
+            <button
+              class="flex flex-col items-center justify-center p-4 bg-white border border-outline-variant/20 rounded-xl hover:bg-slate-50 transition-colors group"
+              onclick="sendCommand('/resume')">
+              <span
+                class="text-on-surface-variant mb-1 group-active:scale-90 transition-transform text-xl">⏭</span>
+              <span class="text-xs font-bold text-on-surface-variant">TIẾP TỤC</span>
+            </button>
+            <button
+              class="col-span-2 flex items-center justify-center gap-3 p-4 bg-error text-on-error rounded-xl font-black tracking-wider shadow-lg shadow-error/20 active:scale-[0.98] transition-all"
+              onclick="sendCommand('/estop')">
+              ⚠️ DỪNG KHẨN CẤP (E-STOP)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Route Table -->
+      <div class="bg-surface-container-lowest rounded-2xl shadow-sm border border-outline-variant/10 overflow-hidden">
+        <div class="p-4 border-b border-outline-variant/5 flex justify-between items-center">
+          <h2 class="font-bold text-on-surface">Bảng Lộ trình di chuyển</h2>
+          <button
+            class="text-xs font-bold text-primary bg-primary/10 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-primary/20 transition-colors"
+            id="deliverBtn">
+            ▶ NẠP LỘ TRÌNH & BẮT ĐẦU
+          </button>
+        </div>
+        <!-- Delivery Order Info -->
+        <div class="px-4 pt-3 space-y-2" id="deliveryInfoArea">
+          <div class="flex items-start gap-2 bg-primary-fixed/30 rounded-xl p-3">
+            <span class="text-primary text-lg mt-0.5">📋</span>
+            <div>
+              <span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant block">Thứ tự giao
+                đơn</span>
+              <span class="text-sm font-semibold text-on-surface" id="deliveryOrderInfo">Chưa có đơn hàng</span>
+            </div>
+          </div>
+          <div class="flex items-start gap-2 bg-green-50 rounded-xl p-3">
+            <span class="text-green-600 text-lg mt-0.5">🛣️</span>
+            <div>
+              <span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant block">Lộ trình các
+                node đi qua</span>
+              <span class="text-sm font-semibold text-on-surface font-mono" id="deliveryRouteInfo">—</span>
+            </div>
+          </div>
+        </div>
+        <!-- Delivery Status -->
+        <div class="px-4 pt-2" id="deliveryStatusArea">
+          <div class="flex items-center gap-2 rounded-xl p-3 bg-surface-container-high/50 hidden"
+            id="deliveryStatusBanner">
+            <span class="text-lg" id="deliveryStatusIcon">⏳</span>
+            <span class="text-sm font-bold" id="deliveryStatusText">Đang chờ giao hàng...</span>
+          </div>
+        </div>
+        <div id="pathResult" class="p-4 text-sm text-on-surface-variant text-center">Chưa có dữ liệu lộ trình — Chọn
+          điểm giao hàng trên bản đồ</div>
+      </div>
+    </main>
+
+    <!-- ================================================ -->
+    <!-- ===== STATS PANEL ===== -->
+    <!-- ================================================ -->
+    <main id="panel-stats" class="panel-view flex-1 p-8 overflow-y-auto hide-scrollbar">
+      <div class="max-w-7xl mx-auto space-y-8">
+        <!-- KPI Row -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div
+            class="bg-surface-container-lowest p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
+            <p class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Tổng quãng đường</p>
+            <div class="flex items-baseline space-x-1">
+              <span class="text-3xl font-black text-on-surface tracking-tighter" id="kpiDistance">--</span>
+              <span class="text-sm font-bold text-on-surface-variant">cm</span>
+            </div>
+          </div>
+          <div
+            class="bg-surface-container-lowest p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
+            <p class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Đơn thành công</p>
+            <div class="flex items-baseline space-x-1">
+              <span class="text-3xl font-black text-primary tracking-tighter" id="kpiSuccess">--</span>
+              <span class="text-sm font-bold text-on-surface-variant">%</span>
+            </div>
+          </div>
+          <div
+            class="bg-surface-container-lowest p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
+            <p class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Thời gian TB</p>
+            <div class="flex items-baseline space-x-1">
+              <span class="text-3xl font-black text-tertiary tracking-tighter" id="kpiAvgTime">--</span>
+              <span class="text-sm font-bold text-on-surface-variant">s</span>
+            </div>
+          </div>
+          <div
+            class="bg-surface-container-lowest p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
+            <p class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Đã giao hôm nay</p>
+            <div class="flex items-baseline space-x-1">
+              <span class="text-3xl font-black text-on-surface tracking-tighter" id="kpiDelivered">--</span>
+              <span class="text-sm font-bold text-on-surface-variant">đơn</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="grid grid-cols-12 gap-8">
+          <!-- Algorithm Comparison Chart -->
+          <div class="col-span-12 bg-surface-container-lowest p-8 rounded-3xl shadow-sm border border-slate-100">
+            <div class="flex items-center justify-between mb-6">
+              <div>
+                <h3 class="text-lg font-bold tracking-tight">So sánh 5 Thuật toán Tìm đường</h3>
+                <p class="text-xs text-on-surface-variant">So sánh Số bước, Node đã duyệt, Thời gian tính toán giữa các
+                  thuật toán</p>
+              </div>
+              <button
+                class="flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:bg-primary/90 transition-all"
+                id="compareAllBtn">
+                📊 So Sánh Tất Cả
+              </button>
+            </div>
+            <div class="h-80"><canvas id="algoComparisonChart"></canvas></div>
+            <div id="algoCompareResult" class="mt-4 text-sm text-on-surface-variant"></div>
+          </div>
+
+          <!-- Order History -->
+          <div class="col-span-12 bg-surface-container-lowest p-8 rounded-3xl shadow-sm border border-slate-100">
+            <div class="flex items-center justify-between mb-6">
+              <div>
+                <h3 class="text-lg font-bold tracking-tight">Lịch sử Đơn hàng</h3>
+                <p class="text-xs text-on-surface-variant">Chi tiết lộ trình và trạng thái vận hành</p>
+              </div>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-separate border-spacing-y-3">
+                <thead>
+                  <tr class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                    <th class="px-4 py-2">ID Đơn</th>
+                    <th class="px-4 py-2">Thuật toán</th>
+                    <th class="px-4 py-2">Lộ trình (Nodes)</th>
+                    <th class="px-4 py-2">Bước</th>
+                    <th class="px-4 py-2 text-right">Trạng thái</th>
+                  </tr>
+                </thead>
+                <tbody id="orderHistoryBody" class="text-sm">
+                  <tr class="bg-surface-container-low/40">
+                    <td class="px-4 py-4 text-on-surface-variant italic" colspan="5">Chưa có dữ liệu</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+
+</html>
