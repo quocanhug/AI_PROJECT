@@ -106,8 +106,9 @@ float v_hard   = 0.08f;   // Bù lệch mạnh
 float vF = v_base * 0.90f;
 
 // PID struct is defined in do_line.h  (Kp giảm 300→180 tương ứng tốc độ mới)
-PID pidL{180.0f, 8.0f, 0.00f, 0, 0, 0, 255};
-PID pidR{180.0f, 8.0f, 0.00f, 0, 0, 0, 255};
+// out_min = -255 để PID có thể điều chỉnh cả chiều âm (braking/reverse correction)
+PID pidL{180.0f, 8.0f, 0.00f, 0, 0, -255, 255};
+PID pidR{180.0f, 8.0f, 0.00f, 0, 0, -255, 255};
 
 const unsigned long CTRL_DT_MS = 10;
 volatile long encL_count = 0, encR_count = 0, encL_total = 0, encR_total = 0;
@@ -127,6 +128,8 @@ static volatile bool g_line_enabled = true;
 bool recovering = false;
 unsigned long rec_t0 = 0;
 const unsigned long RECOV_TIME_MS = 6000; 
+// bad_t ở file scope để do_line_setup() reset được (tránh lỗi dừng ngay lần đầu)
+static unsigned long bad_t_global = 0;
 
 void IRAM_ATTR encL_isr(){
   uint32_t now = micros();
@@ -206,6 +209,8 @@ void spin_left_deg(double deg, int pwmMax){
   const double Kp_theta = 140.0;   
   const double Kbal = 0.6;         
   const int pwmMin = 150;
+  const unsigned long T_FAIL_MS = 5000;   // ← timeout safety (như spin_right_deg)
+  unsigned long t0 = millis();
   long L0, R0; noInterrupts(); L0 = encL_total; R0 = encR_total; interrupts();
   while (true){
     long L, R; noInterrupts(); L = encL_total; R = encR_total; interrupts();
@@ -213,6 +218,7 @@ void spin_left_deg(double deg, int pwmMax){
     double theta = theta_from_counts(dL, dR, -1, +1); 
     double err = target - theta;
     if (fabs(err) <= deg_tol) break;
+    if (millis() - t0 > T_FAIL_MS) break;              // ← thoát khi encoder bị lỗi
     int pwmCap = (fabs(err) < 15.0*3.141592653589793/180.0) ? (pwmMax*0.5) : pwmMax;
     int base = (int)clamp255((int)(fabs(err)*Kp_theta));
     base = base < pwmMin ? pwmMin : (base > pwmCap ? pwmCap : base);
@@ -273,7 +279,7 @@ void move_forward_distance(double dist_m, int pwmAbs){
 bool move_forward_distance_until_line(double dist_m, int pwmAbs){
   long target = countsForDistance(dist_m);
   long sL, sR; noInterrupts(); sL = encL_total; sR = encR_total; interrupts();
-  motorWriteLR_signed(+pwmAbs, +pwmAbs);qq
+  motorWriteLR_signed(+pwmAbs, +pwmAbs);
   while (true){
     if (!g_line_enabled){ motorsStop(); return false; }
     long cL, cR; noInterrupts(); cL = encL_total; cR = encR_total; interrupts();
@@ -316,6 +322,8 @@ void do_line_setup() {
   vL_ema = 0.0f; vR_ema = 0.0f; pwmL_prev = 0; pwmR_prev = 0;
   us_last_ms = 0; us_dist_cm = 999.0f; obs_hit = 0; obs_latched = false;
   pidL.i_term = 0; pidL.prev_err = 0; pidR.i_term = 0; pidR.prev_err = 0;
+  bad_t_global = millis(); // ← reset để tránh dừng ngay lần chạy đầu
+  recovering = false; avoiding = false; last_seen = NONE; seen_line_ever = false;
   motorsStop();
 }
 
@@ -323,7 +331,8 @@ void do_line_loop() {
   if (!g_line_enabled) { motorsStop(); return; }
 
   static unsigned long t_prev = millis();
-  static unsigned long bad_t = 0; 
+  // bad_t dùng biến file-scope để do_line_setup() reset được
+  unsigned long &bad_t = bad_t_global;
 
   bool L2 = onLine(L2_SENSOR), L1 = onLine(L1_SENSOR);
   bool M  = onLine(M_SENSOR);
@@ -363,7 +372,7 @@ void do_line_loop() {
     } else {
       if (last_seen == LEFT)       { vL_tgt = -vF; vR_tgt =  vF; }
       else if (last_seen == RIGHT) { vL_tgt =  vF; vR_tgt = -vF; }
-      else                         { vL_tgt =  vF; vR_tgt = -vF; } 
+      else                         { vL_tgt = 0;   vR_tgt = 0;   } // NONE: dừng chờ, không đoán hướng
     }
   }
 

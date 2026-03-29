@@ -1,16 +1,26 @@
-#pragma once
+#ifndef DO_LINE_H
+#define DO_LINE_H
+
 #include <Arduino.h>
 
-// Shared PID structure (used by do_line.cpp and route_interpreter.cpp)
-struct PID { float Kp, Ki, Kd; float i_term; float prev_err; float out_min, out_max; };
+enum UIMode {
+  MODE_MANUAL,
+  MODE_LINE_ONLY,
+  MODE_DELIVERY,
+  MODE_AI_ROUTE
+};
+// Định nghĩa struct PID
+struct PID {
+  float Kp, Ki, Kd;
+  float i_term, prev_err;
+  float out_min, out_max;
+};
 
-// 4 operating modes
-enum UIMode { MODE_MANUAL=0, MODE_LINE_ONLY=1, MODE_DELIVERY=2, MODE_AI_ROUTE=3 };
-
-// Safety lock: robot only moves when true
-extern bool is_auto_running;
-
+// Khai báo các hàm để file khác có thể gọi
 void do_line_setup();
 void do_line_loop();
 void do_line_abort();
+int getTargetDirection(int nodeA, int nodeB);
 void motorsStop();
+
+#endif

@@ -1,605 +1,1739 @@
 <!doctype html>
-<html class="light" lang="vi">
-
+<html lang="vi">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>RoboControl — Hệ thống Điều khiển Robot AI</title>
-  <meta name="description"
-    content="AI Robot Pathfinder Dashboard — Hệ thống xe robot giao hàng với thuật toán tìm kiếm AI" />
-  <script src="tailwind.min.js"></script>
-  <script src="chart.min.js"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            "primary": "#005ab4",
-            "primary-container": "#0873df",
-            "on-primary": "#ffffff",
-            "on-primary-container": "#fefcff",
-            "primary-fixed": "#d6e3ff",
-            "primary-fixed-dim": "#aac7ff",
-            "secondary": "#465f89",
-            "secondary-container": "#b7cfff",
-            "on-secondary": "#ffffff",
-            "on-secondary-container": "#405882",
-            "secondary-fixed": "#d6e3ff",
-            "tertiary": "#964400",
-            "tertiary-container": "#bd5700",
-            "on-tertiary": "#ffffff",
-            "tertiary-fixed": "#ffdbc9",
-            "error": "#ba1a1a",
-            "error-container": "#ffdad6",
-            "on-error": "#ffffff",
-            "on-error-container": "#93000a",
-            "surface": "#f8f9fa",
-            "surface-dim": "#d9dadb",
-            "surface-bright": "#f8f9fa",
-            "surface-container-lowest": "#ffffff",
-            "surface-container-low": "#f3f4f5",
-            "surface-container": "#edeeef",
-            "surface-container-high": "#e7e8e9",
-            "surface-container-highest": "#e1e3e4",
-            "surface-variant": "#e1e3e4",
-            "on-surface": "#191c1d",
-            "on-surface-variant": "#414753",
-            "outline": "#717785",
-            "outline-variant": "#c1c6d5",
-            "inverse-surface": "#2e3132",
-            "inverse-on-surface": "#f0f1f2",
-            "inverse-primary": "#aac7ff",
-          },
-          fontFamily: { "headline": ["system-ui","sans-serif"], "body": ["system-ui","sans-serif"], "label": ["system-ui","sans-serif"] },
-          borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" },
-        },
-      },
-    }
-  </script>
-  <link rel="stylesheet" href="style.css" />
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>RoboControl — AI Robot Dashboard</title>
+<style>
+/* ============================================================
+   DESIGN SYSTEM — Industrial Mission-Control Aesthetic
+   Pure CSS, zero framework dependency
+   ============================================================ */
+:root {
+  --bg:        #0b0f1a;
+  --bg2:       #111827;
+  --bg3:       #1a2235;
+  --bg4:       #222d42;
+  --border:    #2a3a55;
+  --border2:   #1e2d45;
+  --txt:       #e2e8f0;
+  --txt2:      #94a3b8;
+  --txt3:      #64748b;
+  --primary:   #38bdf8;
+  --primary-d: #0ea5e9;
+  --primary-bg:#0c2a3f;
+  --green:     #22c55e;
+  --green-bg:  #052e16;
+  --red:       #ef4444;
+  --red-bg:    #2d0a0a;
+  --amber:     #f59e0b;
+  --amber-bg:  #2d1a00;
+  --purple:    #a78bfa;
+  --radius:    10px;
+  --radius-lg: 16px;
+  --shadow:    0 4px 24px rgba(0,0,0,.45);
+  --mono:      'Courier New', 'Lucida Console', monospace;
+  --sans:      'Segoe UI', system-ui, sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--txt);font-family:var(--sans);font-size:14px;display:flex}
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+/* ===== SIDEBAR ===== */
+#sidebar{
+  width:220px;min-width:220px;
+  background:var(--bg2);
+  border-right:1px solid var(--border2);
+  display:flex;flex-direction:column;
+  z-index:20;
+}
+.brand{
+  padding:20px 16px 12px;
+  border-bottom:1px solid var(--border2);
+}
+.brand-title{
+  font-size:18px;font-weight:900;letter-spacing:.08em;
+  color:var(--primary);text-transform:uppercase;
+  display:flex;align-items:center;gap:8px;
+}
+.brand-dot{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--green);
+  box-shadow:0 0 8px var(--green);
+  animation:pulse 2s ease-in-out infinite;
+}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.team-box{
+  padding:12px 16px;border-bottom:1px solid var(--border2);
+}
+.team-label{
+  font-size:9px;font-weight:700;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--txt3);margin-bottom:8px;
+}
+.team-item{display:flex;flex-direction:column;padding:4px 0}
+.team-name{font-size:12px;font-weight:700;color:var(--txt)}
+.team-id{font-size:10px;color:var(--txt3);font-family:var(--mono)}
+
+/* ===== NAV ===== */
+nav{padding:12px 8px;flex:1}
+.nav-item{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 12px;border-radius:var(--radius);
+  color:var(--txt2);cursor:pointer;
+  transition:all .15s;text-decoration:none;
+  font-size:13px;font-weight:600;
+  margin-bottom:2px;
+  border:1px solid transparent;
+}
+.nav-item:hover{background:var(--bg3);color:var(--txt)}
+.nav-item.active{
+  background:var(--primary-bg);
+  color:var(--primary);
+  border-color:rgba(56,189,248,.2);
+}
+.nav-icon{font-size:16px;width:20px;text-align:center}
+
+/* ===== SYS STATUS ===== */
+.sys-status{
+  padding:12px 16px;
+  border-top:1px solid var(--border2);
+}
+.status-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.status-label{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--txt3)}
+.status-val{font-size:12px;font-weight:700;color:var(--txt2)}
+.status-dot{
+  width:7px;height:7px;border-radius:50%;
+  background:var(--amber);
+  transition:background .3s;
+}
+.status-dot.online{background:var(--green);box-shadow:0 0 6px var(--green)}
+
+/* ===== MAIN WRAPPER ===== */
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+
+/* ===== TOP BAR ===== */
+#topbar{
+  height:52px;min-height:52px;
+  background:var(--bg2);
+  border-bottom:1px solid var(--border2);
+  display:flex;align-items:center;
+  justify-content:space-between;
+  padding:0 20px;
+}
+.topbar-left{display:flex;align-items:center;gap:12px}
+.topbar-badge{
+  padding:3px 10px;border-radius:999px;
+  background:var(--primary-bg);
+  color:var(--primary);
+  font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
+  border:1px solid rgba(56,189,248,.25);
+}
+#headerTitle{font-size:15px;font-weight:700;color:var(--txt)}
+.topbar-right{display:flex;align-items:center;gap:12px}
+.clock-box{
+  background:var(--bg3);border:1px solid var(--border);
+  border-radius:var(--radius);padding:5px 12px;
+  font-family:var(--mono);font-size:13px;font-weight:700;
+  color:var(--txt);
+}
+
+/* ===== PANELS ===== */
+.panel{display:none;flex:1;overflow-y:auto;overflow-x:hidden}
+.panel.active{display:flex;flex-direction:column}
+
+/* ===== PANEL: MANUAL ===== */
+#panel-manual.active{display:grid;grid-template-columns:1fr 340px;gap:0;overflow:hidden}
+.manual-left{overflow-y:auto;padding:20px}
+.manual-right{
+  border-left:1px solid var(--border2);
+  overflow-y:auto;padding:20px;
+  display:flex;flex-direction:column;gap:16px;
+  background:var(--bg2);
+}
+
+/* ===== CARD ===== */
+.card{
+  background:var(--bg2);
+  border:1px solid var(--border2);
+  border-radius:var(--radius-lg);
+  overflow:hidden;
+}
+.card-header{
+  padding:14px 18px;
+  border-bottom:1px solid var(--border2);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.card-title{
+  font-size:12px;font-weight:800;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--txt2);
+  display:flex;align-items:center;gap:8px;
+}
+.card-icon{font-size:16px}
+.card-body{padding:18px}
+
+/* ===== D-PAD ===== */
+.dpad-section{
+  display:flex;flex-direction:column;align-items:center;
+  gap:16px;padding:20px;
+}
+.dpad-grid{
+  display:grid;grid-template-columns:repeat(3,72px);
+  grid-template-rows:repeat(3,72px);
+  gap:8px;
+}
+.dpad-btn{
+  background:var(--bg3);
+  border:1px solid var(--border);
+  border-radius:12px;
+  color:var(--txt);
+  font-size:22px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .1s;
+  -webkit-user-select:none;user-select:none;
+  touch-action:none;
+}
+.dpad-btn:hover{background:var(--bg4);border-color:var(--primary);color:var(--primary)}
+.dpad-btn.active-hold{
+  background:var(--primary-bg);border-color:var(--primary);
+  color:var(--primary);transform:scale(.93);
+  box-shadow:0 0 16px rgba(56,189,248,.3);
+}
+.dpad-stop{
+  background:linear-gradient(135deg,#7f1d1d,#991b1b);
+  border-color:#b91c1c;color:#fca5a5;
+  font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
+}
+.dpad-stop:hover{background:linear-gradient(135deg,#991b1b,#b91c1c);border-color:#ef4444;color:#fff}
+
+/* ===== GRIP ===== */
+.grip-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%}
+.grip-btn{
+  padding:12px;border-radius:var(--radius);
+  border:1px solid var(--border);
+  background:var(--bg3);color:var(--txt);
+  font-size:12px;font-weight:700;cursor:pointer;
+  transition:all .15s;letter-spacing:.05em;text-transform:uppercase;
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+}
+.grip-btn:hover{background:var(--amber-bg);border-color:var(--amber);color:var(--amber)}
+.grip-btn span{font-size:18px}
+
+/* ===== SPEED ===== */
+.speed-section{display:flex;flex-direction:column;gap:8px}
+.speed-display{
+  background:var(--bg3);border:1px solid var(--border);
+  border-radius:var(--radius);padding:10px 14px;
+  font-family:var(--mono);font-size:13px;color:var(--primary);
+  text-align:center;font-weight:700;
+}
+.speed-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.spd-btn{
+  padding:8px 4px;border-radius:var(--radius);
+  border:1px solid var(--border);background:var(--bg3);
+  color:var(--txt2);font-size:11px;font-weight:700;cursor:pointer;
+  transition:all .15s;letter-spacing:.03em;
+}
+.spd-btn:hover{background:var(--bg4);color:var(--txt);border-color:var(--primary)}
+
+/* ===== SENSOR CARDS ===== */
+.sensor-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px}
+.sensor-card{
+  background:var(--bg3);border:1px solid var(--border2);
+  border-radius:var(--radius);padding:12px;text-align:center;
+}
+.sensor-label{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--txt3);margin-bottom:6px}
+.sensor-val{font-family:var(--mono);font-size:13px;color:var(--primary);font-weight:700}
+.sensor-dots{display:flex;gap:4px;justify-content:center;margin-top:6px}
+.sdot{width:10px;height:10px;border-radius:50%;background:var(--bg4);transition:all .2s}
+.sdot.on{background:var(--primary);box-shadow:0 0 6px rgba(56,189,248,.6)}
+
+/* ===== TELEMETRY CARDS ===== */
+.tele-card{
+  background:var(--bg3);border:1px solid var(--border2);
+  border-radius:var(--radius);padding:14px;
+}
+.tele-label{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--txt3);margin-bottom:4px}
+.tele-val{font-family:var(--mono);font-size:32px;font-weight:900;color:var(--txt);line-height:1}
+.tele-unit{font-size:13px;color:var(--txt3);font-weight:400}
+.tele-bar{
+  height:4px;background:var(--bg4);border-radius:2px;
+  margin-top:10px;overflow:hidden;
+}
+.tele-bar-fill{
+  height:100%;background:var(--primary);border-radius:2px;
+  width:0%;transition:width .4s ease;
+  box-shadow:0 0 8px rgba(56,189,248,.4);
+}
+.state-block{
+  background:var(--bg3);border:1px solid var(--border2);
+  border-radius:var(--radius);padding:14px;
+}
+.state-mono{font-family:var(--mono);font-size:22px;font-weight:900;color:var(--primary);margin-top:4px}
+
+/* ===== HOME BTN ===== */
+.home-btn{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  padding:12px 20px;border-radius:var(--radius);
+  background:var(--bg3);border:1px solid var(--border);
+  color:var(--txt2);cursor:pointer;font-weight:700;font-size:13px;
+  transition:all .15s;letter-spacing:.04em;text-transform:uppercase;
+  width:100%;
+}
+.home-btn:hover{background:var(--primary-bg);border-color:var(--primary);color:var(--primary)}
+
+/* ===== PANEL: AUTO ===== */
+#panel-auto.active{display:grid;grid-template-rows:auto 1fr auto;overflow:hidden}
+.auto-stats-row{
+  display:grid;grid-template-columns:repeat(5,1fr);
+  gap:8px;padding:12px 16px;
+  border-bottom:1px solid var(--border2);
+  background:var(--bg2);
+}
+.auto-stat{
+  background:var(--bg3);border:1px solid var(--border2);
+  border-radius:var(--radius);padding:10px 12px;
+}
+.auto-stat-label{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--txt3);margin-bottom:2px}
+.auto-stat-val{font-family:var(--mono);font-size:18px;font-weight:900;color:var(--txt)}
+
+.auto-body{display:grid;grid-template-columns:1fr 280px;gap:0;overflow:hidden}
+.map-section{
+  border-right:1px solid var(--border2);
+  display:flex;flex-direction:column;
+  overflow:hidden;
+}
+.map-header{
+  padding:10px 14px;border-bottom:1px solid var(--border2);
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--bg2);
+}
+.map-title{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--txt2)}
+.map-tools{display:flex;gap:4px;flex-wrap:wrap}
+.map-tool{
+  padding:4px 10px;border-radius:6px;border:1px solid var(--border);
+  background:transparent;color:var(--txt3);
+  font-size:11px;font-weight:700;cursor:pointer;
+  transition:all .12s;font-family:var(--sans);
+}
+.map-tool:hover{background:var(--bg3);color:var(--txt)}
+.map-tool.active{background:var(--primary-bg);color:var(--primary);border-color:rgba(56,189,248,.3)}
+
+.map-canvas{flex:1;background:var(--bg);position:relative;overflow:hidden;padding:12px}
+#agvMap{width:100%;height:100%}
+
+/* Animation controls */
+.anim-controls{
+  padding:8px 14px;border-top:1px solid var(--border2);
+  display:none;align-items:center;gap:10px;flex-wrap:wrap;
+  background:var(--bg2);
+}
+.anim-controls.show{display:flex}
+.anim-btn{
+  width:30px;height:30px;border-radius:8px;
+  border:1px solid var(--border);background:var(--bg3);
+  color:var(--txt2);font-size:13px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .12s;
+}
+.anim-btn:hover{background:var(--bg4);color:var(--primary);border-color:var(--primary)}
+.anim-btn:disabled{opacity:.35;cursor:not-allowed}
+.anim-info{font-family:var(--mono);font-size:11px;color:var(--txt3);margin-left:auto}
+.speed-slider{
+  -webkit-appearance:none;height:3px;border-radius:2px;
+  background:var(--border);outline:none;width:100px;
+}
+.speed-slider::-webkit-slider-thumb{
+  -webkit-appearance:none;width:14px;height:14px;border-radius:50%;
+  background:var(--primary);cursor:pointer;
+}
+
+/* Config sidebar */
+.config-section{
+  overflow-y:auto;padding:16px;
+  display:flex;flex-direction:column;gap:12px;
+  background:var(--bg2);
+}
+.config-group{
+  background:var(--bg3);border:1px solid var(--border2);
+  border-radius:var(--radius);padding:14px;
+}
+.config-group-title{
+  font-size:10px;font-weight:800;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--txt3);margin-bottom:10px;
+}
+.config-label{font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:4px;display:block}
+.config-select{
+  width:100%;background:var(--bg2);border:1px solid var(--border);
+  border-radius:8px;color:var(--txt);font-size:12px;padding:7px 10px;
+  font-family:var(--sans);outline:none;cursor:pointer;
+  -webkit-appearance:none;appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2364748b'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;
+  padding-right:28px;
+}
+.config-select:focus{border-color:var(--primary)}
+.config-field{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.config-field:last-child{margin-bottom:0}
+
+/* Action buttons */
+.action-btn{
+  width:100%;padding:10px;border-radius:var(--radius);
+  font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  cursor:pointer;transition:all .15s;font-family:var(--sans);
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  border:1px solid transparent;
+}
+.action-btn.primary{background:var(--primary-d);color:#fff;border-color:var(--primary-d)}
+.action-btn.primary:hover{background:var(--primary);box-shadow:0 0 14px rgba(56,189,248,.35)}
+.action-btn.green{background:#15803d;color:#fff;border-color:#16a34a}
+.action-btn.green:hover{background:#16a34a;box-shadow:0 0 12px rgba(34,197,94,.3)}
+.action-btn.red{background:#991b1b;color:#fca5a5;border-color:#b91c1c}
+.action-btn.red:hover{background:#b91c1c;color:#fff;box-shadow:0 0 14px rgba(239,68,68,.3)}
+.action-btn.ghost{background:var(--bg3);color:var(--txt2);border-color:var(--border)}
+.action-btn.ghost:hover{background:var(--bg4);color:var(--txt)}
+
+/* Path result */
+.path-result{
+  padding:12px 14px;border-top:1px solid var(--border2);
+  font-size:12px;font-family:var(--mono);color:var(--txt3);
+  background:var(--bg2);min-height:44px;
+  word-break:break-all;
+}
+.path-result.ok{color:var(--green)}
+.path-result.err{color:var(--red)}
+.path-result.warn{color:var(--amber)}
+
+/* Delivery info */
+.delivery-info{
+  background:var(--bg3);border:1px solid var(--border2);
+  border-radius:var(--radius);padding:12px;
+  display:flex;flex-direction:column;gap:6px;
+}
+.del-row{display:flex;flex-direction:column;gap:2px}
+.del-row-label{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--txt3)}
+.del-row-val{font-size:12px;font-weight:600;color:var(--txt);font-family:var(--mono)}
+
+/* Legend */
+#deliveryLegend{
+  display:none;padding:8px 14px;border-top:1px solid var(--border2);
+  flex-wrap:wrap;gap:6px;align-items:center;background:var(--bg2);
+}
+#deliveryLegend.show{display:flex}
+.leg-item{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--txt2)}
+.leg-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+
+/* ===== PANEL: STATS ===== */
+#panel-stats{padding:20px;overflow-y:auto}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.kpi-card{
+  background:var(--bg2);border:1px solid var(--border2);
+  border-radius:var(--radius-lg);padding:18px;
+}
+.kpi-label{font-size:9px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--txt3);margin-bottom:6px}
+.kpi-val{font-family:var(--mono);font-size:36px;font-weight:900;color:var(--txt);line-height:1}
+.kpi-unit{font-size:13px;color:var(--txt3);margin-left:4px}
+
+.chart-card{
+  background:var(--bg2);border:1px solid var(--border2);
+  border-radius:var(--radius-lg);padding:20px;margin-bottom:16px;
+}
+.chart-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px}
+.chart-title{font-size:15px;font-weight:800;color:var(--txt)}
+.chart-sub{font-size:11px;color:var(--txt3);margin-top:2px}
+#svgChart{width:100%;height:240px}
+.compare-table{width:100%;border-collapse:separate;border-spacing:0 4px;margin-top:12px;font-size:12px}
+.compare-table th{
+  font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--txt3);padding:4px 10px;text-align:left;
+}
+.compare-table td{padding:8px 10px;background:var(--bg3)}
+.compare-table td:first-child{border-radius:8px 0 0 8px}
+.compare-table td:last-child{border-radius:0 8px 8px 0}
+.rank-gold{color:var(--amber);font-weight:900}
+.rank-silver{color:#94a3b8;font-weight:900}
+.rank-bronze{color:#b45309;font-weight:900}
+
+/* History table */
+.history-card{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius-lg);overflow:hidden}
+.history-table{width:100%;border-collapse:collapse;font-size:12px}
+.history-table th{padding:10px 14px;font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--txt3);background:var(--bg3);text-align:left}
+.history-table td{padding:10px 14px;border-top:1px solid var(--border2);color:var(--txt2)}
+.badge-ok{padding:2px 8px;border-radius:999px;background:#052e16;color:var(--green);font-size:10px;font-weight:700;border:1px solid #166534}
+.badge-run{padding:2px 8px;border-radius:999px;background:var(--amber-bg);color:var(--amber);font-size:10px;font-weight:700;border:1px solid #92400e}
+
+/* ===== SVG MAP NODE STYLES ===== */
+.node-circle{fill:var(--bg3);stroke:var(--border);stroke-width:1.5;transition:all .25s}
+.node-text{fill:var(--txt3);font-size:10px;font-weight:800;text-anchor:middle;dominant-baseline:central;pointer-events:none;font-family:var(--mono)}
+.node-group{cursor:pointer}
+.node-group:hover .node-circle{stroke:var(--primary);stroke-width:2.5}
+
+.node-start .node-circle{fill:var(--primary-d);stroke:var(--primary);filter:drop-shadow(0 0 6px rgba(56,189,248,.5))}
+.node-start .node-text{fill:#fff}
+.node-obstacle .node-circle{fill:#1a1a1a;stroke:var(--txt3);stroke-dasharray:4 2}
+.node-obstacle .node-text{fill:var(--txt3)}
+.node-path .node-circle{fill:#0c2a1a;stroke:var(--green)}
+.node-path .node-text{fill:var(--green)}
+.node-skipped .node-circle{fill:#2d0a0a;stroke:var(--red);stroke-dasharray:4 2}
+.node-skipped .node-text{fill:var(--red)}
+.node-explored .node-circle{fill:#2d2200;stroke:var(--amber)}
+.node-explored .node-text{fill:var(--amber)}
+.node-frontier .node-circle{fill:#0c1a3a;stroke:#60a5fa}
+.node-frontier .node-text{fill:#60a5fa}
+.node-current .node-circle{fill:#7c2d12;stroke:#f97316;filter:drop-shadow(0 0 8px rgba(249,115,22,.6))}
+.node-current .node-text{fill:#fff}
+.node-final-path .node-circle{fill:#052e16;stroke:var(--green);filter:drop-shadow(0 0 5px rgba(34,197,94,.4))}
+.node-final-path .node-text{fill:var(--green)}
+.node-edge-sel .node-circle{stroke:var(--purple);stroke-width:3;stroke-dasharray:4 2;filter:drop-shadow(0 0 8px rgba(167,139,250,.5))}
+
+.target-1 .node-circle{fill:#2d0a0a;stroke:#ef4444;filter:drop-shadow(0 0 5px rgba(239,68,68,.4))}
+.target-1 .node-text{fill:#fca5a5}
+.target-2 .node-circle{fill:#2d1a00;stroke:#f59e0b;filter:drop-shadow(0 0 5px rgba(245,158,11,.4))}
+.target-2 .node-text{fill:#fcd34d}
+.target-3 .node-circle{fill:#1a0a2d;stroke:#a78bfa;filter:drop-shadow(0 0 5px rgba(167,139,250,.4))}
+.target-3 .node-text{fill:#c4b5fd}
+.target-4 .node-circle{fill:#0c2a3f;stroke:var(--primary);filter:drop-shadow(0 0 5px rgba(56,189,248,.4))}
+.target-4 .node-text{fill:var(--primary)}
+.target-5 .node-circle{fill:#0c2d1a;stroke:var(--green);filter:drop-shadow(0 0 5px rgba(34,197,94,.4))}
+.target-5 .node-text{fill:#86efac}
+.target-6 .node-circle{fill:#1a0f0f;stroke:#fb7185;filter:drop-shadow(0 0 5px rgba(251,113,133,.4))}
+.target-6 .node-text{fill:#fda4af}
+
+.track-line{stroke:var(--bg4);stroke-width:7;stroke-linecap:round}
+.segment-path{fill:none;stroke-width:5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:10 5;animation:dashFlow .7s linear infinite}
+@keyframes dashFlow{to{stroke-dashoffset:-30}}
+
+.flow-edge{fill:none;stroke-linecap:round}
+.edge-current{stroke:#f97316;stroke-width:4;opacity:.9}
+.edge-explored{stroke:var(--amber);stroke-width:2.5;opacity:.5}
+.edge-frontier{stroke:#60a5fa;stroke-width:2;opacity:.35}
+
+.robot-indicator{cursor:pointer;transition:transform .3s cubic-bezier(.4,0,.2,1)}
+.robot-glow{fill:rgba(34,197,94,.15);animation:rGlow 2s ease-in-out infinite}
+@keyframes rGlow{0%,100%{opacity:.3}50%{opacity:.1}}
+.robot-arrow{fill:var(--green);stroke:#15803d;stroke-width:1.5;stroke-linejoin:round;filter:drop-shadow(0 2px 4px rgba(34,197,94,.5))}
+.robot-center{fill:#15803d}
+
+/* ===== TOAST ===== */
+#toastContainer{position:fixed;top:68px;right:16px;z-index:100;display:flex;flex-direction:column;gap:6px;pointer-events:none}
+.toast{
+  padding:10px 16px;border-radius:10px;
+  background:var(--bg2);border:1px solid var(--border);
+  font-size:12px;font-weight:700;color:var(--txt);
+  box-shadow:var(--shadow);max-width:300px;
+  animation:toastIn .25s ease;pointer-events:all;
+  border-left:3px solid var(--border);
+}
+.toast.success{border-left-color:var(--green)}
+.toast.error{border-left-color:var(--red)}
+.toast.info{border-left-color:var(--primary)}
+@keyframes toastIn{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:translateX(0)}}
+
+/* ===== STATUS BANNER ===== */
+.delivery-banner{
+  display:none;padding:10px 12px;border-radius:var(--radius);
+  border:1px solid var(--border);background:var(--bg3);
+  font-size:12px;font-weight:700;color:var(--txt2);
+  align-items:center;gap:8px;
+}
+.delivery-banner.show{display:flex}
+.delivery-banner.ok{border-color:#166534;background:var(--green-bg);color:var(--green)}
+.delivery-banner.late{border-color:#991b1b;background:var(--red-bg);color:#fca5a5}
+.delivery-banner.running{border-color:#92400e;background:var(--amber-bg);color:var(--amber)}
+</style>
 </head>
+<body>
 
-<body class="bg-surface font-body text-on-surface flex h-screen overflow-hidden antialiased">
-
-  <!-- ===== SIDEBAR ===== -->
-  <aside class="w-72 bg-surface-container-low flex flex-col border-r border-outline-variant/20 z-20 shrink-0">
-    <!-- Brand + Group Info -->
-    <div class="p-6">
-      <div class="flex items-center gap-2 mb-6">
-        <span class="text-primary text-2xl">🤖</span>
-        <h1 class="font-black tracking-tighter text-xl text-primary uppercase">RoboControl</h1>
-      </div>
-      <div class="bg-surface-container-lowest rounded-xl p-4 shadow-sm">
-        <p class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-3">Thành viên nhóm</p>
-        <ul class="space-y-3">
-          <li class="flex flex-col"><span class="text-sm font-bold text-on-surface">Đinh Quốc Anh</span><span
-              class="text-xs text-on-surface-variant">MSSV: 24133003</span></li>
-          <li class="flex flex-col"><span class="text-sm font-bold text-on-surface">Nguyễn Chiến</span><span
-              class="text-xs text-on-surface-variant">MSSV: 24133007</span></li>
-          <li class="flex flex-col"><span class="text-sm font-bold text-on-surface">Lý Gia Hân</span><span
-              class="text-xs text-on-surface-variant">MSSV: 24133016</span></li>
-          <li class="flex flex-col"><span class="text-sm font-bold text-on-surface">Phan Tuấn Thanh</span><span
-              class="text-xs text-on-surface-variant">MSSV: 24133054</span></li>
-        </ul>
-      </div>
+<!-- ===== SIDEBAR ===== -->
+<aside id="sidebar">
+  <div class="brand">
+    <div class="brand-title">
+      <span>🤖</span> RoboCtrl
+      <span class="brand-dot"></span>
     </div>
-    <!-- Navigation -->
-    <div class="mt-auto p-4 space-y-1">
-      <nav class="space-y-1 mb-8">
-        <a class="nav-link active-nav" id="nav-manual" onclick="switchTab('manual')" href="#">
-          <span style="font-size:1.2rem">🖐️</span>
-          <span class="text-sm font-bold uppercase tracking-wide">Thủ công</span>
-        </a>
-        <a class="nav-link" id="nav-auto" onclick="switchTab('auto')" href="#">
-          <span style="font-size:1.2rem">🤖</span>
-          <span class="text-sm font-bold uppercase tracking-wide">Tự động</span>
-        </a>
-        <a class="nav-link" id="nav-stats" onclick="switchTab('stats')" href="#">
-          <span style="font-size:1.2rem">📊</span>
-          <span class="text-sm font-bold uppercase tracking-wide">Thống kê</span>
-        </a>
-      </nav>
-      <div class="pt-4 border-t border-outline-variant/30 space-y-1">
-        <a class="flex items-center gap-3 px-4 py-2 rounded-xl text-on-surface-variant hover:text-primary transition-all"
-          href="#">
-          <span style="font-size:1.1rem">⚙️</span><span class="text-sm font-medium">Cài
-            đặt</span>
-        </a>
-        <a class="flex items-center gap-3 px-4 py-2 rounded-xl text-on-surface-variant hover:text-primary transition-all"
-          href="#">
-          <span style="font-size:1.1rem">❓</span><span class="text-sm font-medium">Trợ giúp</span>
-        </a>
-      </div>
-      <!-- System Status -->
-      <div class="mt-4 p-4 bg-primary rounded-2xl text-white">
-        <p class="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-2">Hệ thống</p>
-        <div class="flex items-center justify-between">
-          <span class="text-sm font-medium" id="wsStatusText">Đang kết nối...</span>
-          <div class="w-2 h-2 rounded-full bg-yellow-400" id="wsStatusDot"></div>
-        </div>
-      </div>
-    </div>
-  </aside>
-
-  <!-- ===== MAIN CONTENT WRAPPER ===== -->
-  <div class="flex-1 flex flex-col relative overflow-hidden">
-    <!-- TopAppBar -->
-    <header
-      class="h-16 flex justify-between items-center px-8 bg-surface/80 backdrop-blur-md z-10 border-b border-slate-100 shrink-0">
-      <div class="flex items-center gap-4">
-        <span
-          class="px-3 py-1 bg-primary text-on-primary text-[10px] font-black rounded-full uppercase tracking-tighter shadow-sm"
-          id="headerBadge">Live Status</span>
-        <h2 class="font-headline font-bold text-on-surface tracking-tight" id="headerTitle">Hệ thống: Vận hành Thủ công
-        </h2>
-      </div>
-      <div class="flex items-center gap-4">
-        <div class="flex items-center gap-2 bg-surface-container-high px-4 py-2 rounded-full">
-          <span class="text-primary text-sm">🕐</span>
-          <span class="text-sm font-black text-on-surface tracking-tight" id="real-time-clock">--:--:-- --</span>
-        </div>
-        <div
-          class="w-10 h-10 rounded-full bg-primary-fixed flex items-center justify-center border-2 border-surface shadow-sm">
-          <span class="text-primary">🤖</span>
-        </div>
-      </div>
-    </header>
-
-    <!-- ================================================ -->
-    <!-- ===== MANUAL PANEL ===== -->
-    <!-- ================================================ -->
-    <main id="panel-manual" class="panel-view active flex-1 p-8 grid grid-cols-12 gap-8 overflow-y-auto hide-scrollbar">
-      <!-- D-Pad Section -->
-      <section class="col-span-12 lg:col-span-7 flex flex-col gap-8">
-        <div
-          class="bg-surface-container-lowest p-8 rounded-[2rem] shadow-sm border border-outline-variant/30 flex flex-col items-center">
-          <div class="flex items-center justify-between w-full mb-8">
-            <div class="flex items-center gap-3">
-              <span class="text-primary text-2xl">🎮</span>
-              <h3 class="text-lg font-black uppercase tracking-widest text-on-surface">Bộ điều hướng</h3>
-            </div>
-            <span
-              class="px-3 py-1 bg-green-100 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-widest border border-green-200"
-              id="connBadge">Đang kết nối...</span>
-          </div>
-          <!-- Large D-Pad -->
-          <div class="grid grid-cols-3 grid-rows-3 gap-6 w-full max-w-md aspect-square">
-            <button class="dpad-btn hold" data-path="/fwd_left"><span
-                class="rotate-[-45deg] text-3xl group-hover:text-primary">⬆</span></button>
-            <button class="dpad-btn hold" data-path="/forward"><span
-                class="text-4xl group-hover:text-primary">⬆</span></button>
-            <button class="dpad-btn hold" data-path="/fwd_right"><span
-                class="rotate-[45deg] text-3xl group-hover:text-primary">⬆</span></button>
-            <button class="dpad-btn hold" data-path="/left"><span
-                class="text-4xl group-hover:text-primary">⬅</span></button>
-            <button
-              class="bg-error text-on-error hover:brightness-110 transition-all rounded-[2rem] flex items-center justify-center shadow-xl shadow-error/20 active:scale-90 duration-150"
-              id="stopBtn" data-path="/stop"><span class="font-black tracking-tighter text-sm uppercase">Dừng
-                khẩn</span></button>
-            <button class="dpad-btn hold" data-path="/right"><span
-                class="text-4xl group-hover:text-primary">➡</span></button>
-            <button class="dpad-btn hold" data-path="/back_left"><span
-                class="rotate-[-135deg] text-3xl group-hover:text-primary">⬆</span></button>
-            <button class="dpad-btn hold" data-path="/backward"><span
-                class="text-4xl group-hover:text-primary">⬇</span></button>
-            <button class="dpad-btn hold" data-path="/back_right"><span
-                class="rotate-[135deg] text-3xl group-hover:text-primary">⬆</span></button>
-          </div>
-          <div class="mt-8 flex gap-4 w-full justify-center">
-            <button
-              class="bg-primary text-on-primary px-8 py-4 rounded-2xl shadow-lg shadow-primary/20 hover:brightness-110 transition-all font-bold text-sm uppercase tracking-widest flex items-center gap-2"
-              onclick="sendCommand('/return_home')">
-              🏠 Về điểm xuất phát
-            </button>
-          </div>
-        </div>
-        <!-- Sensor Cards -->
-        <div class="grid grid-cols-3 gap-6">
-          <div
-            class="bg-surface-container-lowest p-6 rounded-3xl shadow-sm border border-outline-variant/20 flex flex-col items-center gap-2">
-            <span class="text-primary text-3xl">📡</span>
-            <span class="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Cảm biến line</span>
-            <div class="flex gap-1 mt-1" id="sensorDotsManual">
-              <span class="w-3 h-3 rounded-full bg-surface-container" id="sm0"></span>
-              <span class="w-3 h-3 rounded-full bg-surface-container" id="sm1"></span>
-              <span class="w-3 h-3 rounded-full bg-surface-container" id="sm2"></span>
-              <span class="w-3 h-3 rounded-full bg-surface-container" id="sm3"></span>
-              <span class="w-3 h-3 rounded-full bg-surface-container" id="sm4"></span>
-            </div>
-          </div>
-          <div
-            class="bg-surface-container-lowest p-6 rounded-3xl shadow-sm border border-outline-variant/20 flex flex-col items-center gap-2">
-            <span class="text-primary text-3xl">📏</span>
-            <span class="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Sonar
-              (HC-SR04)</span>
-            <span class="text-xs font-bold" id="sonarStatus">-- cm</span>
-          </div>
-          <div
-            class="bg-surface-container-lowest p-6 rounded-3xl shadow-sm border border-outline-variant/20 flex flex-col items-center gap-2">
-            <span class="text-primary text-3xl">⚡</span>
-            <span class="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Encoder</span>
-            <span class="text-xs font-bold text-green-600" id="encoderStatus">Hoạt động</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- Telemetry Panel -->
-      <aside class="col-span-12 lg:col-span-5 flex flex-col gap-6">
-        <!-- Speed -->
-        <div class="bg-surface-container-lowest p-8 rounded-3xl shadow-sm border border-outline-variant/10">
-          <div class="flex justify-between items-start mb-4">
-            <div>
-              <p class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Vận tốc hiện tại
-              </p>
-              <h3 class="text-5xl font-black text-on-surface tracking-tighter"><span id="teleSpeedVal">0.0</span> <span
-                  class="text-xl text-on-surface-variant font-medium">m/s</span></h3>
-            </div>
-            <div class="bg-primary-fixed w-12 h-12 rounded-2xl flex items-center justify-center">
-              <span class="text-primary text-2xl">⚡</span>
-            </div>
-          </div>
-          <div class="h-2 bg-surface-container rounded-full overflow-hidden">
-            <div class="h-full bg-primary shadow-[0_0_10px_rgba(0,90,180,0.5)] transition-all duration-500"
-              id="speedBar" style="width:0%"></div>
-          </div>
-        </div>
-        <!-- Distance -->
-        <div class="bg-surface-container-lowest p-8 rounded-3xl shadow-sm border border-outline-variant/10">
-          <div class="flex justify-between items-start mb-4">
-            <div>
-              <p class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Quãng đường đã đi
-              </p>
-              <h3 class="text-5xl font-black text-on-surface tracking-tighter"><span id="teleDistVal">0</span> <span
-                  class="text-xl text-on-surface-variant font-medium">cm</span></h3>
-            </div>
-            <div class="bg-green-100 w-12 h-12 rounded-2xl flex items-center justify-center">
-              <span class="text-green-600 text-2xl">📐</span>
-            </div>
-          </div>
-        </div>
-        <!-- Robot State/Step -->
-        <section class="bg-surface-container-lowest p-8 rounded-[2rem] shadow-sm border border-primary/20 flex-1">
-          <div class="flex items-center gap-3 mb-6">
-            <div class="bg-primary/10 p-2 rounded-xl"><span
-                class="text-primary">📍</span></div>
-            <h3 class="text-lg font-black uppercase tracking-widest text-on-surface">Trạng thái Robot</h3>
-          </div>
-          <div class="space-y-4">
-            <div class="bg-surface p-6 rounded-2xl border border-outline-variant/30">
-              <span class="text-xs font-bold text-on-surface-variant uppercase tracking-tighter block mb-1">Trạng thái
-                máy</span>
-              <span class="font-mono text-3xl font-black text-primary block" id="teleStateVal">IDLE</span>
-            </div>
-            <div class="bg-surface p-6 rounded-2xl border border-outline-variant/30">
-              <span class="text-xs font-bold text-on-surface-variant uppercase tracking-tighter block mb-1">Bước / Tổng
-                lệnh</span>
-              <span class="font-mono text-3xl font-black text-primary block" id="teleStepVal">0 / 0</span>
-            </div>
-          </div>
-          <div class="mt-8 flex flex-col gap-2">
-            <p
-              class="text-[10px] text-center text-on-surface-variant font-medium flex items-center justify-center gap-1 uppercase tracking-widest">
-              <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span> Cập nhật thời gian thực
-            </p>
-            <p class="text-[9px] text-center text-on-surface-variant opacity-50 uppercase" id="footer-update-time">
-              --:--:-- (GMT+7)</p>
-          </div>
-        </section>
-      </aside>
-    </main>
-
-    <!-- ================================================ -->
-    <!-- ===== AUTO PANEL ===== -->
-    <!-- ================================================ -->
-    <main id="panel-auto" class="panel-view flex-1 flex flex-col bg-surface p-6 gap-6 overflow-y-auto hide-scrollbar">
-      <!-- Top Status Row -->
-      <div class="grid grid-cols-5 gap-4">
-        <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm border border-outline-variant/10">
-          <span class="text-[10px] font-bold text-on-surface-variant tracking-widest uppercase block mb-1">Thứ tự
-            giao</span>
-          <span class="text-2xl font-black text-primary" id="autoOrderNum">#--/--</span>
-        </div>
-        <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm border border-outline-variant/10">
-          <span class="text-[10px] font-bold text-on-surface-variant tracking-widest uppercase block mb-1">Số bước di
-            chuyển</span>
-          <span class="text-2xl font-black text-on-surface" id="autoStepsVal">0 <span
-              class="text-xs font-medium text-on-surface-variant italic">bước</span></span>
-        </div>
-        <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm border border-outline-variant/10">
-          <span class="text-[10px] font-bold text-on-surface-variant tracking-widest uppercase block mb-1">Node đã
-            duyệt</span>
-          <span class="text-2xl font-black text-on-surface" id="autoVisitedVal">0</span>
-        </div>
-        <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm border border-outline-variant/10">
-          <span class="text-[10px] font-bold text-on-surface-variant tracking-widest uppercase block mb-1">Vận
-            tốc</span>
-          <div class="flex items-baseline gap-1">
-            <span class="text-2xl font-black text-on-surface" id="autoSpeedVal">0.0</span>
-            <span class="text-xs font-bold text-on-surface-variant italic">m/s</span>
-          </div>
-        </div>
-        <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm border border-outline-variant/10">
-          <span class="text-[10px] font-bold text-on-surface-variant tracking-widest uppercase block mb-1">Vật
-            cản</span>
-          <div class="flex items-center gap-2">
-            <span class="text-2xl font-black text-on-surface" id="autoObstacleVal">--</span>
-            <span class="text-xs font-bold text-on-surface-variant italic">cm</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Central Grid: Map + Config -->
-      <div class="grid grid-cols-12 gap-6 flex-1">
-        <!-- Map Section -->
-        <div
-          class="col-span-8 bg-surface-container-lowest rounded-2xl shadow-sm overflow-hidden flex flex-col border border-outline-variant/10 min-h-[500px]">
-          <div class="p-4 border-b border-outline-variant/5 flex justify-between items-center">
-            <div class="flex items-center gap-3">
-              <span class="text-primary">🗺️</span>
-              <h2 class="font-bold text-on-surface">Bản đồ Node Lưới — Khu vực Giao hàng</h2>
-            </div>
-            <div class="flex bg-surface-container-low p-1 rounded-lg flex-wrap gap-0.5">
-              <button class="map-tool-btn" id="toolStart" onclick="setMapTool('start')">
-                📌 Xuất phát
-              </button>
-              <button class="map-tool-btn active" id="toolTarget" onclick="setMapTool('target')">
-                📍 Điểm giao
-              </button>
-              <button class="map-tool-btn" id="toolObstacle" onclick="setMapTool('obstacle')">
-                🚫 Vật cản
-              </button>
-              <button class="map-tool-btn" id="toolEdge" onclick="setMapTool('edge')">
-                🔗 Edge
-              </button>
-              <button class="map-tool-btn" id="toolWeight" onclick="setMapTool('weight')">
-                ⚖️ Trọng số
-              </button>
-            </div>
-          </div>
-          <div class="flex-1 relative bg-slate-50 overflow-hidden p-4">
-            <svg id="agvMap" viewBox="0 0 340 270" class="w-full h-full">
-              <g class="track-lines">
-              </g>
-              <g id="pathLayer"></g>
-              <g id="nodeLayer"></g>
-              <g id="robotLayer"></g>
-            </svg>
-          </div>
-          <!-- Legend -->
-          <!-- Animation Controls -->
-          <div id="animationControls" class="hidden border-t border-outline-variant/5 p-3">
-            <div class="flex items-center justify-between gap-3 flex-wrap">
-              <div class="flex items-center gap-1">
-                <button onclick="animPlay()" id="animPlayBtn" class="anim-ctrl-btn" title="Play">▶</button>
-                <button onclick="animPause()" id="animPauseBtn" class="anim-ctrl-btn" title="Pause">⏸</button>
-                <button onclick="animStepFwd()" class="anim-ctrl-btn" title="Step">⏭</button>
-                <button onclick="animReset()" class="anim-ctrl-btn" title="Reset">🔄</button>
-              </div>
-              <div class="flex items-center gap-2 flex-1 max-w-[200px]">
-                <span class="text-[9px] font-bold text-on-surface-variant whitespace-nowrap">CHẬM</span>
-                <input type="range" id="animSpeedSlider" min="1" max="100" value="50" class="flex-1">
-                <span class="text-[9px] font-bold text-on-surface-variant whitespace-nowrap">NHANH</span>
-              </div>
-              <div class="flex items-center gap-3 text-[11px] font-semibold">
-                <span>Step: <b class="text-on-surface" id="animStepNum">0</b>/<b id="animTotalSteps">0</b></span>
-                <span class="flex items-center gap-1"><span class="anim-legend-dot" style="background:#f59e0b"></span> <b class="text-amber-700" id="animExploredCount">0</b></span>
-                <span class="flex items-center gap-1"><span class="anim-legend-dot" style="background:#3b82f6"></span> <b class="text-blue-700" id="animFrontierCount">0</b></span>
-              </div>
-            </div>
-          </div>
-          <div id="deliveryLegend"
-            class="hidden p-3 border-t border-outline-variant/5 flex flex-wrap gap-2 items-center justify-center text-xs font-semibold text-on-surface-variant">
-          </div>
-        </div>
-
-        <!-- Config & Commands -->
-        <div class="col-span-4 flex flex-col gap-6">
-          <!-- Algorithm Config -->
-          <div class="bg-surface-container-lowest p-5 rounded-2xl shadow-sm border border-outline-variant/10">
-            <div class="flex items-center gap-2 mb-4">
-              <span class="text-primary text-xl">⚙️</span>
-              <h3 class="font-bold text-on-surface">Cấu hình thuật toán</h3>
-            </div>
-            <div class="space-y-4">
-              <div>
-                <label class="config-label">Thuật toán tìm đường</label>
-                <select class="config-select" id="algoSel">
-                  <option value="astar">A* (Heuristic Tối ưu)</option>
-                  <option value="bfs">BFS (Loang theo lớp)</option>
-                  <option value="dfs">DFS (Đi sâu trước)</option>
-                  <option value="ucs">UCS (Chi phí đều)</option>
-                  <option value="greedy">Greedy Best-First</option>
-                </select>
-              </div>
-              <div>
-                <label class="config-label">Chế độ giao</label>
-                <select class="config-select" id="orderModeSel">
-                  <option value="single">Giao 1 đơn (Điểm đến)</option>
-                  <option value="multi">Giao nhiều đơn (Tối đa 6)</option>
-                </select>
-              </div>
-              <div>
-                <label class="config-label">Vị trí xuất phát (Kho)</label>
-                <select class="config-select" id="startNode"></select>
-              </div>
-              <div>
-                <label class="config-label">Chế độ giao</label>
-                <select class="config-select" id="deliveryModeSel">
-                  <option value="normal">Bình thường (Theo thuật toán)</option>
-                  <option value="express">Hỏa tốc (Ưu tiên đơn cuối)</option>
-                </select>
-              </div>
-            </div>
-            <div class="pt-2 space-y-2">
-              <button class="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-primary-container text-on-primary px-4 py-3 rounded-xl text-sm font-bold shadow-lg shadow-primary/20 hover:brightness-110 transition-all active:scale-[0.98]" onclick="animStart()">
-                ⏯ MÔ PHỎNG THUẬT TOÁN
-              </button>
-              <button class="w-full flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-3 rounded-xl text-sm font-bold shadow-lg shadow-green-600/20 hover:bg-green-700 transition-all active:scale-[0.98]" id="deliverBtn2" onclick="document.getElementById('deliverBtn').click()">
-                🚀 NẠP LỘ TRÌNH & CHO XE CHẠY
-              </button>
-            </div>
-          </div>
-          <!-- Command Buttons -->
-          <div class="grid grid-cols-2 gap-3">
-            <button
-              class="flex flex-col items-center justify-center p-4 bg-white border border-outline-variant/20 rounded-xl hover:bg-slate-50 transition-colors group"
-              onclick="sendCommand('/return_home')">
-              <span
-                class="text-primary mb-1 group-active:scale-90 transition-transform text-xl">🏭</span>
-              <span class="text-xs font-bold text-primary">VỀ KHO</span>
-            </button>
-            <button
-              class="flex flex-col items-center justify-center p-4 bg-white border border-outline-variant/20 rounded-xl hover:bg-slate-50 transition-colors group"
-              onclick="sendCommand('/resume')">
-              <span
-                class="text-on-surface-variant mb-1 group-active:scale-90 transition-transform text-xl">⏭</span>
-              <span class="text-xs font-bold text-on-surface-variant">TIẾP TỤC</span>
-            </button>
-            <button
-              class="col-span-2 flex items-center justify-center gap-3 p-4 bg-error text-on-error rounded-xl font-black tracking-wider shadow-lg shadow-error/20 active:scale-[0.98] transition-all"
-              onclick="sendCommand('/estop')">
-              ⚠️ DỪNG KHẨN CẤP (E-STOP)
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Route Table -->
-      <div class="bg-surface-container-lowest rounded-2xl shadow-sm border border-outline-variant/10 overflow-hidden">
-        <div class="p-4 border-b border-outline-variant/5 flex justify-between items-center">
-          <h2 class="font-bold text-on-surface">Bảng Lộ trình di chuyển</h2>
-          <button
-            class="text-xs font-bold text-primary bg-primary/10 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-primary/20 transition-colors"
-            id="deliverBtn">
-            ▶ NẠP LỘ TRÌNH & BẮT ĐẦU
-          </button>
-        </div>
-        <!-- Delivery Order Info -->
-        <div class="px-4 pt-3 space-y-2" id="deliveryInfoArea">
-          <div class="flex items-start gap-2 bg-primary-fixed/30 rounded-xl p-3">
-            <span class="text-primary text-lg mt-0.5">📋</span>
-            <div>
-              <span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant block">Thứ tự giao
-                đơn</span>
-              <span class="text-sm font-semibold text-on-surface" id="deliveryOrderInfo">Chưa có đơn hàng</span>
-            </div>
-          </div>
-          <div class="flex items-start gap-2 bg-green-50 rounded-xl p-3">
-            <span class="text-green-600 text-lg mt-0.5">🛣️</span>
-            <div>
-              <span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant block">Lộ trình các
-                node đi qua</span>
-              <span class="text-sm font-semibold text-on-surface font-mono" id="deliveryRouteInfo">—</span>
-            </div>
-          </div>
-        </div>
-        <!-- Delivery Status -->
-        <div class="px-4 pt-2" id="deliveryStatusArea">
-          <div class="flex items-center gap-2 rounded-xl p-3 bg-surface-container-high/50 hidden"
-            id="deliveryStatusBanner">
-            <span class="text-lg" id="deliveryStatusIcon">⏳</span>
-            <span class="text-sm font-bold" id="deliveryStatusText">Đang chờ giao hàng...</span>
-          </div>
-        </div>
-        <div id="pathResult" class="p-4 text-sm text-on-surface-variant text-center">Chưa có dữ liệu lộ trình — Chọn
-          điểm giao hàng trên bản đồ</div>
-      </div>
-    </main>
-
-    <!-- ================================================ -->
-    <!-- ===== STATS PANEL ===== -->
-    <!-- ================================================ -->
-    <main id="panel-stats" class="panel-view flex-1 p-8 overflow-y-auto hide-scrollbar">
-      <div class="max-w-7xl mx-auto space-y-8">
-        <!-- KPI Row -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div
-            class="bg-surface-container-lowest p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
-            <p class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Tổng quãng đường</p>
-            <div class="flex items-baseline space-x-1">
-              <span class="text-3xl font-black text-on-surface tracking-tighter" id="kpiDistance">--</span>
-              <span class="text-sm font-bold text-on-surface-variant">cm</span>
-            </div>
-          </div>
-          <div
-            class="bg-surface-container-lowest p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
-            <p class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Đơn thành công</p>
-            <div class="flex items-baseline space-x-1">
-              <span class="text-3xl font-black text-primary tracking-tighter" id="kpiSuccess">--</span>
-              <span class="text-sm font-bold text-on-surface-variant">%</span>
-            </div>
-          </div>
-          <div
-            class="bg-surface-container-lowest p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
-            <p class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Thời gian TB</p>
-            <div class="flex items-baseline space-x-1">
-              <span class="text-3xl font-black text-tertiary tracking-tighter" id="kpiAvgTime">--</span>
-              <span class="text-sm font-bold text-on-surface-variant">s</span>
-            </div>
-          </div>
-          <div
-            class="bg-surface-container-lowest p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
-            <p class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Đã giao hôm nay</p>
-            <div class="flex items-baseline space-x-1">
-              <span class="text-3xl font-black text-on-surface tracking-tighter" id="kpiDelivered">--</span>
-              <span class="text-sm font-bold text-on-surface-variant">đơn</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Charts Row -->
-        <div class="grid grid-cols-12 gap-8">
-          <!-- Algorithm Comparison Chart -->
-          <div class="col-span-12 bg-surface-container-lowest p-8 rounded-3xl shadow-sm border border-slate-100">
-            <div class="flex items-center justify-between mb-6">
-              <div>
-                <h3 class="text-lg font-bold tracking-tight">So sánh 5 Thuật toán Tìm đường</h3>
-                <p class="text-xs text-on-surface-variant">So sánh Số bước, Node đã duyệt, Thời gian tính toán giữa các
-                  thuật toán</p>
-              </div>
-              <button
-                class="flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:bg-primary/90 transition-all"
-                id="compareAllBtn">
-                📊 So Sánh Tất Cả
-              </button>
-            </div>
-            <div class="h-80"><canvas id="algoComparisonChart"></canvas></div>
-            <div id="algoCompareResult" class="mt-4 text-sm text-on-surface-variant"></div>
-          </div>
-
-          <!-- Order History -->
-          <div class="col-span-12 bg-surface-container-lowest p-8 rounded-3xl shadow-sm border border-slate-100">
-            <div class="flex items-center justify-between mb-6">
-              <div>
-                <h3 class="text-lg font-bold tracking-tight">Lịch sử Đơn hàng</h3>
-                <p class="text-xs text-on-surface-variant">Chi tiết lộ trình và trạng thái vận hành</p>
-              </div>
-            </div>
-            <div class="overflow-x-auto">
-              <table class="w-full text-left border-separate border-spacing-y-3">
-                <thead>
-                  <tr class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-                    <th class="px-4 py-2">ID Đơn</th>
-                    <th class="px-4 py-2">Thuật toán</th>
-                    <th class="px-4 py-2">Lộ trình (Nodes)</th>
-                    <th class="px-4 py-2">Bước</th>
-                    <th class="px-4 py-2 text-right">Trạng thái</th>
-                  </tr>
-                </thead>
-                <tbody id="orderHistoryBody" class="text-sm">
-                  <tr class="bg-surface-container-low/40">
-                    <td class="px-4 py-4 text-on-surface-variant italic" colspan="5">Chưa có dữ liệu</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-    </main>
   </div>
+  <div class="team-box">
+    <div class="team-label">Thành viên nhóm</div>
+    <div class="team-item"><span class="team-name">Đinh Quốc Anh</span><span class="team-id">24133003</span></div>
+    <div class="team-item"><span class="team-name">Nguyễn Chiến</span><span class="team-id">24133007</span></div>
+    <div class="team-item"><span class="team-name">Lý Gia Hân</span><span class="team-id">24133016</span></div>
+    <div class="team-item"><span class="team-name">Phan Tuấn Thanh</span><span class="team-id">24133054</span></div>
+  </div>
+  <nav>
+    <a class="nav-item active" id="nav-manual" onclick="switchTab('manual')" href="#">
+      <span class="nav-icon">🖐️</span> Thủ công
+    </a>
+    <a class="nav-item" id="nav-auto" onclick="switchTab('auto')" href="#">
+      <span class="nav-icon">🤖</span> Tự động
+    </a>
+    <a class="nav-item" id="nav-stats" onclick="switchTab('stats')" href="#">
+      <span class="nav-icon">📊</span> Thống kê
+    </a>
+  </nav>
+  <div class="sys-status">
+    <div class="status-label">Hệ thống</div>
+    <div class="status-row">
+      <span class="status-val" id="wsStatusText">Đang kết nối...</span>
+      <span class="status-dot" id="wsStatusDot"></span>
+    </div>
+  </div>
+</aside>
 
-  <script src="script.js"></script>
+<!-- ===== MAIN ===== -->
+<div id="main">
+  <!-- Top bar -->
+  <header id="topbar">
+    <div class="topbar-left">
+      <span class="topbar-badge">Live Status</span>
+      <span id="headerTitle">Hệ thống: Vận hành Thủ công</span>
+    </div>
+    <div class="topbar-right">
+      <div class="clock-box" id="clock">--:--:--</div>
+      <span id="connBadge" class="topbar-badge" style="background:rgba(245,158,11,.15);color:var(--amber);border-color:rgba(245,158,11,.3)">Đang kết nối...</span>
+    </div>
+  </header>
+
+  <!-- ========== PANEL: MANUAL ========== -->
+  <main id="panel-manual" class="panel active">
+    <div class="manual-left">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title"><span class="card-icon">🎮</span> Bộ điều hướng</span>
+        </div>
+        <div class="dpad-section">
+          <div class="dpad-grid">
+            <button class="dpad-btn hold" data-path="/fwd_left">↖</button>
+            <button class="dpad-btn hold" data-path="/forward">↑</button>
+            <button class="dpad-btn hold" data-path="/fwd_right">↗</button>
+            <button class="dpad-btn hold" data-path="/left">←</button>
+            <button class="dpad-btn dpad-stop" id="stopBtn" data-path="/stop">DỪNG<br>KHẨN</button>
+            <button class="dpad-btn hold" data-path="/right">→</button>
+            <button class="dpad-btn hold" data-path="/back_left">↙</button>
+            <button class="dpad-btn hold" data-path="/backward">↓</button>
+            <button class="dpad-btn hold" data-path="/back_right">↘</button>
+          </div>
+          <div class="grip-row">
+            <button class="grip-btn" onclick="send('/grip/open')"><span>🔓</span>Mở kẹp</button>
+            <button class="grip-btn" onclick="send('/grip/close')"><span>🔒</span>Đóng kẹp</button>
+          </div>
+          <button class="home-btn" onclick="sendCommand('/return_home')">🏠 Về điểm xuất phát</button>
+        </div>
+        <!-- Sensor row -->
+        <div style="padding:0 18px 16px">
+          <div class="sensor-row">
+            <div class="sensor-card">
+              <div class="sensor-label">📡 Cảm biến line</div>
+              <div class="sensor-dots">
+                <span class="sdot" id="sm0"></span><span class="sdot" id="sm1"></span>
+                <span class="sdot" id="sm2"></span><span class="sdot" id="sm3"></span>
+                <span class="sdot" id="sm4"></span>
+              </div>
+            </div>
+            <div class="sensor-card">
+              <div class="sensor-label">📏 Sonar</div>
+              <div class="sensor-val" id="sonarStatus">-- cm</div>
+            </div>
+            <div class="sensor-card">
+              <div class="sensor-label">⚡ Encoder</div>
+              <div class="sensor-val" style="color:var(--green);font-size:11px" id="encoderStatus">Hoạt động</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Telemetry -->
+    <div class="manual-right">
+      <div class="tele-card">
+        <div class="tele-label">Vận tốc</div>
+        <div><span class="tele-val" id="teleSpeedVal">0.00</span><span class="tele-unit"> m/s</span></div>
+        <div class="tele-bar"><div class="tele-bar-fill" id="speedBar"></div></div>
+      </div>
+      <div class="tele-card">
+        <div class="tele-label">Quãng đường đã đi</div>
+        <div><span class="tele-val" id="teleDistVal">0</span><span class="tele-unit"> cm</span></div>
+      </div>
+      <div class="state-block">
+        <div class="tele-label">Trạng thái máy</div>
+        <div class="state-mono" id="teleStateVal">IDLE</div>
+      </div>
+      <div class="state-block">
+        <div class="tele-label">Bước / Tổng lệnh</div>
+        <div class="state-mono" id="teleStepVal">0 / 0</div>
+      </div>
+      <!-- Speed controls -->
+      <div class="speed-section">
+        <div class="speed-display" id="spdText">Lin: 130  |  Rot: 110</div>
+        <div class="speed-grid">
+          <button class="spd-btn" data-path="/speed/lin/down" onclick="sendSpd(this)">Lin −</button>
+          <button class="spd-btn" data-path="/speed/lin/up" onclick="sendSpd(this)">Lin +</button>
+          <button class="spd-btn" data-path="/speed/rot/down" onclick="sendSpd(this)">Rot −</button>
+          <button class="spd-btn" data-path="/speed/rot/up" onclick="sendSpd(this)">Rot +</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ========== PANEL: AUTO ========== -->
+  <main id="panel-auto" class="panel">
+    <!-- Stats row -->
+    <div class="auto-stats-row">
+      <div class="auto-stat"><div class="auto-stat-label">Thứ tự giao</div><div class="auto-stat-val" id="autoOrderNum">#--/--</div></div>
+      <div class="auto-stat"><div class="auto-stat-label">Số bước</div><div class="auto-stat-val" id="autoStepsVal">—</div></div>
+      <div class="auto-stat"><div class="auto-stat-label">Node duyệt</div><div class="auto-stat-val" id="autoVisitedVal">—</div></div>
+      <div class="auto-stat"><div class="auto-stat-label">Vận tốc</div><div class="auto-stat-val" id="autoSpeedVal">0.0<span style="font-size:11px;color:var(--txt3)"> m/s</span></div></div>
+      <div class="auto-stat"><div class="auto-stat-label">Vật cản</div><div class="auto-stat-val" id="autoObstacleVal">--<span style="font-size:11px;color:var(--txt3)"> cm</span></div></div>
+    </div>
+
+    <!-- Body -->
+    <div class="auto-body">
+      <!-- Map -->
+      <div class="map-section">
+        <div class="map-header">
+          <span class="map-title">🗺️ Bản đồ Node Lưới</span>
+          <div class="map-tools">
+            <button class="map-tool" id="toolStart" onclick="setMapTool('start')">📌 Xuất phát</button>
+            <button class="map-tool active" id="toolTarget" onclick="setMapTool('target')">📍 Đích</button>
+            <button class="map-tool" id="toolObstacle" onclick="setMapTool('obstacle')">🚫 Vật cản</button>
+            <button class="map-tool" id="toolEdge" onclick="setMapTool('edge')">🔗 Edge</button>
+            <button class="map-tool" id="toolWeight" onclick="setMapTool('weight')">⚖️ Trọng số</button>
+          </div>
+        </div>
+        <div class="map-canvas">
+          <svg id="agvMap" viewBox="0 0 340 270">
+            <g class="track-lines"></g>
+            <g id="pathLayer"></g>
+            <g id="nodeLayer"></g>
+            <g id="robotLayer"></g>
+          </svg>
+        </div>
+        <div class="anim-controls" id="animationControls">
+          <button class="anim-btn" onclick="animPlay()" title="Play">▶</button>
+          <button class="anim-btn" onclick="animPause()" title="Pause">⏸</button>
+          <button class="anim-btn" onclick="animStepFwd()" title="Step">⏭</button>
+          <button class="anim-btn" onclick="animReset()" title="Reset">🔄</button>
+          <input type="range" class="speed-slider" id="animSpeedSlider" min="1" max="100" value="50">
+          <span class="anim-info">
+            Step <b id="animStepNum">0</b>/<b id="animTotalSteps">0</b>
+            &nbsp;|&nbsp; 🟡<b id="animExploredCount">0</b>
+            &nbsp;🔵<b id="animFrontierCount">0</b>
+          </span>
+        </div>
+        <div id="deliveryLegend"></div>
+        <div class="path-result" id="pathResult">Chọn điểm xuất phát và đích trên bản đồ</div>
+      </div>
+
+      <!-- Config -->
+      <div class="config-section">
+        <div class="config-group">
+          <div class="config-group-title">⚙️ Cấu hình thuật toán</div>
+          <div class="config-field">
+            <label class="config-label">Thuật toán tìm đường</label>
+            <select class="config-select" id="algoSel">
+              <option value="astar">A* — Heuristic tối ưu</option>
+              <option value="bfs">BFS — Loang theo lớp</option>
+              <option value="dfs">DFS — Đi sâu trước</option>
+              <option value="ucs">UCS — Chi phí đều</option>
+              <option value="greedy">Greedy Best-First</option>
+            </select>
+          </div>
+          <div class="config-field">
+            <label class="config-label">Chế độ giao</label>
+            <select class="config-select" id="orderModeSel">
+              <option value="single">Giao 1 đơn</option>
+              <option value="multi">Giao nhiều đơn (tối đa 6)</option>
+            </select>
+          </div>
+          <div class="config-field">
+            <label class="config-label">Vị trí xuất phát</label>
+            <select class="config-select" id="startNode"></select>
+          </div>
+          <div class="config-field">
+            <label class="config-label">Ưu tiên giao</label>
+            <select class="config-select" id="deliveryModeSel">
+              <option value="normal">Bình thường</option>
+              <option value="express">Hỏa tốc 🚀</option>
+            </select>
+          </div>
+        </div>
+
+        <button class="action-btn primary" onclick="animStart()">⏯ Mô phỏng thuật toán</button>
+        <button class="action-btn green" id="deliverBtn">🚀 Nạp lộ trình &amp; cho xe chạy</button>
+
+        <div class="delivery-info">
+          <div class="del-row">
+            <span class="del-row-label">Thứ tự đơn</span>
+            <span class="del-row-val" id="deliveryOrderInfo">Chưa có đơn hàng</span>
+          </div>
+          <div class="del-row">
+            <span class="del-row-label">Lộ trình nodes</span>
+            <span class="del-row-val" id="deliveryRouteInfo">—</span>
+          </div>
+        </div>
+
+        <div class="delivery-banner" id="deliveryStatusBanner">
+          <span id="deliveryStatusIcon">⏳</span>
+          <span id="deliveryStatusText">Đang chờ...</span>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button class="action-btn ghost" onclick="sendCommand('/return_home')">🏭 Về kho</button>
+          <button class="action-btn ghost" onclick="sendCommand('/resume')">⏭ Tiếp tục</button>
+        </div>
+        <button class="action-btn red" onclick="sendCommand('/estop')">⚠️ DỪNG KHẨN CẤP</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- ========== PANEL: STATS ========== -->
+  <main id="panel-stats" class="panel">
+    <div class="stats-grid">
+      <div class="kpi-card"><div class="kpi-label">Tổng quãng đường</div><div><span class="kpi-val" id="kpiDistance">--</span><span class="kpi-unit">cm</span></div></div>
+      <div class="kpi-card"><div class="kpi-label">Đơn thành công</div><div><span class="kpi-val" style="color:var(--green)" id="kpiSuccess">--</span><span class="kpi-unit">%</span></div></div>
+      <div class="kpi-card"><div class="kpi-label">Thời gian trung bình</div><div><span class="kpi-val" style="color:var(--amber)" id="kpiAvgTime">--</span><span class="kpi-unit">s</span></div></div>
+      <div class="kpi-card"><div class="kpi-label">Đã giao hôm nay</div><div><span class="kpi-val" id="kpiDelivered">--</span><span class="kpi-unit">đơn</span></div></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">So sánh 5 Thuật toán Tìm đường</div>
+          <div class="chart-sub">Số bước, node duyệt, thời gian tính toán</div>
+        </div>
+        <button class="action-btn primary" style="width:auto;padding:8px 16px" id="compareAllBtn">📊 So sánh tất cả</button>
+      </div>
+      <svg id="svgChart" viewBox="0 0 700 220"></svg>
+      <div id="algoCompareResult"></div>
+    </div>
+
+    <div class="history-card">
+      <div style="padding:16px 18px;border-bottom:1px solid var(--border2)">
+        <div class="chart-title">Lịch sử Đơn hàng</div>
+      </div>
+      <table class="history-table">
+        <thead><tr><th>ID Đơn</th><th>Thuật toán</th><th>Lộ trình (Nodes)</th><th>Bước</th><th>Trạng thái</th></tr></thead>
+        <tbody id="orderHistoryBody">
+          <tr><td colspan="5" style="color:var(--txt3);font-style:italic">Chưa có dữ liệu</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<div id="toastContainer"></div>
+
+<script>
+// ================================================================
+//  RoboControl — Full Script (No external dependencies)
+//  Algorithms + SVG Chart + WebSocket + Animation + D-Pad
+// ================================================================
+
+// ==================== State ====================
+let currentTab = "manual";
+let deliveryStartTime = null, deliveryExpectedTime = null, deliveryInProgress = false;
+let statsInterval = null;
+let orderHistory = [];
+
+// ==================== Graph ====================
+let graph = {};
+const coords = {
+  0:[30,30],1:[100,30],2:[170,30],3:[240,30],4:[310,30],
+  5:[30,100],6:[100,100],7:[170,100],8:[240,100],9:[310,100],
+  10:[30,170],11:[100,170],12:[170,170],13:[240,170],14:[310,170],
+  15:[30,240],16:[100,240],17:[170,240],18:[240,240],19:[310,240]
+};
+for(let i=0;i<20;i++) graph[i]=[];
+const edgeWeights = {};
+const TARGET_COLORS = ["#ef4444","#f59e0b","#a78bfa","#38bdf8","#22c55e","#fb7185"];
+let targets = new Set([4]), obstacles = new Set(), finalCalculatedPath = [];
+let currentMapTool = 'target', edgeSelFirst = null;
+
+// Robot direction
+let robotIndicator = null, robotCurrentNode = -1, robotCurrentDir = 2, robotInitialDir = 2;
+const DIR_ROTATION = [0,90,180,270];
+const JS_TO_CPP_DIR = [2,1,0,3];
+const CPP_TO_JS_DIR = [2,1,0,3];
+const DIR_LABELS = ['⬆ Lên','➡ Phải','⬇ Xuống','⬅ Trái'];
+
+// Anim state
+let anim = {steps:[],path:[],currentStep:0,playing:false,speed:300,timer:null,active:false,segPaths:[],fullPath:[],algoName:'',resultSteps:0,resultExplored:0,resultCost:0,segCount:1,prevSegIdx:-1};
+const SEG_COLORS = ["#22c55e","#38bdf8","#f59e0b","#ef4444","#a78bfa","#fb7185"];
+
+// Init default grid edges
+(function(){
+  const edges=[
+    [0,1],[1,2],[2,3],[3,4],[5,6],[6,7],[7,8],[8,9],
+    [10,11],[11,12],[12,13],[13,14],[15,16],[16,17],[17,18],[18,19],
+    [0,5],[1,6],[2,7],[3,8],[4,9],[5,10],[6,11],[7,12],[8,13],[9,14],
+    [10,15],[11,16],[12,17],[13,18],[14,19]
+  ];
+  edges.forEach(([a,b])=>{
+    if(!graph[a].includes(b)) graph[a].push(b);
+    if(!graph[b].includes(a)) graph[b].push(a);
+  });
+})();
+
+// ==================== Clock ====================
+function updateClock(){
+  const t=new Date();
+  document.getElementById('clock').textContent=
+    t.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
+}
+setInterval(updateClock,1000); updateClock();
+
+// ==================== Toast ====================
+function showToast(msg,type="info"){
+  const c=document.getElementById('toastContainer');
+  const t=document.createElement('div');
+  t.className='toast '+type; t.textContent=msg;
+  c.appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(16px)';setTimeout(()=>t.remove(),250);},3000);
+}
+
+// ==================== WebSocket ====================
+let ws=null, wsReconnect=null, pingTimer=null;
+function connectWebSocket(){
+  const host=window.location.hostname||'192.168.4.1';
+  const port=window.location.port||'80';
+  try{ws=new WebSocket(`ws://${host}:${port}/ws`);}catch(e){scheduleReconnect();return;}
+  ws.onopen=()=>{
+    setWsStatus(true);showToast('Kết nối ESP32 thành công','success');
+    if(wsReconnect){clearTimeout(wsReconnect);wsReconnect=null;}
+    pingTimer=setInterval(()=>{try{ws.send(JSON.stringify({type:'PING'}));}catch(e){}},5000);
+  };
+  ws.onmessage=(e)=>{try{handleWsMsg(JSON.parse(e.data));}catch(e){}};
+  ws.onclose=()=>{setWsStatus(false);if(pingTimer){clearInterval(pingTimer);pingTimer=null;}scheduleReconnect();};
+  ws.onerror=()=>setWsStatus(false);
+}
+function scheduleReconnect(){if(wsReconnect)return;wsReconnect=setTimeout(()=>{wsReconnect=null;connectWebSocket();},3000);}
+function setWsStatus(c){
+  document.getElementById('wsStatusText').textContent=c?'Trực tuyến':'Mất kết nối';
+  const dot=document.getElementById('wsStatusDot');
+  dot.className='status-dot'+(c?' online':'');
+  const badge=document.getElementById('connBadge');
+  badge.textContent=c?'Kết nối ổn định':'Đang kết nối...';
+  badge.style.background=c?'rgba(34,197,94,.15)':'rgba(245,158,11,.15)';
+  badge.style.color=c?'var(--green)':'var(--amber)';
+  badge.style.borderColor=c?'rgba(34,197,94,.3)':'rgba(245,158,11,.3)';
+}
+function wsSend(obj){if(ws&&ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify(obj));}
+
+function handleWsMsg(d){
+  if(d.type==='TELEMETRY') updateTelemetry(d);
+  else if(d.type==='ROUTE_ACK') showToast(`Route nạp: ${d.commands} lệnh`,'success');
+  else if(d.type==='OBSTACLE_DETECTED'){
+    showToast(`⚠️ Vật cản phát hiện!`,'error');
+    handleDynamicReroute(d);
+  }
+  else if(d.type==='COMPLETED'){
+    showToast(`✅ Hoàn thành! ${d.distance_cm||''}cm`,'success');
+    updateRobotState('DONE'); handleDeliveryCompleted();
+  }
+}
+
+function handleDynamicReroute(data){
+  if(data.position){const n=data.position.row*5+data.position.col;if(n>=0&&n<20)obstacles.add(n);}
+  if(data.robot_position){
+    const rn=data.robot_position.row*5+data.robot_position.col;
+    const tarArr=Array.from(targets);
+    if(tarArr.length>0){
+      const algo=document.getElementById('algoSel').value;
+      const result=findPathAnimated(rn,tarArr[0],algo);
+      if(result){
+        const cmds=pathToCommands(result.path,robotCurrentDir);
+        wsSend({type:'ROUTE',commands:cmds,total_steps:cmds.length,rerouted:true});
+        animRunSingle(result,getAlgoName(algo));
+        showToast('🔄 Tái định tuyến...','info');
+      }
+    }
+    updateNodeVisuals();
+  }
+}
+
+function handleDeliveryCompleted(){
+  if(!deliveryInProgress) return;
+  deliveryInProgress=false;
+  const actualTime=((Date.now()-deliveryStartTime)/1000).toFixed(1);
+  const banner=document.getElementById('deliveryStatusBanner');
+  const icon=document.getElementById('deliveryStatusIcon');
+  const text=document.getElementById('deliveryStatusText');
+  banner.className='delivery-banner show';
+  if(deliveryExpectedTime&&parseFloat(actualTime)>deliveryExpectedTime){
+    const late=(parseFloat(actualTime)-deliveryExpectedTime).toFixed(1);
+    banner.classList.add('late');
+    icon.textContent='⚠️'; text.textContent=`Đã giao — TRỄ ${late}s (${actualTime}s / ${deliveryExpectedTime}s)`;
+  } else {
+    banner.classList.add('ok');
+    icon.textContent='✅'; text.textContent=`Đã giao xong — ${actualTime}s`;
+  }
+}
+
+function updateTelemetry(d){
+  const avg=(Math.abs(d.speedL||0)+Math.abs(d.speedR||0))/2;
+  document.getElementById('teleSpeedVal').textContent=avg.toFixed(2);
+  document.getElementById('speedBar').style.width=Math.min(avg/1.5*100,100)+'%';
+  document.getElementById('teleDistVal').textContent=(d.distance||0).toFixed(1);
+  document.getElementById('teleStateVal').textContent=d.state||'IDLE';
+  document.getElementById('teleStepVal').textContent=`${d.step||0} / ${d.total||0}`;
+  const obs=d.obstacle||999;
+  document.getElementById('sonarStatus').textContent=obs>200?'-- cm':obs.toFixed(1)+' cm';
+  document.getElementById('sonarStatus').style.color=obs<20?'var(--red)':'var(--green)';
+  document.getElementById('autoSpeedVal').innerHTML=avg.toFixed(1)+'<span style="font-size:11px;color:var(--txt3)"> m/s</span>';
+  document.getElementById('autoObstacleVal').innerHTML=(obs>200?'--':obs.toFixed(0))+'<span style="font-size:11px;color:var(--txt3)"> cm</span>';
+  if(d.sensors){for(let i=0;i<5;i++){const el=document.getElementById('sm'+i);if(el){el.className='sdot'+(d.sensors[i]?' on':'');}}}
+  if(d.state) updateRobotState(d.state);
+  if(d.robotNode!==undefined&&d.robotNode>=0){
+    const jsDir=CPP_TO_JS_DIR[d.robotDir||0];
+    updateRobotIndicator(d.robotNode,jsDir);
+  }
+}
+function updateRobotState(s){
+  const map={IDLE:'IDLE',FOLLOWING_LINE:'DÒ LINE',AT_INTERSECTION:'GIAO LỘ',OBSTACLE:'VẬT CẢN',REROUTING:'TÁI ĐỊNH TUYẾN',DONE:'HOÀN THÀNH'};
+  document.getElementById('teleStateVal').textContent=map[s]||s;
+}
+
+// ==================== Tab switching ====================
+async function switchTab(tab){
+  document.querySelectorAll('.panel').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
+  document.getElementById('panel-'+tab).classList.add('active');
+  document.getElementById('nav-'+tab).classList.add('active');
+  currentTab=tab;
+  const titles={manual:'Hệ thống: Vận hành Thủ công',auto:'Hệ thống: Chế độ Tự động',stats:'Mission Control — Thống kê'};
+  document.getElementById('headerTitle').textContent=titles[tab];
+  if(statsInterval){clearInterval(statsInterval);statsInterval=null;}
+  if(tab==='stats'){fetchRealStats();statsInterval=setInterval(fetchRealStats,3000);}
+  // Chỉ gửi manual khi chuyển về tab thủ công.
+  // Tab auto KHÔNG tự set ai_route — mode chỉ thay đổi khi nhấn "Nạp lộ trình"
+  if(tab==='manual'){try{await fetch('/setMode?m=manual');}catch(e){}}
+}
+async function fetchRealStats(){
+  try{
+    const r=await fetch('/api/stats');
+    if(r.ok){
+      const d=await r.json();
+      document.getElementById('kpiDelivered').textContent=d.delivered||'--';
+      document.getElementById('kpiAvgTime').textContent=d.avgTime||'--';
+      document.getElementById('kpiSuccess').textContent=d.efficiency||'--';
+      document.getElementById('kpiDistance').textContent=d.totalDistance||'--';
+    }
+  }catch(e){}
+}
+
+// ==================== Robot Indicator ====================
+function createRobotIndicator(){
+  const layer=document.getElementById('robotLayer');if(!layer)return;
+  layer.innerHTML='';
+  const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+  g.id='robotArrow';g.setAttribute('class','robot-indicator');g.style.display='none';
+  const glow=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  glow.setAttribute('cx','0');glow.setAttribute('cy','0');glow.setAttribute('r','18');glow.setAttribute('class','robot-glow');
+  const arrow=document.createElementNS('http://www.w3.org/2000/svg','polygon');
+  arrow.setAttribute('points','0,-16 -9,9 9,9');arrow.setAttribute('class','robot-arrow');
+  const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  dot.setAttribute('cx','0');dot.setAttribute('cy','0');dot.setAttribute('r','4');dot.setAttribute('class','robot-center');
+  g.appendChild(glow);g.appendChild(arrow);g.appendChild(dot);
+  layer.appendChild(g);
+  g.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    if(anim.active) return;
+    robotInitialDir=(robotInitialDir+1)%4;
+    robotCurrentDir=robotInitialDir;
+    updateRobotIndicator(robotCurrentNode,robotCurrentDir);
+    showToast(`Hướng đầu xe: ${DIR_LABELS[robotInitialDir]}`,'info');
+  });
+  robotIndicator=g;
+}
+function updateRobotIndicator(nodeId,dir){
+  if(!robotIndicator||nodeId<0||nodeId>=20)return;
+  const[x,y]=coords[nodeId];const rot=DIR_ROTATION[dir];
+  robotIndicator.setAttribute('transform',`translate(${x},${y}) rotate(${rot})`);
+  robotIndicator.style.display='';
+  robotCurrentNode=nodeId;robotCurrentDir=dir;
+}
+function hideRobotIndicator(){if(robotIndicator)robotIndicator.style.display='none';robotCurrentNode=-1;}
+function getDirBetweenNodes(a,b){
+  const dx=Math.sign(coords[b][0]-coords[a][0]),dy=Math.sign(coords[b][1]-coords[a][1]);
+  if(dy<0)return 0;if(dx>0)return 1;if(dy>0)return 2;if(dx<0)return 3;return 2;
+}
+
+// ==================== Helpers ====================
+function heuristic(a,b){return Math.abs(coords[a][0]-coords[b][0])+Math.abs(coords[a][1]-coords[b][1]);}
+function getEdgeWeight(a,b){return edgeWeights[Math.min(a,b)+'-'+Math.max(a,b)]||1;}
+function setEdgeWeight(a,b,w){edgeWeights[Math.min(a,b)+'-'+Math.max(a,b)]=w;}
+function getAlgoName(a){return{bfs:'BFS',dfs:'DFS',ucs:'UCS',astar:'A*',greedy:'Greedy'}[a]||a;}
+function shuffle(arr){let a=[...arr];for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+
+// ==================== Edge Rendering ====================
+function renderEdges(){
+  const layer=document.querySelector('.track-lines');layer.innerHTML='';
+  const drawn=new Set();
+  for(const[nid,neighbors]of Object.entries(graph)){
+    for(const nb of neighbors){
+      const a=parseInt(nid),b=nb;
+      const key=Math.min(a,b)+'-'+Math.max(a,b);
+      if(drawn.has(key))continue;drawn.add(key);
+      const[x1,y1]=coords[a],[x2,y2]=coords[b];
+      const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1',x1);line.setAttribute('y1',y1);
+      line.setAttribute('x2',x2);line.setAttribute('y2',y2);
+      line.setAttribute('class','track-line');
+      layer.appendChild(line);
+      const w=getEdgeWeight(a,b);
+      if(w!==1){
+        const txt=document.createElementNS('http://www.w3.org/2000/svg','text');
+        txt.setAttribute('x',(x1+x2)/2);txt.setAttribute('y',(y1+y2)/2-8);
+        txt.setAttribute('fill','var(--purple)');txt.setAttribute('font-size','9');
+        txt.setAttribute('font-weight','700');txt.setAttribute('text-anchor','middle');
+        txt.setAttribute('font-family','monospace');txt.textContent=w;
+        layer.appendChild(txt);
+      }
+    }
+  }
+}
+
+function toggleEdge(a,b){
+  if(a===b)return;
+  const has=graph[a].includes(b);
+  if(has){graph[a]=graph[a].filter(n=>n!==b);graph[b]=graph[b].filter(n=>n!==a);delete edgeWeights[Math.min(a,b)+'-'+Math.max(a,b)];}
+  else{graph[a].push(b);graph[b].push(a);}
+  renderEdges();updateNodeVisuals();return !has;
+}
+
+// ==================== Nodes ====================
+const startNodeEl=document.getElementById('startNode');
+for(let i=0;i<20;i++){let o=document.createElement('option');o.value=i;o.textContent='Node '+i;if(i===15)o.selected=true;startNodeEl.appendChild(o);}
+
+function initNodes(){
+  const layer=document.getElementById('nodeLayer');layer.innerHTML='';
+  for(let i=0;i<20;i++){
+    const[x,y]=coords[i];
+    const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.setAttribute('class','node-group');g.setAttribute('id','svg-node-'+i);
+    g.onclick=()=>handleNodeClick(i);
+    const c=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('cx',x);c.setAttribute('cy',y);c.setAttribute('r','13');c.setAttribute('class','node-circle');
+    const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x',x);t.setAttribute('y',y);t.setAttribute('class','node-text');t.textContent=i;
+    g.appendChild(c);g.appendChild(t);layer.appendChild(g);
+  }
+}
+
+function setMapTool(tool){
+  currentMapTool=tool;edgeSelFirst=null;
+  ['start','target','obstacle','edge','weight'].forEach(t=>{
+    document.getElementById('tool'+t.charAt(0).toUpperCase()+t.slice(1)).classList.toggle('active',t===tool);
+  });
+  updateEdgeSelUI();
+}
+function updateEdgeSelUI(){
+  for(let i=0;i<20;i++) document.getElementById('svg-node-'+i).classList.remove('node-edge-sel');
+  if(edgeSelFirst!==null) document.getElementById('svg-node-'+edgeSelFirst).classList.add('node-edge-sel');
+}
+
+function handleNodeClick(nid){
+  if(anim.active){animReset();}
+  const sn=parseInt(document.getElementById('startNode').value);
+  if(currentMapTool==='start'){
+    targets.delete(nid);obstacles.delete(nid);
+    document.getElementById('startNode').value=nid;
+    showToast(`Xuất phát: Node ${nid}`,'success');
+    updateNodeVisuals();return;
+  }
+  if(currentMapTool==='edge'){
+    if(edgeSelFirst===null){edgeSelFirst=nid;updateEdgeSelUI();showToast(`Node ${nid} — click node khác để toggle edge`,'info');}
+    else{if(edgeSelFirst!==nid){const added=toggleEdge(edgeSelFirst,nid);showToast(`Edge ${edgeSelFirst}↔${nid} ${added?'thêm':'xóa'}`,'success');}edgeSelFirst=null;updateEdgeSelUI();}
+    return;
+  }
+  if(currentMapTool==='weight'){
+    if(edgeSelFirst===null){edgeSelFirst=nid;updateEdgeSelUI();showToast(`Node ${nid} — click node kề để đặt trọng số`,'info');}
+    else{
+      if(edgeSelFirst!==nid&&graph[edgeSelFirst].includes(nid)){
+        const cur=getEdgeWeight(edgeSelFirst,nid);
+        const nw=prompt(`Trọng số edge ${edgeSelFirst}↔${nid} (hiện: ${cur}):`,cur);
+        if(nw&&!isNaN(parseInt(nw))&&parseInt(nw)>0){setEdgeWeight(edgeSelFirst,nid,parseInt(nw));renderEdges();updateNodeVisuals();showToast(`Trọng số ${edgeSelFirst}↔${nid} = ${nw}`,'success');}
+      } else if(edgeSelFirst!==nid) showToast('Không có edge giữa 2 node này!','error');
+      edgeSelFirst=null;updateEdgeSelUI();
+    }
+    return;
+  }
+  if(nid===sn&&currentMapTool!=='start')return;
+  if(currentMapTool==='target'){
+    obstacles.delete(nid);
+    const mode=document.getElementById('orderModeSel').value;
+    if(mode==='single'){targets.clear();targets.add(nid);}
+    else{if(targets.has(nid))targets.delete(nid);else{if(targets.size>=6){showToast('Tối đa 6 đơn!','error');return;}targets.add(nid);}}
+  } else if(currentMapTool==='obstacle'){
+    targets.delete(nid);
+    if(obstacles.has(nid))obstacles.delete(nid);else obstacles.add(nid);
+  }
+  updateNodeVisuals();
+}
+
+function updateNodeVisuals(){
+  const sn=parseInt(document.getElementById('startNode').value);
+  for(let i=0;i<20;i++){
+    let cls='node-group';
+    if(i===sn)cls+=' node-start';
+    else if(obstacles.has(i))cls+=' node-obstacle';
+    else if(targets.has(i)){let ti=0;for(let t of targets){if(t===i)break;ti++;}cls+=' target-'+(Math.min(ti,5)+1);}
+    document.getElementById('svg-node-'+i).setAttribute('class',cls);
+  }
+  document.getElementById('pathLayer').innerHTML='';
+  const resEl=document.getElementById('pathResult');
+  if(targets.size>0){
+    resEl.textContent=`🟢 Xuất phát: Node ${sn}  →  🔴 Đích: Node ${Array.from(targets).join(', ')}  —  Nhấn "Mô phỏng" để chạy`;
+    resEl.className='path-result';
+  } else {
+    resEl.textContent='Chọn điểm xuất phát và đích trên bản đồ';
+    resEl.className='path-result';
+  }
+  document.getElementById('autoStepsVal').textContent='—';
+  document.getElementById('autoVisitedVal').textContent='—';
+  updateRobotIndicator(sn,robotInitialDir);
+}
+
+// ==================== AI Algorithms ====================
+function findPathAnimated(start,end,algo){
+  if(obstacles.has(start)||obstacles.has(end))return null;
+  algo=algo||document.getElementById('algoSel').value;
+  const steps=[];
+  if(algo==='bfs'){
+    let queue=[[start]],explored=new Set(),frontier=new Set([start]);
+    while(queue.length){
+      let path=queue.shift(),node=path[path.length-1];
+      frontier.delete(node);explored.add(node);
+      steps.push({current:node,explored:new Set(explored),frontier:new Set(frontier),from:path.length>1?path[path.length-2]:-1});
+      if(node===end)return{path,steps,visitedCount:explored.size,cost:path.length-1};
+      for(let nx of shuffle(graph[node]||[])){if(!explored.has(nx)&&!frontier.has(nx)&&!obstacles.has(nx)){frontier.add(nx);queue.push([...path,nx]);}}
+    }
+  } else if(algo==='dfs'){
+    let stack=[[start]],explored=new Set(),frontier=new Set([start]);
+    while(stack.length){
+      let path=stack.pop(),node=path[path.length-1];
+      frontier.delete(node);
+      if(explored.has(node))continue;explored.add(node);
+      steps.push({current:node,explored:new Set(explored),frontier:new Set(frontier),from:path.length>1?path[path.length-2]:-1});
+      if(node===end)return{path,steps,visitedCount:explored.size,cost:path.length-1};
+      for(let nx of shuffle(graph[node]||[])){if(!explored.has(nx)&&!obstacles.has(nx)){frontier.add(nx);stack.push([...path,nx]);}}
+    }
+  } else if(algo==='ucs'){
+    let pq=[{path:[start],cost:0}],best=new Map(),frontier=new Set([start]);
+    best.set(start,0);
+    while(pq.length){
+      pq.sort((a,b)=>a.cost-b.cost);let cur=pq.shift(),node=cur.path[cur.path.length-1];
+      frontier.delete(node);
+      steps.push({current:node,explored:new Set(best.keys()),frontier:new Set(frontier),from:cur.path.length>1?cur.path[cur.path.length-2]:-1});
+      if(node===end)return{path:cur.path,steps,visitedCount:best.size,cost:cur.cost};
+      for(let nx of shuffle(graph[node]||[])){if(obstacles.has(nx))continue;let nc=cur.cost+getEdgeWeight(node,nx);if(!best.has(nx)||nc<best.get(nx)){best.set(nx,nc);frontier.add(nx);pq.push({path:[...cur.path,nx],cost:nc});}}
+    }
+  } else if(algo==='greedy'){
+    let pq=[{path:[start],h:heuristic(start,end)}],explored=new Set(),frontier=new Set([start]);
+    while(pq.length){
+      pq.sort((a,b)=>a.h-b.h);let cur=pq.shift(),node=cur.path[cur.path.length-1];
+      frontier.delete(node);
+      if(explored.has(node))continue;explored.add(node);
+      steps.push({current:node,explored:new Set(explored),frontier:new Set(frontier),from:cur.path.length>1?cur.path[cur.path.length-2]:-1});
+      if(node===end)return{path:cur.path,steps,visitedCount:explored.size,cost:cur.path.length-1};
+      for(let nx of shuffle(graph[node]||[])){if(!explored.has(nx)&&!obstacles.has(nx)){frontier.add(nx);pq.push({path:[...cur.path,nx],h:heuristic(nx,end)});}}
+    }
+  } else { // astar
+    let pq=[{path:[start],g:0,f:heuristic(start,end)}],gS=new Map(),explored=new Set(),frontier=new Set([start]);
+    gS.set(start,0);
+    while(pq.length){
+      pq.sort((a,b)=>a.f-b.f);let cur=pq.shift(),node=cur.path[cur.path.length-1];
+      frontier.delete(node);
+      if(explored.has(node))continue;explored.add(node);
+      steps.push({current:node,explored:new Set(explored),frontier:new Set(frontier),from:cur.path.length>1?cur.path[cur.path.length-2]:-1});
+      if(node===end)return{path:cur.path,steps,visitedCount:explored.size,cost:cur.g};
+      for(let nx of shuffle(graph[node]||[])){if(obstacles.has(nx)||explored.has(nx))continue;let ng=cur.g+getEdgeWeight(node,nx);if(!gS.has(nx)||ng<gS.get(nx)){gS.set(nx,ng);frontier.add(nx);pq.push({path:[...cur.path,nx],g:ng,f:ng+heuristic(nx,end)});}}
+    }
+  }
+  return null;
+}
+
+function findPath(start,end,algo){const r=findPathAnimated(start,end,algo);if(!r)return null;return{path:r.path,visitedCount:r.visitedCount,cost:r.cost};}
+
+function findPathToNearest(start,targetSet,algo){
+  if(obstacles.has(start))return null;
+  algo=algo||document.getElementById('algoSel').value;
+  const steps=[];
+  if(algo==='bfs'){
+    let queue=[[start]],explored=new Set(),frontier=new Set([start]);
+    while(queue.length){
+      let path=queue.shift(),node=path[path.length-1];frontier.delete(node);explored.add(node);
+      steps.push({current:node,explored:new Set(explored),frontier:new Set(frontier),from:path.length>1?path[path.length-2]:-1});
+      if(targetSet.has(node))return{path,steps,visitedCount:explored.size,cost:path.length-1,foundTarget:node};
+      for(let nx of shuffle(graph[node]||[])){if(!explored.has(nx)&&!frontier.has(nx)&&!obstacles.has(nx)){frontier.add(nx);queue.push([...path,nx]);}}
+    }
+  } else {
+    // Use A* for all other modes in nearest-target search
+    let pq=[{path:[start],g:0,f:Math.min(...[...targetSet].map(t=>heuristic(start,t)))}];
+    let gS=new Map(),explored=new Set(),frontier=new Set([start]);gS.set(start,0);
+    while(pq.length){
+      pq.sort((a,b)=>a.f-b.f);let cur=pq.shift(),node=cur.path[cur.path.length-1];
+      frontier.delete(node);if(explored.has(node))continue;explored.add(node);
+      steps.push({current:node,explored:new Set(explored),frontier:new Set(frontier),from:cur.path.length>1?cur.path[cur.path.length-2]:-1});
+      if(targetSet.has(node))return{path:cur.path,steps,visitedCount:explored.size,cost:cur.g,foundTarget:node};
+      for(let nx of shuffle(graph[node]||[])){if(obstacles.has(nx)||explored.has(nx))continue;let ng=cur.g+getEdgeWeight(node,nx);if(!gS.has(nx)||ng<gS.get(nx)){gS.set(nx,ng);frontier.add(nx);pq.push({path:[...cur.path,nx],g:ng,f:ng+Math.min(...[...targetSet].map(t=>heuristic(nx,t)))});}}
+    }
+  }
+  return null;
+}
+
+function buildSegments(sn,tarArr,algo){
+  let ordered=[],currentS=sn,remaining=new Set(tarArr);
+  const dm=document.getElementById('deliveryModeSel').value;
+  if(dm==='express'&&tarArr.length>1){ordered.push(tarArr[tarArr.length-1]);remaining.delete(tarArr[tarArr.length-1]);}
+  while(remaining.size){const r=findPathToNearest(currentS,remaining,algo);if(!r)break;ordered.push(r.foundTarget);remaining.delete(r.foundTarget);currentS=r.foundTarget;}
+  let segs=[],fullPath=[sn];currentS=sn;
+  let totalSteps=0,totalExplored=0,totalCost=0;
+  for(let tar of ordered){
+    const r=findPathAnimated(currentS,tar,algo);if(!r)continue;
+    segs.push({steps:r.steps,path:r.path,from:currentS,to:tar,visitedCount:r.visitedCount,cost:r.cost});
+    totalSteps+=r.path.length-1;totalExplored+=r.visitedCount;totalCost+=r.cost;
+    fullPath=fullPath.concat(r.path.slice(1));currentS=tar;
+  }
+  return{segs,fullPath,ordered,totalSteps,totalExplored,totalCost};
+}
+
+function flattenSegments(segs){
+  let all=[];
+  for(let si=0;si<segs.length;si++){
+    const seg=segs[si];
+    for(let j=0;j<seg.steps.length;j++) all.push({...seg.steps[j],segIdx:si,isLast:j===seg.steps.length-1,segPath:seg.path});
+  }
+  return all;
+}
+
+// ==================== Animation Engine ====================
+function animStart(){
+  const sn=parseInt(document.getElementById('startNode').value);
+  const tarArr=Array.from(targets);
+  if(!tarArr.length){showToast('Chọn điểm đích trước!','error');return;}
+  const algo=document.getElementById('algoSel').value;
+  const {segs,fullPath,ordered,totalSteps,totalExplored,totalCost}=buildSegments(sn,tarArr,algo);
+  if(!segs.length){showToast('Không tìm được đường!','error');return;}
+  animStop();animClearVis();
+  anim.steps=flattenSegments(segs);anim.segPaths=segs.map(s=>s.path);
+  anim.fullPath=fullPath;anim.path=fullPath;anim.currentStep=0;anim.active=true;
+  anim.algoName=getAlgoName(algo);anim.resultSteps=totalSteps;anim.resultExplored=totalExplored;anim.resultCost=totalCost;
+  anim.segCount=segs.length;anim.prevSegIdx=-1;
+  updateNodeVisuals();
+  document.getElementById('animationControls').classList.add('show');
+  document.getElementById('pathLayer').innerHTML='';
+  updateAnimUI();anim.playing=true;animTick();
+}
+
+function animRunSingle(result,algoName){
+  animStop();animClearVis();
+  anim.steps=result.steps.map((s,j)=>({...s,segIdx:0,isLast:j===result.steps.length-1,segPath:result.path}));
+  anim.segPaths=[result.path];anim.fullPath=result.path;anim.path=result.path;
+  anim.currentStep=0;anim.active=true;anim.algoName=algoName;
+  anim.resultSteps=result.path.length-1;anim.resultExplored=result.visitedCount;anim.resultCost=result.cost;
+  anim.segCount=1;anim.prevSegIdx=-1;
+  updateNodeVisuals();document.getElementById('animationControls').classList.add('show');
+  document.getElementById('pathLayer').innerHTML='';
+  updateAnimUI();anim.playing=true;animTick();
+}
+
+function animPlay(){if(!anim.active)return;if(anim.currentStep>=anim.steps.length){animShowFinalPath();return;}anim.playing=true;updateAnimUI();animTick();}
+function animTick(){
+  if(!anim.playing||anim.currentStep>=anim.steps.length){if(anim.currentStep>=anim.steps.length)animShowFinalPath();anim.playing=false;updateAnimUI();return;}
+  animRenderStep(anim.steps[anim.currentStep]);anim.currentStep++;updateAnimUI();
+  anim.timer=setTimeout(animTick,anim.speed);
+}
+function animPause(){anim.playing=false;if(anim.timer){clearTimeout(anim.timer);anim.timer=null;}updateAnimUI();}
+function animStepFwd(){if(!anim.active)return;if(anim.currentStep>=anim.steps.length){animShowFinalPath();return;}animPause();animRenderStep(anim.steps[anim.currentStep]);anim.currentStep++;updateAnimUI();}
+function animReset(){animStop();animClearVis();anim.currentStep=0;anim.active=false;document.getElementById('animationControls').classList.remove('show');document.getElementById('pathLayer').innerHTML='';updateNodeVisuals();}
+function animStop(){anim.playing=false;if(anim.timer){clearTimeout(anim.timer);anim.timer=null;}}
+function animClearVis(){
+  for(let i=0;i<20;i++) document.getElementById('svg-node-'+i).classList.remove('node-explored','node-frontier','node-current','node-final-path');
+  const fl=document.getElementById('flowLayer');if(fl)fl.innerHTML='';
+}
+
+function getFlowLayer(){
+  let fl=document.getElementById('flowLayer');
+  if(!fl){fl=document.createElementNS('http://www.w3.org/2000/svg','g');fl.id='flowLayer';const nl=document.getElementById('nodeLayer');nl.parentNode.insertBefore(fl,nl);}
+  return fl;
+}
+function drawFlowEdge(layer,fromN,toN,cls){
+  const[x1,y1]=coords[fromN],[x2,y2]=coords[toN];
+  const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+  line.setAttribute('x1',x1);line.setAttribute('y1',y1);line.setAttribute('x2',x2);line.setAttribute('y2',y2);
+  line.setAttribute('class','flow-edge '+cls);
+  const len=Math.sqrt((x2-x1)**2+(y2-y1)**2);
+  line.style.strokeDasharray=len;line.style.strokeDashoffset=len;
+  layer.appendChild(line);
+  line.animate([{strokeDashoffset:len+'px'},{strokeDashoffset:'0px'}],{duration:200,fill:'forwards',easing:'ease-out'});
+}
+
+function drawSegPath(path,idx){
+  const col=SEG_COLORS[idx%SEG_COLORS.length];
+  const pts=path.map(n=>coords[n].join(',')).join(' ');
+  const poly=document.createElementNS('http://www.w3.org/2000/svg','polyline');
+  poly.setAttribute('class','segment-path');poly.setAttribute('points',pts);
+  poly.setAttribute('stroke',col);poly.setAttribute('fill','none');
+  document.getElementById('pathLayer').appendChild(poly);
+}
+
+function animRenderStep(step){
+  const sn=parseInt(document.getElementById('startNode').value);
+  const flowLayer=getFlowLayer();
+  if(step.segIdx!==anim.prevSegIdx){
+    if(anim.prevSegIdx>=0){
+      drawSegPath(anim.segPaths[anim.prevSegIdx],anim.prevSegIdx);
+      for(let n of anim.segPaths[anim.prevSegIdx]){
+        if(n===sn||targets.has(n)||obstacles.has(n))continue;
+        const el=document.getElementById('svg-node-'+n);
+        el.classList.remove('node-explored','node-frontier','node-current');el.classList.add('node-final-path');
+      }
+    }
+    for(let i=0;i<20;i++) document.getElementById('svg-node-'+i).classList.remove('node-explored','node-frontier','node-current');
+    flowLayer.innerHTML='';anim.prevSegIdx=step.segIdx;
+    if(anim.segCount>1) showToast(`🚚 Đoạn ${step.segIdx+1}/${anim.segCount}...`,'info');
+  }
+  flowLayer.querySelectorAll('.edge-current').forEach(el=>{el.classList.remove('edge-current');el.classList.add('edge-explored');});
+  if(step.from!==undefined&&step.from>=0) drawFlowEdge(flowLayer,step.from,step.current,'edge-current');
+  for(let n of step.explored){
+    if(n===sn||targets.has(n)||obstacles.has(n))continue;
+    const el=document.getElementById('svg-node-'+n);
+    if(!el.classList.contains('node-final-path'))el.classList.add('node-explored');
+  }
+  for(let n of step.frontier){
+    if(n===sn||targets.has(n)||obstacles.has(n))continue;
+    const el=document.getElementById('svg-node-'+n);
+    if(!el.classList.contains('node-final-path'))el.classList.add('node-frontier');
+  }
+  if(step.current!==sn&&!targets.has(step.current)&&!obstacles.has(step.current)){
+    const el=document.getElementById('svg-node-'+step.current);
+    el.classList.remove('node-explored','node-frontier');el.classList.add('node-current');
+  }
+  document.getElementById('svg-node-'+sn).classList.add('node-start');
+  let ti=0;for(let t of targets){document.getElementById('svg-node-'+t).setAttribute('class','node-group target-'+(Math.min(ti,5)+1));ti++;}
+  for(let o of obstacles) document.getElementById('svg-node-'+o).classList.add('node-obstacle');
+}
+
+function animShowFinalPath(){
+  anim.playing=false;updateAnimUI();
+  if(!anim.fullPath||!anim.fullPath.length)return;
+  const sn=parseInt(document.getElementById('startNode').value);
+  const fl=document.getElementById('flowLayer');if(fl)fl.innerHTML='';
+  if(anim.prevSegIdx>=0) drawSegPath(anim.segPaths[anim.prevSegIdx],anim.prevSegIdx);
+  for(let n of anim.fullPath){
+    if(n===sn||targets.has(n))continue;
+    const el=document.getElementById('svg-node-'+n);
+    el.classList.remove('node-explored','node-frontier','node-current');el.classList.add('node-final-path');
+  }
+  document.getElementById('autoStepsVal').textContent=anim.resultSteps;
+  document.getElementById('autoVisitedVal').textContent=anim.resultExplored;
+  const resEl=document.getElementById('pathResult');
+  resEl.textContent=`✅ ${anim.algoName}: ${anim.fullPath.join(' → ')}  |  ${anim.resultSteps} bước  |  ${anim.resultExplored} node  |  Chi phí: ${anim.resultCost}`;
+  resEl.className='path-result ok';
+  finalCalculatedPath=anim.fullPath;
+  if(anim.fullPath.length>=2){
+    const lastDir=getDirBetweenNodes(anim.fullPath[anim.fullPath.length-2],anim.fullPath[anim.fullPath.length-1]);
+    updateRobotIndicator(anim.fullPath[anim.fullPath.length-1],lastDir);
+  }
+  showToast(`✅ Hoàn thành! ${anim.resultSteps} bước — ${anim.resultExplored} node duyệt`,'success');
+  // Add to order history
+  orderHistory.push({id:'#'+String(orderHistory.length+1).padStart(3,'0'),algo:anim.algoName,route:anim.fullPath.join('→'),steps:anim.resultSteps,status:'ok'});
+  renderOrderHistory();
+}
+
+function updateAnimUI(){
+  document.getElementById('animStepNum').textContent=anim.currentStep;
+  document.getElementById('animTotalSteps').textContent=anim.steps.length;
+  if(anim.currentStep>0&&anim.currentStep<=anim.steps.length){
+    const s=anim.steps[anim.currentStep-1];
+    document.getElementById('animExploredCount').textContent=s.explored.size;
+    document.getElementById('animFrontierCount').textContent=s.frontier.size;
+  } else {document.getElementById('animExploredCount').textContent='0';document.getElementById('animFrontierCount').textContent='0';}
+}
+
+// ==================== Path Calculation ====================
+function calculateOverallPath(){
+  if(anim.active)return;
+  const sn=parseInt(document.getElementById('startNode').value);
+  const deliveryMode=document.getElementById('deliveryModeSel').value;
+  for(let i=0;i<20;i++){
+    let cls='node-group';
+    if(i===sn)cls+=' node-start';else if(obstacles.has(i))cls+=' node-obstacle';
+    document.getElementById('svg-node-'+i).setAttribute('class',cls);
+  }
+  document.getElementById('pathLayer').innerHTML='';
+  const resEl=document.getElementById('pathResult');
+  const legendBox=document.getElementById('deliveryLegend');
+  const orderInfoEl=document.getElementById('deliveryOrderInfo');
+  const routeInfoEl=document.getElementById('deliveryRouteInfo');
+  if(!targets.size){resEl.textContent='Chọn điểm giao hàng';resEl.className='path-result';legendBox.classList.remove('show');finalCalculatedPath=[];orderInfoEl.textContent='Chưa có đơn hàng';routeInfoEl.textContent='—';return;}
+  let fullPath=[sn],curS=sn,rem=new Set(targets),totalSteps=0,totalVis=0;
+  let ordTar=[],segs=[];
+  if(deliveryMode==='express'&&targets.size>1){
+    const tarArr=Array.from(targets),expressTarget=tarArr[tarArr.length-1];
+    const er=findPath(sn,expressTarget);if(er){ordTar.push(expressTarget);segs.push(er.path);fullPath=er.path;totalSteps+=er.path.length-1;totalVis+=er.visitedCount;curS=expressTarget;rem.delete(expressTarget);}
+    while(rem.size){let best=null,bestT=null,sl=Infinity;for(let t of rem){let r=findPath(curS,t);if(r&&r.path.length<sl){sl=r.path.length;best=r;bestT=t;}}if(!best)break;ordTar.push(bestT);segs.push(best.path);fullPath=fullPath.concat(best.path.slice(1));totalSteps+=best.path.length-1;totalVis+=best.visitedCount;curS=bestT;rem.delete(bestT);}
+  } else {
+    while(rem.size){let best=null,bestT=null,sl=Infinity;for(let t of rem){let r=findPath(curS,t);if(r&&r.path.length<sl){sl=r.path.length;best=r;bestT=t;}}if(!best)break;ordTar.push(bestT);segs.push(best.path);fullPath=fullPath.length>1?fullPath.concat(best.path.slice(1)):best.path;totalSteps+=best.path.length-1;totalVis+=best.visitedCount;curS=bestT;rem.delete(bestT);}
+  }
+  if(ordTar.length){
+    finalCalculatedPath=fullPath;
+    resEl.className='path-result ok';
+    let msg='LỘ TRÌNH: '+fullPath.join(' ➔ ');
+    if(rem.size){msg+='\n⚠️ BỎ QUA: '+Array.from(rem).join(', ')+' (vướng vật cản)';resEl.className='path-result warn';Array.from(rem).forEach(t=>document.getElementById('svg-node-'+t).classList.add('node-skipped'));}
+    resEl.textContent=msg;
+    orderInfoEl.textContent=ordTar.map((n,i)=>`Đơn ${i+1} → Node ${n}`+(deliveryMode==='express'&&i===0?' 🚀':'')).join('  |  ');
+    routeInfoEl.textContent=fullPath.join(' → ');
+    document.getElementById('autoStepsVal').textContent=totalSteps;
+    document.getElementById('autoVisitedVal').textContent=totalVis;
+    document.getElementById('autoOrderNum').textContent='#01/'+(ordTar.length<10?'0'+ordTar.length:ordTar.length);
+    let legHTML='';
+    ordTar.forEach((node,idx)=>{
+      const ci=Math.min(idx,5),col=TARGET_COLORS[ci];
+      document.getElementById('svg-node-'+node).classList.add('target-'+(ci+1));
+      const pts=segs[idx].map(n=>coords[n].join(',')).join(' ');
+      const poly=document.createElementNS('http://www.w3.org/2000/svg','polyline');
+      poly.setAttribute('class','segment-path');poly.setAttribute('points',pts);
+      poly.setAttribute('stroke',col);poly.setAttribute('fill','none');
+      document.getElementById('pathLayer').appendChild(poly);
+      legHTML+=`<span class="leg-item"><span class="leg-dot" style="background:${col}"></span>Đơn ${idx+1} (N${node})</span>`;
+      if(idx<ordTar.length-1) legHTML+='<span style="color:var(--txt3)">→</span>';
+    });
+    legendBox.innerHTML=legHTML;legendBox.classList.add('show');
+    for(let i=1;i<fullPath.length-1;i++){if(!targets.has(fullPath[i]))document.getElementById('svg-node-'+fullPath[i]).classList.add('node-path');}
+  } else {
+    resEl.textContent='LỖI: Không tìm được đường! Vật cản chặn toàn bộ.';resEl.className='path-result err';
+    legendBox.classList.remove('show');finalCalculatedPath=[];
+    orderInfoEl.textContent='Không tìm được đường!';routeInfoEl.textContent='—';
+    targets.forEach(t=>document.getElementById('svg-node-'+t).classList.add('target-1'));
+  }
+}
+
+// ==================== Path to Commands ====================
+function pathToCommands(path,initialDir){
+  let dir=parseInt(initialDir||1);const cmds=[];
+  const dd=[{dx:0,dy:-1},{dx:1,dy:0},{dx:0,dy:1},{dx:-1,dy:0}];
+  for(let i=0;i<path.length-1;i++){
+    const dx=Math.sign(coords[path[i+1]][0]-coords[path[i]][0]),dy=Math.sign(coords[path[i+1]][1]-coords[path[i]][1]);
+    let td=-1;for(let d=0;d<4;d++)if(dd[d].dx===dx&&dd[d].dy===dy){td=d;break;}
+    if(td===-1){cmds.push('F');continue;}
+    const diff=(td-dir+4)%4;
+    if(diff===1)cmds.push('R');else if(diff===3)cmds.push('L');else if(diff===2){cmds.push('R');cmds.push('R');}else cmds.push('F');
+    dir=td;
+  }
+  return cmds;
+}
+
+// ==================== Deliver Button ====================
+document.getElementById('deliverBtn').addEventListener('click',async()=>{
+  // Nếu chưa mô phỏng, tự tính đường trước khi gửi
+  if(finalCalculatedPath.length<2){
+    const sn=parseInt(document.getElementById('startNode').value);
+    const tarArr=Array.from(targets);
+    if(!tarArr.length){showToast('Chọn điểm đích trước!','error');return;}
+    const algo=document.getElementById('algoSel').value;
+    const {segs,fullPath}=buildSegments(sn,tarArr,algo);
+    if(!segs.length||fullPath.length<2){showToast('Không tìm được đường! Kiểm tra vật cản.','error');return;}
+    finalCalculatedPath=fullPath;
+    // Vẽ đường lên bản đồ để người dùng thấy
+    animStop();animClearVis();
+    anim.steps=flattenSegments(segs);anim.segPaths=segs.map(s=>s.path);
+    anim.fullPath=fullPath;anim.path=fullPath;anim.active=true;
+    anim.algoName=getAlgoName(algo);anim.segCount=segs.length;anim.prevSegIdx=-1;
+    animShowFinalPath();
+  }
+  const cmds=pathToCommands(finalCalculatedPath,robotInitialDir);
+  const algo=document.getElementById('algoSel').value;
+  const btn=document.getElementById('deliverBtn');
+  btn.textContent='⏳ Đang truyền...';
+  deliveryStartTime=Date.now();deliveryExpectedTime=finalCalculatedPath.length*2;deliveryInProgress=true;
+  const banner=document.getElementById('deliveryStatusBanner');
+  banner.className='delivery-banner show running';
+  document.getElementById('deliveryStatusIcon').textContent='🚚';
+  document.getElementById('deliveryStatusText').textContent=`🚚 Đang giao hàng... (dự kiến: ~${deliveryExpectedTime}s)`;
+  if(ws&&ws.readyState===WebSocket.OPEN){
+    wsSend({type:'ROUTE',commands:cmds,total_steps:cmds.length,algorithm:algo,path:finalCalculatedPath,startNode:parseInt(document.getElementById('startNode').value),initialDir:JS_TO_CPP_DIR[robotInitialDir]});
+  } else {
+    try{await fetch(`/deliver?dir=1&path=${finalCalculatedPath.join(',')}`);}catch(e){}
+  }
+  setTimeout(()=>{btn.textContent='✅ Đã nạp!';showToast('Lộ trình đã gửi đến robot','success');setTimeout(()=>{btn.textContent='🚀 Nạp lộ trình & cho xe chạy';},2000);},1000);
+});
+
+// ==================== SVG Bar Chart (replaces Chart.js) ====================
+function drawSvgBarChart(data){
+  // data: [{name, values:[{label,val,color}]}]  — 5 algos × 3 metrics
+  const svg=document.getElementById('svgChart');
+  svg.innerHTML='';
+  const W=700,H=220,PL=40,PR=20,PT=20,PB=40;
+  const chartW=W-PL-PR,chartH=H-PT-PB;
+  const algos=data;
+  const groupW=chartW/algos.length;
+  const barCount=algos[0].values.length;
+  const barW=Math.min(groupW/(barCount+1),18);
+  const maxVal=Math.max(...algos.flatMap(a=>a.values.map(v=>v.val||0)))||1;
+  // Y grid lines
+  for(let i=0;i<=4;i++){
+    const y=PT+chartH-(chartH*i/4);
+    const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1',PL);line.setAttribute('y1',y);line.setAttribute('x2',PL+chartW);line.setAttribute('y2',y);
+    line.setAttribute('stroke','#2a3a55');line.setAttribute('stroke-width','1');
+    svg.appendChild(line);
+    const label=document.createElementNS('http://www.w3.org/2000/svg','text');
+    label.setAttribute('x',PL-4);label.setAttribute('y',y+4);label.setAttribute('text-anchor','end');
+    label.setAttribute('font-size','9');label.setAttribute('fill','#64748b');label.setAttribute('font-family','monospace');
+    label.textContent=Math.round(maxVal*i/4);
+    svg.appendChild(label);
+  }
+  // Bars
+  algos.forEach((algo,gi)=>{
+    const gx=PL+gi*groupW;
+    const totalBarWidth=barCount*barW+(barCount-1)*2;
+    const startX=gx+(groupW-totalBarWidth)/2;
+    algo.values.forEach((v,bi)=>{
+      const x=startX+bi*(barW+2);
+      const barH=v.val>0?Math.max((v.val/maxVal)*chartH,3):0;
+      const y=PT+chartH-barH;
+      const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+      rect.setAttribute('x',x);rect.setAttribute('y',y);rect.setAttribute('width',barW);rect.setAttribute('height',barH);
+      rect.setAttribute('rx','3');rect.setAttribute('fill',v.color);rect.setAttribute('opacity','0.85');
+      svg.appendChild(rect);
+      // Value label on top
+      if(v.val>0){
+        const txt=document.createElementNS('http://www.w3.org/2000/svg','text');
+        txt.setAttribute('x',x+barW/2);txt.setAttribute('y',y-3);txt.setAttribute('text-anchor','middle');
+        txt.setAttribute('font-size','8');txt.setAttribute('fill',v.color);txt.setAttribute('font-family','monospace');txt.setAttribute('font-weight','700');
+        txt.textContent=v.val%1===0?v.val:v.val.toFixed(2);
+        svg.appendChild(txt);
+      }
+    });
+    // X label
+    const xl=document.createElementNS('http://www.w3.org/2000/svg','text');
+    xl.setAttribute('x',gx+groupW/2);xl.setAttribute('y',PT+chartH+16);xl.setAttribute('text-anchor','middle');
+    xl.setAttribute('font-size','11');xl.setAttribute('fill','#94a3b8');xl.setAttribute('font-family','monospace');xl.setAttribute('font-weight','700');
+    xl.textContent=algo.name;svg.appendChild(xl);
+  });
+  // Legend
+  const legends=[{label:'Bước',color:'#38bdf8'},{label:'Node duyệt',color:'#f59e0b'},{label:'ms×10',color:'#a78bfa'}];
+  legends.forEach((l,i)=>{
+    const lx=PL+i*130;
+    const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    rect.setAttribute('x',lx);rect.setAttribute('y',2);rect.setAttribute('width',10);rect.setAttribute('height',10);rect.setAttribute('rx','2');rect.setAttribute('fill',l.color);svg.appendChild(rect);
+    const txt=document.createElementNS('http://www.w3.org/2000/svg','text');
+    txt.setAttribute('x',lx+14);txt.setAttribute('y',11);txt.setAttribute('font-size','10');txt.setAttribute('fill','#94a3b8');txt.setAttribute('font-family','monospace');txt.textContent=l.label;svg.appendChild(txt);
+  });
+}
+
+// ==================== Algorithm Comparison ====================
+document.getElementById('compareAllBtn').addEventListener('click',()=>{
+  const sn=parseInt(document.getElementById('startNode').value);
+  const tarArr=Array.from(targets);
+  if(!tarArr.length){showToast('Chọn điểm giao!','error');return;}
+  const algos=['bfs','dfs','ucs','astar','greedy'];
+  const names={bfs:'BFS',dfs:'DFS',ucs:'UCS',astar:'A*',greedy:'Greedy'};
+  const results=[];
+  for(let algo of algos){
+    const t0=performance.now();
+    let tv=0,tc=0,pl=0,ok=true,cs=sn;
+    for(let t of tarArr){const r=findPath(cs,t,algo);if(r){tv+=r.visitedCount;tc+=(r.cost||r.path.length-1);pl+=r.path.length-1;cs=t;}else{ok=false;break;}}
+    results.push({algo,name:names[algo],visited:tv,pathLen:pl,cost:tc,time:parseFloat((performance.now()-t0).toFixed(3)),success:ok});
+  }
+  results.sort((a,b)=>{if(a.success&&!b.success)return-1;if(!a.success&&b.success)return 1;if(a.pathLen!==b.pathLen)return a.pathLen-b.pathLen;if(a.visited!==b.visited)return a.visited-b.visited;return a.time-b.time;});
+  const medals=['🥇','🥈','🥉'];
+  results.forEach((r,i)=>{r.rank=i+1;r.medal=i<3?medals[i]:'';});
+  // Draw SVG chart
+  const chartData=results.map(r=>({
+    name:r.medal+(r.name),
+    values:[
+      {label:'Bước',val:r.success?r.pathLen:0,color:'#38bdf8'},
+      {label:'Node',val:r.success?r.visited:0,color:'#f59e0b'},
+      {label:'ms×10',val:r.success?parseFloat((r.time*10).toFixed(1)):0,color:'#a78bfa'}
+    ]
+  }));
+  drawSvgBarChart(chartData);
+  // Table
+  let html='<table class="compare-table"><thead><tr><th>Hạng</th><th>Thuật toán</th><th>Node duyệt</th><th>Số bước</th><th>ms</th><th>Kết quả</th></tr></thead><tbody>';
+  for(let r of results){
+    const rankClass=r.rank===1?'rank-gold':r.rank===2?'rank-silver':r.rank===3?'rank-bronze':'';
+    const badge=r.success?'<span class="badge-ok">✓ OK</span>':'<span style="color:var(--red);font-weight:700">✗ Lỗi</span>';
+    html+=`<tr><td class="${rankClass}" style="text-align:center">${r.medal||r.rank}</td><td style="color:var(--primary);font-weight:800;font-family:var(--mono)">${r.name}</td><td style="text-align:center;font-family:var(--mono)">${r.success?r.visited:'—'}</td><td style="text-align:center;font-family:var(--mono)">${r.success?r.pathLen:'—'}</td><td style="text-align:center;font-family:var(--mono)">${r.time.toFixed(3)}</td><td style="text-align:center">${badge}</td></tr>`;
+  }
+  html+='</tbody></table>';
+  document.getElementById('algoCompareResult').innerHTML=html;
+  showToast('So sánh hoàn tất!','success');
+});
+
+// ==================== Order History ====================
+function renderOrderHistory(){
+  const tbody=document.getElementById('orderHistoryBody');
+  if(!orderHistory.length){tbody.innerHTML='<tr><td colspan="5" style="color:var(--txt3);font-style:italic">Chưa có dữ liệu</td></tr>';return;}
+  tbody.innerHTML=orderHistory.map(o=>`
+    <tr>
+      <td style="font-family:var(--mono);font-weight:800;color:var(--txt)">${o.id}</td>
+      <td style="color:var(--primary);font-weight:700;font-family:var(--mono)">${o.algo}</td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--txt2)">${o.route}</td>
+      <td style="text-align:center;font-family:var(--mono)">${o.steps}</td>
+      <td style="text-align:center"><span class="${o.status==='ok'?'badge-ok':'badge-run'}">${o.status==='ok'?'✓ Hoàn thành':'⏳ Đang chạy'}</span></td>
+    </tr>`).join('');
+}
+
+// ==================== Event Listeners ====================
+document.querySelectorAll('#startNode,#algoSel,#orderModeSel,#deliveryModeSel').forEach(el=>
+  el.addEventListener('change',()=>{
+    if(el.id==='orderModeSel'&&el.value==='single'&&targets.size>1){const f=Array.from(targets)[0];targets.clear();targets.add(f);}
+    obstacles.delete(parseInt(document.getElementById('startNode').value));
+    updateNodeVisuals();
+  })
+);
+document.getElementById('animSpeedSlider').addEventListener('input',(e)=>{
+  const v=parseInt(e.target.value);const t=1-v/100;anim.speed=Math.round(1500*t*t+30);
+});
+
+// ==================== Manual D-Pad ====================
+async function sendCommand(cmd){try{await fetch(cmd);showToast('Lệnh: '+cmd,'info');}catch(e){}}
+async function send(path){try{await fetch(path);}catch(e){}}
+// Tốc độ được track cục bộ vì ESP32 không có endpoint /speed
+let _spLin=130,_spRot=110;
+async function sendSpd(btn){
+  try{
+    await fetch(btn.dataset.path);
+    const step=10,mn=60,mx=255;
+    if(btn.dataset.path.includes('lin/up'))   _spLin=Math.min(_spLin+step,mx);
+    else if(btn.dataset.path.includes('lin/down')) _spLin=Math.max(_spLin-step,mn);
+    else if(btn.dataset.path.includes('rot/up'))   _spRot=Math.min(_spRot+step,mx);
+    else if(btn.dataset.path.includes('rot/down')) _spRot=Math.max(_spRot-step,mn);
+    document.getElementById('spdText').textContent=`Lin: ${_spLin}  |  Rot: ${_spRot}`;
+  }catch(e){}
+}
+
+let activeHold={btn:null,pid:null};
+function guard(fn){return(e)=>{if(currentTab!=='manual'){e.preventDefault();return;}return fn(e);};}
+
+document.querySelectorAll('.hold').forEach(btn=>{
+  btn.addEventListener('pointerdown',guard(e=>{
+    e.preventDefault();activeHold={btn,pid:e.pointerId};btn.classList.add('active-hold');btn.setPointerCapture(e.pointerId);send(btn.dataset.path);
+  }),{passive:false});
+  const release=guard(e=>{
+    e.preventDefault();
+    if(activeHold.btn===btn&&activeHold.pid===e.pointerId){btn.classList.remove('active-hold');send('/stop');activeHold={btn:null,pid:null};}
+    try{btn.releasePointerCapture(e.pointerId);}catch(_){}
+  });
+  btn.addEventListener('pointerup',release,{passive:false});
+  btn.addEventListener('pointercancel',release,{passive:false});
+});
+document.getElementById('stopBtn').addEventListener('pointerdown',guard(e=>{e.preventDefault();send('/stop');}),{passive:false});
+document.addEventListener('contextmenu',e=>e.preventDefault());
+
+// ==================== Init ====================
+initNodes();
+renderEdges();
+createRobotIndicator();
+updateNodeVisuals();
+renderOrderHistory();
+setTimeout(()=>connectWebSocket(),800);
+</script>
 </body>
-
 </html>
