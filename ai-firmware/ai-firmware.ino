@@ -4,7 +4,6 @@
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 #include "do_line.h"
-#include "route_interpreter.h"
 
 const char* ssid = "ESP32-Car";
 const char* password = "12345678";
@@ -131,7 +130,6 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
   else if (strcmp(type, "STOP") == 0 || strcmp(type, "ESTOP") == 0) {
     stopCar();
     do_line_abort();
-    route_abort();
     currentMode = MODE_MANUAL;
     line_mode = false;
     is_auto_running = false;
@@ -145,72 +143,6 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
       client->text("{\"type\":\"ACK\",\"action\":\"RESUMED\"}");
     }
   }
-  else if (strcmp(type, "RETURN_HOME") == 0) {
-    String result = handleReturnHome();
-    client->text(result);
-  }
-}
-
-// ================= RETURN HOME: Đảo path và chạy về kho =================
-String handleReturnHome() {
-  if (pathLength < 2) {
-    return "{\"type\":\"ACK\",\"action\":\"NO_ROUTE\"}";
-  }
-
-  // Dừng mọi thứ trước
-  stopCar(); do_line_abort();
-  currentMode = MODE_MANUAL;
-  line_mode = false;
-  is_auto_running = false;
-
-  // Robot hiện ở node nào?
-  int robotNode = currentPath[pathLength - 1];  // Đang ở đích cuối
-  int homeNode  = currentPath[0];               // Kho = node đầu tiên
-
-  if (robotNode == homeNode) {
-    return "{\"type\":\"ACK\",\"action\":\"ALREADY_HOME\"}";
-  }
-
-  // ★ ĐẢO NGƯỢC path: đích → kho
-  int reversedPath[20];
-  int reverseLen = pathLength;
-  for (int i = 0; i < pathLength; i++) {
-    reversedPath[i] = currentPath[pathLength - 1 - i];
-  }
-
-  // Nạp path đảo vào currentPath
-  for (int i = 0; i < reverseLen; i++) {
-    currentPath[i] = reversedPath[i];
-  }
-  pathLength = reverseLen;
-  currentPathIndex = 0;
-
-  // Tính hướng ban đầu (robot đã quay về hướng return ở đích)
-  extern int getTargetDirection(int, int);
-  if (pathLength >= 2) {
-    int calcDir = getTargetDirection(currentPath[0], currentPath[1]);
-    if (calcDir != -1) currentDir = calcDir;
-  }
-
-  // Khởi động route
-  do_line_setup();
-  currentMode = MODE_AI_ROUTE;
-  line_mode = true;
-  is_auto_running = true;
-
-  Serial.printf("[RETURN_HOME] Reversed path: ");
-  for (int i = 0; i < pathLength; i++) Serial.printf("%d%s", currentPath[i], i < pathLength-1 ? " -> " : "\n");
-  Serial.printf("  Dir=%d, %d nodes\n", currentDir, pathLength);
-
-  String msg = "{\"type\":\"RETURN_HOME_ACK\",\"path\":[";
-  for (int i = 0; i < pathLength; i++) {
-    if (i > 0) msg += ",";
-    msg += String(currentPath[i]);
-  }
-  msg += "],\"dir\":" + String(currentDir) + "}";
-  ws.textAll(msg);
-
-  return msg;
 }
 
 // ================= Telemetry Timer =================
@@ -277,9 +209,6 @@ void setup() {
   ws.onEvent(onWsEvent);
   server.addHandler(&ws);
 
-  // Route interpreter callback
-  route_set_ws_callback(wsBroadcast);
-
   server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
 
   server.on("/setMode", HTTP_GET, [](AsyncWebServerRequest* r){
@@ -295,13 +224,11 @@ void setup() {
     } else if (m == "ai_route") {
       stopCar();
       do_line_setup();
-      route_setup();
       currentMode = MODE_AI_ROUTE;
       line_mode = true;
       is_auto_running = true;
     } else if (m == "manual") {
       do_line_abort();
-      route_abort();
       stopCar();
       currentMode = MODE_MANUAL;
       line_mode = false;
@@ -336,7 +263,7 @@ void setup() {
   });
 
   server.on("/estop", HTTP_GET, [](AsyncWebServerRequest *r){
-    stopCar(); do_line_abort(); route_abort();
+    stopCar(); do_line_abort();
     currentMode = MODE_MANUAL; line_mode = false; is_auto_running = false;
     r->send(200, "text/plain", "E-STOP ACTIVATED");
   });
@@ -358,8 +285,16 @@ void setup() {
   });
 
   server.on("/return_home", HTTP_GET, [](AsyncWebServerRequest *r){
-    String result = handleReturnHome();
-    r->send(200, "application/json", result);
+    // Dừng robot và trả vị trí hiện tại để web tính đường về
+    stopCar(); do_line_abort();
+    int robotNode = (currentPathIndex < pathLength) ? currentPath[currentPathIndex] : 0;
+    currentMode = MODE_MANUAL;
+    line_mode = false;
+    is_auto_running = false;
+    Serial.printf("[RETURN_HOME] Robot at node %d, dir %d\n", robotNode, currentDir);
+    r->send(200, "application/json",
+      "{\"status\":\"STOPPED\",\"robotNode\":" + String(robotNode) + 
+      ",\"robotDir\":" + String(currentDir) + "}");
   });
 
   server.on("/api/stats", HTTP_GET, [](AsyncWebServerRequest *r){

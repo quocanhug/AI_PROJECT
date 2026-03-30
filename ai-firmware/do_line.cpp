@@ -106,6 +106,13 @@ bool recovering = false;
 unsigned long rec_t0 = 0;
 const unsigned long RECOV_TIME_MS = 6000;
 
+// ★ Debounce giao lộ: 500ms (tính: v_base=0.4m/s, node~25cm → 625ms giữa 2 node)
+const unsigned long INTERSECTION_DEBOUNCE_MS = 500;
+unsigned long last_intersection_time = 0;  // ★ Non-static để do_line_setup() reset được
+
+// ★ Initial turn: xoay xe chuẩn hướng khi nhận route mới (trước khi dò line)
+bool needs_initial_turn = false;
+
 // ================= ISR encoder =================
 void IRAM_ATTR encL_isr(){
   uint32_t now = micros();
@@ -352,6 +359,9 @@ void do_line_setup() {
   vL_ema = 0.0f; vR_ema = 0.0f; pwmL_prev = 0; pwmR_prev = 0;
   us_last_ms = 0; us_dist_cm = 999.0f; obs_hit = 0; obs_latched = false;
   pidL.i_term = 0; pidL.prev_err = 0; pidR.i_term = 0; pidR.prev_err = 0;
+  last_intersection_time = 0;  // ★ Reset debounce để “Về kho” xử lý intersection ngay
+  last_seen = NONE; recovering = false;
+  needs_initial_turn = true;   // ★ Đánh dấu cần xoay hướng khi loop bắt đầu
   motorsStop();
 }
 
@@ -359,9 +369,74 @@ void do_line_setup() {
 void do_line_loop() {
   if (!g_line_enabled) { motorsStop(); return; }
 
+  // ★★★ INITIAL TURN: Xoay xe chuẩn hướng khi nhận route mới ★★★
+  // Xử lý TRƯỚC khi đọc sensor, áp dụng cho:
+  // - Xuất phát lần đầu
+  // - Về kho (hướng ngược)
+  // - Tiếp tục (resume route)
+  // - Dynamic reroute (sau vật cản)
+  // - Multi-target (đã giao xong 1 điểm, quay đi điểm tiếp)
+  if (needs_initial_turn) {
+    needs_initial_turn = false;
+
+    if ((currentMode == MODE_DELIVERY || currentMode == MODE_AI_ROUTE)
+        && pathLength >= 2 && currentPathIndex < pathLength - 1) {
+
+      int curNode = currentPath[currentPathIndex];
+      int nxtNode = currentPath[currentPathIndex + 1];
+      int targetDir = getTargetDirection(curNode, nxtNode);
+
+      Serial.printf("[INIT_TURN] node%d→node%d, dir %d→%d\n",
+                    curNode, nxtNode, currentDir, targetDir);
+
+      if (targetDir != -1 && targetDir != currentDir) {
+        int diff = (targetDir - currentDir + 4) % 4;
+        const int TURN_PWM = 160;
+        bool turnOk = true;
+
+        if (diff == 1) {
+          turnOk = spin_left_deg(60.0, TURN_PWM);
+          Serial.println("  >> INIT LEFT");
+        } else if (diff == 3) {
+          turnOk = spin_right_deg(60.0, TURN_PWM);
+          Serial.println("  >> INIT RIGHT");
+        } else if (diff == 2) {
+          turnOk = spin_right_deg(115.0, TURN_PWM);
+          Serial.println("  >> INIT U-TURN");
+        }
+
+        if (!turnOk) {
+          Serial.println("  ❗ INIT TURN FAILED — dừng route");
+          motorsStop();
+          extern void wsBroadcast(const char*);
+          String msg = "{\"type\":\"OBSTACLE_DETECTED\","
+                       "\"robotNode\":" + String(curNode) + ","
+                       "\"robotDir\":" + String(currentDir) + ","
+                       "\"reason\":\"TURN_FAILED\"}";
+          wsBroadcast(msg.c_str());
+          currentMode = MODE_MANUAL;
+          is_auto_running = false;
+          line_mode = false; do_line_abort(); return;
+        }
+
+        currentDir = targetDir;
+
+        // Sau khi xoay xong, tiến tìm line
+        move_forward_distance_until_line(0.10, 120);
+      } else {
+        Serial.println("  >> INIT STRAIGHT (hướng đã chuẩn)");
+      }
+
+      // Đã xử lý node đầu → tiến sang đoạn tiếp theo
+      currentPathIndex++;
+      last_intersection_time = millis();  // Chống trigger lại intersection
+      seen_line_ever = true;              // Đã trên track → không cần auto-search
+      return;
+    }
+  }
+
   static unsigned long t_prev = millis();
   static unsigned long bad_t = millis();
-  static unsigned long last_intersection_time = 0;
 
   bool L2 = onLine(L2_SENSOR), L1 = onLine(L1_SENSOR);
   bool M  = onLine(M_SENSOR);
@@ -425,7 +500,7 @@ void do_line_loop() {
 
     // --- MODE_LINE_ONLY: đi thẳng qua giao lộ ---
     if (currentMode == MODE_LINE_ONLY) {
-      if (millis() - last_intersection_time > 1500) {
+      if (millis() - last_intersection_time > INTERSECTION_DEBOUNCE_MS) {
         last_intersection_time = millis();
         motorsStop(); delay(200);
         move_forward_distance(0.06, 120);
@@ -446,7 +521,7 @@ void do_line_loop() {
 
     // --- MODE_DELIVERY / MODE_AI_ROUTE: xử lý node ---
     else if (currentMode == MODE_DELIVERY || currentMode == MODE_AI_ROUTE) {
-      if (millis() - last_intersection_time > 1500) {
+      if (millis() - last_intersection_time > INTERSECTION_DEBOUNCE_MS) {
         last_intersection_time = millis();
         motorsStop(); delay(200);
 
@@ -459,33 +534,16 @@ void do_line_loop() {
         if (pathLength > 0) {
           // ★ Kiểm tra đã đến đích chưa
           if (currentPathIndex >= pathLength - 1) {
+            // Xe đã tiến 3cm centering rồi → đủ để nằm trên đích, KHÔNG tiến thêm
             motorsStop(); delay(200);
-            int destNode = currentPath[pathLength - 1];
-            Serial.printf("[AI_ROUTE] ARRIVED at node %d\n", destNode);
-
-            // ★ QUAY XE về hướng đường quay về (hướng từ đích → node trước)
-            if (pathLength >= 2) {
-              int prevNode = currentPath[pathLength - 2];
-              extern int getTargetDirection(int, int);
-              int returnDir = getTargetDirection(destNode, prevNode);
-              if (returnDir != -1 && returnDir != currentDir) {
-                int diff = (returnDir - currentDir + 4) % 4;
-                const int TURN_PWM = 160;
-                Serial.printf("  Rotating to return dir: %d -> %d (diff=%d)\n", currentDir, returnDir, diff);
-                if (diff == 1) spin_left_deg(57.0, TURN_PWM);
-                else if (diff == 3) spin_right_deg(57.0, TURN_PWM);
-                else if (diff == 2) spin_right_deg(115.0, TURN_PWM);
-                currentDir = returnDir;
-                motorsStop(); delay(200);
-              }
-            }
+            Serial.printf("[AI_ROUTE] ARRIVED at node %d\n", currentPath[pathLength-1]);
 
             if (currentMode == MODE_DELIVERY) {
               gripOpen(); delay(1500); gripClose();
             } else {
               Serial.println("[AI_ROUTE] DESTINATION REACHED — COMPLETED");
               extern void wsBroadcast(const char*);
-              String msg = "{\"type\":\"COMPLETED\",\"robotNode\":" + String(destNode) +
+              String msg = "{\"type\":\"COMPLETED\",\"robotNode\":" + String(currentPath[pathLength-1]) +
                            ",\"robotDir\":" + String(currentDir) + "}";
               wsBroadcast(msg.c_str());
             }

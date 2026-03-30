@@ -161,17 +161,6 @@ function handleWsMessage(data) {
       updateRobotIndicator(data.robotNode, jsDir);
     }
   }
-  else if (data.type === "RETURN_HOME_ACK") {
-    // ★ Firmware đã đảo path và bắt đầu chạy về kho
-    if (data.path && data.path.length >= 2) {
-      finalCalculatedPath = data.path;
-      deliveryInProgress = true;
-      deliveryStartTime = Date.now();
-      const jsDir = CPP_TO_JS_DIR[data.dir || 0];
-      updateRobotIndicator(data.path[0], jsDir);
-      showToast(`🏭 Về kho: ${data.path.join(' → ')}`, "success");
-    }
-  }
   else if (data.type === "PONG" || data.type === "PING") { }
 }
 
@@ -920,7 +909,7 @@ document.getElementById("deliverBtn").addEventListener("click", async () => {
   text.textContent = `🚚 Đang giao hàng... (Dự kiến: ~${deliveryExpectedTime}s)`; text.className = 'text-sm font-bold text-amber-700';
   if (ws && ws.readyState === WebSocket.OPEN) {
     wsSend({ type: "ROUTE", commands: cmds, total_steps: cmds.length, algorithm: algo, path: finalCalculatedPath, startNode: parseInt(document.getElementById("startNode").value), initialDir: JS_TO_CPP_DIR[robotInitialDir] });
-  } else { try { await fetch(`/deliver?dir=1&path=${finalCalculatedPath.join(",")}`); } catch (e) { } }
+  } else { try { const cppDir = JS_TO_CPP_DIR[robotInitialDir]; await fetch(`/deliver?dir=${cppDir}&path=${finalCalculatedPath.join(",")}`); } catch (e) { } }
   setTimeout(() => {
     btn.innerHTML = '✅ ĐÃ NẠP!';
     showToast("Lộ trình đã được gửi đến robot", "success");
@@ -1005,14 +994,44 @@ async function sendCommand(cmd) {
   showToast("Lệnh: " + cmd, "info");
 }
 
-// ==================== VỀ KHO: Gửi lệnh RETURN_HOME cho ESP32 ====================
+// ==================== VỀ KHO: Tính đường từ vị trí hiện tại → start node ====================
 function returnHome() {
-  if (!finalCalculatedPath || finalCalculatedPath.length < 2) {
-    showToast("⚠️ Chưa có lộ trình để quay về!", "error");
+  const homeNode = parseInt(document.getElementById("startNode").value);
+  const currentNode = robotCurrentNode >= 0 ? robotCurrentNode : homeNode;
+
+  if (currentNode === homeNode) {
+    showToast("🏭 Robot đã ở điểm xuất phát!", "info");
     return;
   }
-  wsSend({ type: "RETURN_HOME" });
-  showToast("🏭 Đang quay về kho...", "info");
+
+  // Dừng robot trước
+  wsSend({ type: "ESTOP" });
+
+  // Tính đường về kho bằng thuật toán đang chọn
+  const algo = document.getElementById("algoSel").value;
+  const result = findPathAnimated(currentNode, homeNode, algo);
+
+  if (!result || !result.path || result.path.length < 2) {
+    showToast("❌ Không tìm được đường về kho!", "error");
+    return;
+  }
+
+  // Gửi route mới cho ESP32
+  const cppDir = JS_TO_CPP_DIR[robotCurrentDir];
+  wsSend({
+    type: "ROUTE",
+    path: result.path,
+    initialDir: cppDir,
+    rerouted: true
+  });
+
+  // Chạy animation trên web
+  animRunSingle(result, getAlgoName(algo), '🏭 Về kho');
+  finalCalculatedPath = result.path;
+  deliveryInProgress = true;
+  deliveryStartTime = Date.now();
+
+  showToast(`🏭 Đang quay về kho: ${result.path.join(' → ')}`, "success");
 }
 
 // ==================== TIẾP TỤC: Resume route bị dừng ====================

@@ -1,7 +1,7 @@
 #pragma once
 #include <Arduino.h>
 
-// Shared PID structure (used by do_line.cpp and route_interpreter.cpp)
+// PID controller structure
 struct PID { float Kp, Ki, Kd; float i_term; float prev_err; float out_min, out_max; };
 
 // 4 operating modes
