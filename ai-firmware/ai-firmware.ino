@@ -98,10 +98,9 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
     client->text("{\"type\":\"PONG\"}");
   }
   else if (strcmp(type, "ROUTE") == 0) {
-    // Nạp path node trực tiếp vào currentPath[] — dùng do_line_loop() đã ổn định
     stopCar();
     
-    // Parse path array từ JSON: [0, 1, 6, 7, 12, ...]
+    // ★ FIX: Parse path[] cho telemetry tracking (robotNode hiển thị trên web)
     JsonArray pathArr = doc["path"].as<JsonArray>();
     pathLength = 0;
     for (JsonVariant v : pathArr) {
@@ -109,24 +108,26 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
     }
     currentPathIndex = 0;
     
-    // Tính hướng ban đầu từ 2 node đầu tiên
+    // Tính hướng ban đầu
     if (doc.containsKey("initialDir")) {
       currentDir = doc["initialDir"] | 0;
     } else if (pathLength >= 2) {
-      // Tự tính từ node_coords trong do_line.cpp
       extern int getTargetDirection(int, int);
       currentDir = getTargetDirection(currentPath[0], currentPath[1]);
     }
     
-    do_line_setup();
+    // ★ FIX: Khởi tạo route_interpreter + nạp commands (F/L/R) vào hàng đợi
+    do_line_setup();     // Reset encoder, PID, sensors
+    route_setup();       // Reset state machine về RS_IDLE, clear command queue
+    route_load(msg);     // Parse "commands":["F","L","R",...] → commandQueue, state → RS_FOLLOWING_LINE
+    
     currentMode = MODE_AI_ROUTE;
     line_mode = true;
     is_auto_running = true;
     
-    // Gửi ACK về Web
-    String ack = "{\"type\":\"ROUTE_ACK\",\"commands\":" + String(pathLength) + "}";
-    ws.textAll(ack);
-    Serial.printf("AI Route: %d nodes loaded, dir=%d\n", pathLength, currentDir);
+    // Gửi ACK (route_load đã gửi ACK riêng, nhưng gửi thêm để web nhận ok)
+    int cmdCount = route_total_steps();
+    Serial.printf("AI Route: %d nodes, %d commands loaded, dir=%d\n", pathLength, cmdCount, currentDir);
   }
   else if (strcmp(type, "STOP") == 0 || strcmp(type, "ESTOP") == 0) {
     stopCar();
@@ -231,24 +232,8 @@ extern float vL_ema, vR_ema;
 void sendTelemetry() {
   if (ws.count() == 0) return;
   if (currentMode == MODE_AI_ROUTE && is_auto_running) {
-    int robotNode = (currentPathIndex < pathLength) ? currentPath[currentPathIndex] : currentPath[pathLength-1];
-    
-    // ★ Đọc cảm biến line (LOW = trên vạch)
-    int s0 = digitalRead(TELE_L2) == LOW ? 1 : 0;
-    int s1 = digitalRead(TELE_L1) == LOW ? 1 : 0;
-    int s2 = digitalRead(TELE_M)  == LOW ? 1 : 0;
-    int s3 = digitalRead(TELE_R1) == LOW ? 1 : 0;
-    int s4 = digitalRead(TELE_R2) == LOW ? 1 : 0;
-    
-    String json = "{\"type\":\"TELEMETRY\",\"state\":\"FOLLOWING_LINE\"";
-    json += ",\"step\":" + String(currentPathIndex);
-    json += ",\"total\":" + String(pathLength);
-    json += ",\"robotNode\":" + String(robotNode);
-    json += ",\"robotDir\":" + String(currentDir);
-    json += ",\"speedL\":" + String(vL_ema, 3);
-    json += ",\"speedR\":" + String(vR_ema, 3);
-    json += ",\"obstacle\":" + String(us_dist_cm, 1);
-    json += ",\"sensors\":[" + String(s0) + "," + String(s1) + "," + String(s2) + "," + String(s3) + "," + String(s4) + "]}";
+    // ★ FIX: Dùng telemetry từ route_interpreter (có state, step, robotNode chính xác)
+    String json = route_telemetry_json();
     ws.textAll(json);
   }
 }
@@ -401,8 +386,19 @@ void loop() {
     if (currentMode == MODE_AI_ROUTE) {
       // MODE_AI_ROUTE → dùng route_interpreter state machine (xử lý hàng đợi F/L/R)
       route_loop();
+      
+      // ★ FIX: Kiểm tra route hoàn thành → dừng auto, về MANUAL
+      if (route_is_done()) {
+        stopCar();
+        currentMode = MODE_MANUAL;
+        is_auto_running = false;
+        line_mode = false;
+        delivered_count++;
+        Serial.println("[AI_ROUTE] Route completed via route_interpreter");
+      }
+      
       // Gửi telemetry định kỳ
-      if (millis() - lastTelemetryMs >= TELEMETRY_INTERVAL_MS) {
+      if (is_auto_running && millis() - lastTelemetryMs >= TELEMETRY_INTERVAL_MS) {
         lastTelemetryMs = millis();
         sendTelemetry();
       }
