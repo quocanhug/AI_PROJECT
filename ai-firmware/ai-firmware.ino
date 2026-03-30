@@ -396,12 +396,20 @@ void loop() {
   static unsigned long lastCleanup = 0;
   if (millis() - lastCleanup > 1000) { ws.cleanupClients(); lastCleanup = millis(); }
 
-  if ((currentMode == MODE_LINE_ONLY || currentMode == MODE_DELIVERY || currentMode == MODE_AI_ROUTE) && is_auto_running) {
-    do_line_loop();
-    // Gửi telemetry cho AI Route
-    if (currentMode == MODE_AI_ROUTE && millis() - lastTelemetryMs >= TELEMETRY_INTERVAL_MS) {
-      lastTelemetryMs = millis();
-      sendTelemetry();
+  if (is_auto_running) {
+    // ★ FIX #1: Phân luồng theo mode
+    if (currentMode == MODE_AI_ROUTE) {
+      // MODE_AI_ROUTE → dùng route_interpreter state machine (xử lý hàng đợi F/L/R)
+      route_loop();
+      // Gửi telemetry định kỳ
+      if (millis() - lastTelemetryMs >= TELEMETRY_INTERVAL_MS) {
+        lastTelemetryMs = millis();
+        sendTelemetry();
+      }
+    }
+    else if (currentMode == MODE_LINE_ONLY || currentMode == MODE_DELIVERY) {
+      // MODE_LINE_ONLY / MODE_DELIVERY → dùng do_line_loop (PID + node path)
+      do_line_loop();
     }
   } else {
     if (line_mode) { stopCar(); line_mode = false; }

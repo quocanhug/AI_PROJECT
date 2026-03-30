@@ -15,6 +15,10 @@
    - HC-SR04 readDistanceCM_filtered()
    ================================================================ */
 
+// ★ FIX #3: Góc rẽ cấu hình — tinh chỉnh bù trừ ma sát thực tế tại đây
+const float TURN_ANGLE_LEFT  = 85.0f;  // Góc quay trái (độ, trước hệ số 1.5x trong spin_left_deg)
+const float TURN_ANGLE_RIGHT = 85.0f;  // Góc quay phải (độ, trước hệ số 1.5x trong spin_right_deg)
+
 // ---- External functions from do_line.cpp ----
 extern void spin_left_deg(double deg, int pwmMax);
 extern void spin_right_deg(double deg, int pwmMax);
@@ -500,8 +504,8 @@ void route_loop() {
           rt_advanceGridPos();
           break;
         case 'L': {
-          // Quay trái — góc 85° (tune từ delivery mode, không phải 90° lý thuyết)
-          spin_left_deg(85.0, 160);
+          // Quay trái — dùng hằng số TURN_ANGLE_LEFT (để tinh chỉnh bù ma sát)
+          spin_left_deg(TURN_ANGLE_LEFT, 160);
           motorsStop();
           delay(80);
           // Tìm lại line sau khi quay (tiến tối đa 8cm, dừng khi gặp line)
@@ -514,8 +518,8 @@ void route_loop() {
           break;
         }
         case 'R': {
-          // Quay phải — góc 85°
-          spin_right_deg(85.0, 160);
+          // Quay phải — dùng hằng số TURN_ANGLE_RIGHT (để tinh chỉnh bù ma sát)
+          spin_right_deg(TURN_ANGLE_RIGHT, 160);
           motorsStop();
           delay(80);
           // Tìm lại line sau khi quay

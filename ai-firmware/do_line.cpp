@@ -77,6 +77,8 @@ const float CIRC = 2.0f * 3.1415926f * WHEEL_RADIUS_M;
 const float TRACK_WIDTH_M = 0.1150f;
 
 // ================= Tham số điều khiển (GIÁ TRỊ GỐC ĐÃ CHẠY TỐT) =================
+// ★ FIX #2: Hằng số debounce giao lộ — dễ tinh chỉnh (giảm từ 1500ms → 600ms)
+const unsigned long INTERSECTION_DEBOUNCE_MS = 600;
 float v_base   = 0.4f;
 float v_boost  = 0.18f;  // ★ Tăng từ 0.11: sửa lệch mạnh hơn khi L1+M hoặc R1+M
 float v_hard   = 0.25f;  // ★ Tăng từ 0.13: sửa lệch rất mạnh khi chỉ L1 hoặc R1 (không M)
@@ -425,7 +427,7 @@ void do_line_loop() {
 
     // --- MODE_LINE_ONLY: đi thẳng qua giao lộ ---
     if (currentMode == MODE_LINE_ONLY) {
-      if (millis() - last_intersection_time > 1500) {
+      if (millis() - last_intersection_time > INTERSECTION_DEBOUNCE_MS) {
         last_intersection_time = millis();
         motorsStop(); delay(200);
         move_forward_distance(0.06, 120);
@@ -446,7 +448,7 @@ void do_line_loop() {
 
     // --- MODE_DELIVERY / MODE_AI_ROUTE: xử lý node ---
     else if (currentMode == MODE_DELIVERY || currentMode == MODE_AI_ROUTE) {
-      if (millis() - last_intersection_time > 1500) {
+      if (millis() - last_intersection_time > INTERSECTION_DEBOUNCE_MS) {
         last_intersection_time = millis();
         motorsStop(); delay(200);
 
