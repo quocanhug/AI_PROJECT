@@ -529,18 +529,10 @@ void do_line_loop() {
     else if (currentMode == MODE_DELIVERY || currentMode == MODE_AI_ROUTE) {
       if (millis() - last_intersection_time > INTERSECTION_DEBOUNCE_MS) {
         last_intersection_time = millis();
-        motorsStop(); delay(200);
-
-        // ★ FIX: Tiến ~5cm vào TÂM giao lộ TRƯỚC khi xoay
-        // Lý do: L2/R2 nằm ở đầu xe, nhưng trục quay nằm giữa 2 bánh
-        // Nếu xoay ngay → trục quay chưa ở tâm → xe lệch khỏi line sau rẽ
-        move_forward_distance(0.03, 100);
-        motorsStop(); delay(100);
 
         if (pathLength > 0) {
           // ★ Kiểm tra đã đến đích chưa
           if (currentPathIndex >= pathLength - 1) {
-            // Xe đã tiến 3cm centering rồi → đủ để nằm trên đích, KHÔNG tiến thêm
             motorsStop(); delay(200);
             Serial.printf("[AI_ROUTE] ARRIVED at node %d\n", currentPath[pathLength-1]);
 
@@ -559,31 +551,34 @@ void do_line_loop() {
             line_mode = false; do_line_abort(); return;
           }
 
-          // ★ FIX: Tính hướng rẽ TRƯỚC khi tăng index
+          // ★ Tính hướng rẽ
           int curNode = currentPath[currentPathIndex];
           int nxtNode = currentPath[currentPathIndex + 1];
           int targetDir = getTargetDirection(curNode, nxtNode);
-          Serial.printf("[NODE] path[%d]=node%d -> node%d, dir %d->%d\n",
-                        currentPathIndex, curNode, nxtNode, currentDir, targetDir);
+          int diff = (targetDir != -1) ? (targetDir - currentDir + 4) % 4 : 0;
+          Serial.printf("[NODE] path[%d]=node%d -> node%d, dir %d->%d (diff=%d)\n",
+                        currentPathIndex, curNode, nxtNode, currentDir, targetDir, diff);
 
-          if (targetDir != -1) {
-            int diff = (targetDir - currentDir + 4) % 4;
-            const int TURN_PWM = 160;
-            bool turnOk = true;
-
-            // ★ Dừng hẳn trước khi quay để xoay chính xác
+          if (diff == 0) {
+            // ★ ĐI THẲNG: KHÔNG dừng, chỉ tiến centering nhỏ rồi tiếp tục PID bình thường
+            currentPathIndex++;
+            currentDir = targetDir;
+            move_forward_distance(0.03, 100);  // centering nhẹ vào tâm giao lộ
+            last_seen = NONE;
+            // Không return → tiếp tục vòng lặp bình thường, PID dò line
+          } else {
+            // ★ RẼ / U-TURN: Dừng hẳn, centering, xoay, tìm line
+            move_forward_distance(0.03, 100);
             motorsStop(); delay(300);
 
-            // ★ Góc 62° × hệ số 1.5 = 93 thực tế ma sát yếu bù trừ
-            if (diff == 1) { turnOk = spin_left_deg(62.0, TURN_PWM); Serial.println("  >> LEFT"); }
+            const int TURN_PWM = 160;
+            bool turnOk = true;
+            if (diff == 1) { turnOk = spin_left_deg(62.0, TURN_PWM);  Serial.println("  >> LEFT"); }
             else if (diff == 3) { turnOk = spin_right_deg(62.0, TURN_PWM); Serial.println("  >> RIGHT"); }
             else if (diff == 2) { turnOk = spin_right_deg(125.0, TURN_PWM); Serial.println("  >> U-TURN"); }
-            else { Serial.println("  >> STRAIGHT"); }
 
-            // ★ Dừng hẳn sau khi quay xong
             motorsStop(); delay(200);
 
-            // ★ FIX: Xử lý spin thất bại (timeout hoặc abort)
             if (!turnOk) {
               Serial.println("  ❗ TURN FAILED — dừng route, báo Web");
               motorsStop();
@@ -598,17 +593,15 @@ void do_line_loop() {
               is_auto_running = false;
               line_mode = false; do_line_abort(); return;
             }
-            currentDir = targetDir;
-          }
 
-          // ★ Tăng index SAU khi đã rẽ
-          currentPathIndex++;
-          // ★ Tìm line thông minh: tiến tối đa 10cm, dừng ngay khi M chạm vạch
-          move_forward_distance_until_line(0.10, 90);  // ★ PWM giảm 120→90: chậm hơn, dễ bắt line
+            currentDir = targetDir;
+            currentPathIndex++;
+            move_forward_distance_until_line(0.10, 90);
+          }
         }
         return;
       }
-      // Debounce: chạy chậm qua vùng giao lộ
+      // Debounce: trong thời gian debounce → chạy thẳng bình thường
       last_seen = NONE;
       vL_tgt = v_base * 0.8f; vR_tgt = v_base * 0.8f;
     }
@@ -631,7 +624,7 @@ void do_line_loop() {
     } else {
       if (last_seen == LEFT)       { vL_tgt = -vF; vR_tgt =  vF; }
       else if (last_seen == RIGHT) { vL_tgt =  vF; vR_tgt = -vF; }
-      else                         { vL_tgt = v_base; vR_tgt = v_base; }
+      else                         { vL_tgt = -vF * 0.4f; vR_tgt = vF * 0.4f; } // ★ FIX: Quay nhẹ tìm line thay vì chạy thẳng vô định
     }
   }
   else {
