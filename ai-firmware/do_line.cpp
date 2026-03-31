@@ -397,10 +397,10 @@ void do_line_loop() {
         motorsStop(); delay(300);
 
         if (diff == 1) {
-          turnOk = spin_left_deg(65.0, TURN_PWM);
+          turnOk = spin_left_deg(62.0, TURN_PWM);
           Serial.println("  >> INIT LEFT");
         } else if (diff == 3) {
-          turnOk = spin_right_deg(65.0, TURN_PWM);
+          turnOk = spin_right_deg(62.0, TURN_PWM);
           Serial.println("  >> INIT RIGHT");
         } else if (diff == 2) {
           turnOk = spin_right_deg(115.0, TURN_PWM);
@@ -573,10 +573,10 @@ void do_line_loop() {
             // ★ Dừng hẳn trước khi quay để xoay chính xác
             motorsStop(); delay(300);
 
-            // ★ Góc 65° × hệ số 1.5 = 97.5 thực tế ma sát yếu bù trừ
-            if (diff == 1) { turnOk = spin_left_deg(65.0, TURN_PWM); Serial.println("  >> LEFT"); }
-            else if (diff == 3) { turnOk = spin_right_deg(65.0, TURN_PWM); Serial.println("  >> RIGHT"); }
-            else if (diff == 2) { turnOk = spin_right_deg(126.0, TURN_PWM); Serial.println("  >> U-TURN"); }
+            // ★ Góc 62° × hệ số 1.5 = 93 thực tế ma sát yếu bù trừ
+            if (diff == 1) { turnOk = spin_left_deg(62.0, TURN_PWM); Serial.println("  >> LEFT"); }
+            else if (diff == 3) { turnOk = spin_right_deg(62.0, TURN_PWM); Serial.println("  >> RIGHT"); }
+            else if (diff == 2) { turnOk = spin_right_deg(125.0, TURN_PWM); Serial.println("  >> U-TURN"); }
             else { Serial.println("  >> STRAIGHT"); }
 
             // ★ Dừng hẳn sau khi quay xong

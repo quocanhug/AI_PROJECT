@@ -396,6 +396,7 @@ function updateNodeVisuals() {
   }
   document.getElementById("autoStepsVal").innerHTML = '— <span class="text-xs font-medium text-on-surface-variant italic">bước</span>';
   document.getElementById("autoVisitedVal").textContent = '—';
+  document.getElementById("autoComputeTime").textContent = '--';
   // ★ FIX: Chỉ giữ nguyên vị trí mũi tên khi animation đang PHÁT (playing)
   //   Khi animation dừng/xong/chưa chạy → luôn reset về start
   if (!anim.playing) {
@@ -606,14 +607,19 @@ function animStart() {
   const tarArr = Array.from(targets);
   if (!tarArr.length) { showToast("Chọn điểm đích trước!", "error"); return; }
   const algo = document.getElementById("algoSel").value;
+  const t0 = performance.now();
   const { segs, fullPath, ordered, totalSteps, totalExplored, totalCost } = buildSegments(sn, tarArr, algo);
+  const computeMs = parseFloat((performance.now() - t0).toFixed(3));
   if (!segs.length) { showToast("Không tìm được đường!", "error"); return; }
+  // ★ Toast thông báo kết quả thuật toán ngay lập tức
+  showToast(`🧠 ${getAlgoName(algo)}: ${totalExplored} node duyệt | ${totalSteps} bước | ${computeMs}ms`, "success");
   animStop(); animClearVis();
   anim.steps = flattenSegments(segs); anim.segPaths = segs.map(s => s.path);
   anim.fullPath = fullPath; anim.path = fullPath;
   anim.currentStep = 0; anim.active = true;
   anim.algoName = getAlgoName(algo); anim.resultSteps = totalSteps;
   anim.resultExplored = totalExplored; anim.resultCost = totalCost;
+  anim.computeTimeMs = computeMs;
   anim.segCount = segs.length; anim.prevSegIdx = -1;
   updateNodeVisuals();
   document.getElementById("animationControls").classList.remove("hidden");
@@ -778,8 +784,9 @@ function animShowFinalPath() {
   // Update stats
   document.getElementById("autoStepsVal").innerHTML = anim.resultSteps + ' <span class="text-xs font-medium text-on-surface-variant italic">bước</span>';
   document.getElementById("autoVisitedVal").textContent = anim.resultExplored;
+  document.getElementById("autoComputeTime").textContent = anim.computeTimeMs || 0;
   const resEl = document.getElementById("pathResult");
-  resEl.innerText = `✅ ${anim.algoName}: ${anim.fullPath.join(" → ")}  |  ${anim.resultSteps} bước  |  ${anim.resultExplored} node duyệt  |  Chi phí: ${anim.resultCost}`;
+  resEl.innerText = `✅ ${anim.algoName}: ${anim.fullPath.join(" → ")}  |  ${anim.resultSteps} bước  |  ${anim.resultExplored} node duyệt  |  Chi phí: ${anim.resultCost}  |  ⏱ ${anim.computeTimeMs || 0}ms`;
   resEl.className = "p-4 text-sm text-center has-path font-bold";
   finalCalculatedPath = anim.fullPath;
   // Move robot indicator to final position with computed direction
@@ -787,7 +794,7 @@ function animShowFinalPath() {
     const lastDir = getDirBetweenNodes(anim.fullPath[anim.fullPath.length - 2], anim.fullPath[anim.fullPath.length - 1]);
     updateRobotIndicator(anim.fullPath[anim.fullPath.length - 1], lastDir);
   }
-  showToast(`✅ Hoàn thành! ${anim.resultSteps} bước — ${anim.resultExplored} node duyệt` + (anim.segCount > 1 ? ` (${anim.segCount} đoạn)` : ''), "success");
+  showToast(`✅ ${anim.algoName}: ${anim.resultSteps} bước — ${anim.resultExplored} node duyệt — ⏱ ${anim.computeTimeMs || 0}ms` + (anim.segCount > 1 ? ` (${anim.segCount} đoạn)` : ''), "success");
 }
 
 function updateAnimUI() {
@@ -845,7 +852,7 @@ function calculateOverallPath() {
     routeInfoEl.textContent = fullPath.join(' → ');
     document.getElementById("autoStepsVal").innerHTML = totalSteps + ' <span class="text-xs font-medium text-on-surface-variant italic">bước</span>';
     document.getElementById("autoVisitedVal").textContent = totalVis;
-    document.getElementById("autoOrderNum").textContent = '#01/' + (ordTar.length < 10 ? '0' + ordTar.length : ordTar.length);
+    document.getElementById("autoComputeTime").textContent = '--';
 
     let legHTML = '<div class="w-full text-center font-bold text-xs text-on-surface-variant mb-1">THỨ TỰ GIAO HÀNG';
     if (deliveryMode === 'express') legHTML += ' <span class="text-red-500">(CHẾ ĐỘ HỎA TỐC)</span>';
@@ -924,10 +931,12 @@ document.getElementById("compareAllBtn").addEventListener("click", () => {
   const names = { bfs: "BFS", dfs: "DFS", ucs: "UCS", astar: "A*", greedy: "Greedy" };
   const results = [];
   for (let algo of algos) {
+    // ★ Dùng buildSegments() — cùng hàm với tab Tự động — để thời gian khớp nhau
     const t0 = performance.now();
-    let tv = 0, tc = 0, pl = 0, ok = true, cs = sn;
-    for (let t of tarArr) { const r = findPath(cs, t, algo); if (r) { tv += r.visitedCount; tc += (r.cost || r.path.length - 1); pl += r.path.length - 1; cs = t; } else { ok = false; break; } }
-    results.push({ algo, name: names[algo], visited: tv, pathLen: pl, cost: tc, time: parseFloat((performance.now() - t0).toFixed(3)), success: ok });
+    const { segs, fullPath, totalSteps, totalExplored, totalCost } = buildSegments(sn, tarArr, algo);
+    const computeMs = parseFloat((performance.now() - t0).toFixed(3));
+    const ok = segs.length > 0;
+    results.push({ algo, name: names[algo], visited: totalExplored, pathLen: totalSteps, cost: totalCost, time: computeMs, success: ok });
   }
   results.sort((a, b) => { if (a.success && !b.success) return -1; if (!a.success && b.success) return 1; if (a.pathLen !== b.pathLen) return a.pathLen - b.pathLen; if (a.visited !== b.visited) return a.visited - b.visited; return a.time - b.time; });
   const medals = ['🥇', '🥈', '🥉'];
@@ -940,7 +949,7 @@ document.getElementById("compareAllBtn").addEventListener("click", () => {
       labels, datasets: [
         { label: 'Số bước', data: results.map(r => r.success ? r.pathLen : 0), backgroundColor: '#005ab4', borderRadius: 6, barPercentage: 0.7 },
         { label: 'Node duyệt', data: results.map(r => r.success ? r.visited : 0), backgroundColor: '#aac7ff', borderRadius: 6, barPercentage: 0.7 },
-        { label: 'ms', data: results.map(r => r.success ? r.time : 0), backgroundColor: '#bd5700', borderRadius: 6, barPercentage: 0.7 }
+        { label: 'Thời gian (ms)', data: results.map(r => r.success ? r.time : 0), backgroundColor: '#bd5700', borderRadius: 6, barPercentage: 0.7 }
       ]
     },
     options: {
