@@ -514,6 +514,40 @@
     <!-- ================================================ -->
     <main id="panel-stats" class="panel-view flex-1 p-8 overflow-y-auto hide-scrollbar">
       <div class="max-w-7xl mx-auto space-y-8">
+
+        <!-- ★ Scenario Info Card (Dynamic — reflects current map config) -->
+        <div class="bg-gradient-to-r from-primary to-primary-container p-6 rounded-3xl shadow-lg text-white">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="text-3xl">🧪</span>
+            <div>
+              <h3 class="text-lg font-black uppercase tracking-wide">Kịch bản so sánh thuật toán</h3>
+              <p class="text-sm opacity-90">Dữ liệu phân tích dựa trên cấu hình bản đồ hiện tại ở tab Tự động</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mt-4">
+            <div class="bg-white/15 backdrop-blur-sm rounded-2xl p-4">
+              <span class="text-[10px] font-bold uppercase tracking-widest opacity-80 block mb-1">Bản đồ</span>
+              <span class="text-base font-black">Grid 3×5 (15 node)</span>
+            </div>
+            <div class="bg-white/15 backdrop-blur-sm rounded-2xl p-4">
+              <span class="text-[10px] font-bold uppercase tracking-widest opacity-80 block mb-1">📌 Xuất phát</span>
+              <span class="text-base font-black" id="statsStartNode">Node 10</span>
+            </div>
+            <div class="bg-white/15 backdrop-blur-sm rounded-2xl p-4">
+              <span class="text-[10px] font-bold uppercase tracking-widest opacity-80 block mb-1">📍 Đích đến</span>
+              <span class="text-base font-black" id="statsTargetNodes">--</span>
+            </div>
+            <div class="bg-white/15 backdrop-blur-sm rounded-2xl p-4">
+              <span class="text-[10px] font-bold uppercase tracking-widest opacity-80 block mb-1">🚫 Vật cản</span>
+              <span class="text-base font-black" id="statsObstacles">Không có</span>
+            </div>
+            <div class="bg-white/15 backdrop-blur-sm rounded-2xl p-4">
+              <span class="text-[10px] font-bold uppercase tracking-widest opacity-80 block mb-1">⚖️ Trọng số</span>
+              <span class="text-base font-black" id="statsWeightInfo">Đồng nhất (=1)</span>
+            </div>
+          </div>
+        </div>
+
         <!-- KPI Row -->
         <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div
@@ -556,9 +590,8 @@
           <div class="col-span-12 bg-surface-container-lowest p-8 rounded-3xl shadow-sm border border-slate-100">
             <div class="flex items-center justify-between mb-6">
               <div>
-                <h3 class="text-lg font-bold tracking-tight">So sánh 5 Thuật toán Tìm đường</h3>
-                <p class="text-xs text-on-surface-variant">So sánh Số bước, Node đã duyệt, Thời gian tính toán giữa các
-                  thuật toán</p>
+                <h3 class="text-lg font-bold tracking-tight">📊 So sánh 5 Thuật toán Tìm đường</h3>
+                <p class="text-xs text-on-surface-variant">So sánh Số bước, Node đã duyệt, Thời gian tính toán giữa các thuật toán</p>
               </div>
               <button
                 class="flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:bg-primary/90 transition-all"
@@ -567,8 +600,24 @@
               </button>
             </div>
             <div class="h-80"><canvas id="algoComparisonChart"></canvas></div>
-            <div id="algoCompareResult" class="mt-4 text-sm text-on-surface-variant"></div>
+            <!-- ★ Detailed Analysis Table (populated by JS) -->
+            <div id="algoCompareResult" class="mt-6 text-sm text-on-surface-variant"></div>
           </div>
+
+          <!-- ★ Detailed Algorithm Analysis Table (pre-populated with benchmark data) -->
+          <div class="col-span-12 bg-surface-container-lowest p-8 rounded-3xl shadow-sm border border-slate-100">
+            <div class="flex items-center gap-3 mb-6">
+              <span class="text-2xl">🏆</span>
+              <div>
+                <h3 class="text-lg font-bold tracking-tight">Bảng phân tích chi tiết thuật toán</h3>
+                <p class="text-xs text-on-surface-variant">Kịch bản: Node 10 → Node 4 | Vật cản: 7, 8 | Trọng số = 1</p>
+              </div>
+            </div>
+            <div class="overflow-x-auto" id="benchmarkTableArea">
+              <!-- This will be populated by JS on page load and when compareAllBtn is clicked -->
+            </div>
+          </div>
+
 
           <!-- Order History -->
           <div class="col-span-12 bg-surface-container-lowest p-8 rounded-3xl shadow-sm border border-slate-100">

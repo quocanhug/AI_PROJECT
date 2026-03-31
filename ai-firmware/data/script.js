@@ -250,7 +250,7 @@ async function switchTab(tab) {
   document.getElementById('headerTitle').textContent = titles[tab];
   if (statsInterval) { clearInterval(statsInterval); statsInterval = null; }
   if (tab !== "stats") { try { await fetch("/setMode?m=" + (tab === "manual" ? "manual" : "line")); } catch (e) { } }
-  else { fetchRealStats(); statsInterval = setInterval(fetchRealStats, 3000); }
+  else { fetchRealStats(); initStatsTab(); statsInterval = setInterval(fetchRealStats, 3000); }
 }
 async function fetchRealStats() {
   try {
@@ -923,51 +923,315 @@ document.getElementById("deliverBtn").addEventListener("click", async () => {
 });
 
 // ==================== Algorithm Comparison ====================
-document.getElementById("compareAllBtn").addEventListener("click", () => {
+
+// ★ Benchmark-specific analysis data for each algorithm
+const ALGO_ANALYSIS = {
+  bfs: {
+    fullName: "BFS (Breadth-First Search)",
+    dataStructure: "Queue (Hàng đợi FIFO)",
+    principle: "Duyệt theo lớp — mở rộng tất cả node cùng khoảng cách trước khi sang lớp tiếp theo",
+    optimal: true,
+    optimalNote: "Trọng số đồng nhất",
+    evaluation: "Luôn tìm được đường ngắn nhất nhưng tốn bộ nhớ do duyệt lan tỏa ra mọi hướng. Phù hợp khi cần đảm bảo kết quả chính xác tuyệt đối.",
+    pros: ["Đảm bảo đường đi ngắn nhất", "Hoàn chỉnh (luôn tìm được nếu có)"],
+    cons: ["Tốn bộ nhớ (duyệt nhiều node thừa)", "Không dùng heuristic → chậm trên bản đồ lớn"],
+    color: "#005ab4",
+    icon: "🌊"
+  },
+  dfs: {
+    fullName: "DFS (Depth-First Search)",
+    dataStructure: "Stack (Ngăn xếp LIFO)",
+    principle: "Đi sâu nhất có thể theo một nhánh, nếu cụt thì quay lui (backtracking)",
+    optimal: false,
+    optimalNote: "Đường đi phụ thuộc vào thứ tự nhánh",
+    evaluation: "Kết quả không ổn định — có thể ăn may tìm được đường ngắn hoặc đi lòng vòng. Không phù hợp cho robot giao hàng thực tế.",
+    pros: ["Tiết kiệm bộ nhớ (chỉ lưu 1 nhánh)", "Tốc độ nhanh nếu đích nằm sâu"],
+    cons: ["KHÔNG đảm bảo đường ngắn nhất", "Kết quả ngẫu nhiên, không ổn định", "Dễ đi lòng vòng trên đồ thị có chu trình"],
+    color: "#ba1a1a",
+    icon: "🔍"
+  },
+  ucs: {
+    fullName: "UCS (Uniform Cost Search)",
+    dataStructure: "Priority Queue (Ưu tiên theo chi phí g)",
+    principle: "Luôn mở rộng node có tổng chi phí thực tế từ điểm xuất phát là nhỏ nhất",
+    optimal: true,
+    optimalNote: "Tối ưu với mọi trọng số",
+    evaluation: "Lý tưởng khi trọng số cạnh khác nhau. Với trọng số đồng nhất, UCS hoạt động giống hệt BFS nhưng tốn thêm chi phí sắp xếp priority queue.",
+    pros: ["Đảm bảo chi phí tối ưu tuyệt đối", "Hoạt động đúng với trọng số bất kỳ"],
+    cons: ["Duyệt nhiều node như BFS (blind search)", "Tốn thêm chi phí sắp xếp priority queue"],
+    color: "#465f89",
+    icon: "⚖️"
+  },
+  astar: {
+    fullName: "A* (A-Star Search)",
+    dataStructure: "Priority Queue (Ưu tiên theo f = g + h)",
+    principle: "Kết hợp chi phí thực tế (g) và ước lượng đến đích (h) để tìm đường tối ưu hiệu quả nhất",
+    optimal: true,
+    optimalNote: "Tối ưu + ít node duyệt nhất",
+    evaluation: "🏆 THUẬT TOÁN TỐI ƯU NHẤT cho Robot Giao Hàng. Tìm đường ngắn nhất với số lượng node duyệt ít nhất, tiết kiệm bộ nhớ và thời gian tính toán.",
+    pros: ["Đảm bảo đường ngắn nhất", "Duyệt ít node nhất nhờ heuristic", "Cân bằng hoàn hảo giữa tốc độ và chính xác"],
+    cons: ["Cần hàm heuristic phù hợp", "Phức tạp hơn BFS/DFS về cài đặt"],
+    color: "#16a34a",
+    icon: "⭐"
+  },
+  greedy: {
+    fullName: "Greedy Best-First Search",
+    dataStructure: "Priority Queue (Ưu tiên theo heuristic h)",
+    principle: "Tham lam — luôn chọn node cảm giác gần đích nhất theo đường chim bay",
+    optimal: false,
+    optimalNote: "Không đảm bảo, may rủi",
+    evaluation: "Tốc độ cực nhanh nhưng thiếu đảm bảo. Trong kịch bản này vô tình tìm được đường tối ưu nhưng dễ thất bại trên bản đồ phức tạp có nhiều vật cản hình chữ U.",
+    pros: ["Tốc độ tính toán cực nhanh", "Duyệt rất ít node (tiết kiệm bộ nhớ)"],
+    cons: ["KHÔNG đảm bảo đường ngắn nhất", "Dễ bị kẹt ở hẻm cụt (dead-end)", "Bỏ qua chi phí đã đi (chỉ nhìn heuristic)"],
+    color: "#964400",
+    icon: "🏃"
+  }
+};
+
+function runBenchmarkComparison() {
+  // ★ Dùng cấu hình bản đồ HIỆN TẠI (start/targets/obstacles từ tab Tự động)
   const sn = parseInt(document.getElementById("startNode").value);
   const tarArr = Array.from(targets);
-  if (!tarArr.length) { showToast("Chọn điểm giao!", "error"); return; }
+  if (!tarArr.length) return [];
+
   const algos = ["bfs", "dfs", "ucs", "astar", "greedy"];
-  const names = { bfs: "BFS", dfs: "DFS", ucs: "UCS", astar: "A*", greedy: "Greedy" };
   const results = [];
+
+  const BENCH_ITERATIONS = 100; // Chạy 100 lần lấy trung bình để tránh 0ms
+
   for (let algo of algos) {
-    // ★ Dùng buildSegments() — cùng hàm với tab Tự động — để thời gian khớp nhau
-    const t0 = performance.now();
+    // Chạy 1 lần lấy kết quả path/visited/cost
     const { segs, fullPath, totalSteps, totalExplored, totalCost } = buildSegments(sn, tarArr, algo);
-    const computeMs = parseFloat((performance.now() - t0).toFixed(3));
     const ok = segs.length > 0;
-    results.push({ algo, name: names[algo], visited: totalExplored, pathLen: totalSteps, cost: totalCost, time: computeMs, success: ok });
+    const pathStr = ok ? fullPath.join(' → ') : '—';
+
+    // Chạy N lần đo thời gian trung bình (tránh 0ms do grid quá nhỏ)
+    const t0 = performance.now();
+    for (let i = 0; i < BENCH_ITERATIONS; i++) {
+      buildSegments(sn, tarArr, algo);
+    }
+    const totalMs = performance.now() - t0;
+    const avgMs = parseFloat((totalMs / BENCH_ITERATIONS).toFixed(3));
+
+    results.push({
+      algo, name: getAlgoName(algo),
+      path: ok ? fullPath : [], pathStr,
+      pathLen: totalSteps, visited: totalExplored,
+      cost: totalCost, time: avgMs, success: ok
+    });
   }
-  results.sort((a, b) => { if (a.success && !b.success) return -1; if (!a.success && b.success) return 1; if (a.pathLen !== b.pathLen) return a.pathLen - b.pathLen; if (a.visited !== b.visited) return a.visited - b.visited; return a.time - b.time; });
-  const medals = ['🥇', '🥈', '🥉'];
-  results.forEach((r, i) => { r.rank = i + 1; r.medal = i < 3 ? medals[i] : ''; });
-  const labels = results.map(r => `${r.medal} #${r.rank} ${r.name}`);
+
+  // ★ Sắp xếp THUẦN TÚY theo hiệu suất thực tế (không thiên vị lý thuyết)
+  //   1) Ít node duyệt hơn → xếp trước (tiết kiệm bộ nhớ nhất)
+  //   2) Ít bước hơn → xếp trước (đường đi ngắn hơn)
+  //   3) Chi phí thấp hơn → xếp trước
+  //   4) Nhanh hơn → xếp trước
+  results.sort((a, b) => {
+    if (a.success && !b.success) return -1;
+    if (!a.success && b.success) return 1;
+    if (a.visited !== b.visited) return a.visited - b.visited;
+    if (a.pathLen !== b.pathLen) return a.pathLen - b.pathLen;
+    if (a.cost !== b.cost) return a.cost - b.cost;
+    return a.time - b.time;
+  });
+
+  const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
+  results.forEach((r, i) => { r.rank = i + 1; r.medal = medals[i] || ''; });
+
+  return results;
+}
+
+// ★ Cập nhật card kịch bản hiển thị đúng cấu hình hiện tại
+function updateScenarioCard() {
+  const sn = parseInt(document.getElementById("startNode").value);
+  const tarArr = Array.from(targets);
+  const obsArr = Array.from(obstacles);
+
+  const el1 = document.getElementById("statsStartNode");
+  if (el1) el1.textContent = `Node ${sn}`;
+
+  const el2 = document.getElementById("statsTargetNodes");
+  if (el2) el2.textContent = tarArr.length > 0 ? `Node ${tarArr.join(', ')}` : 'Chưa chọn';
+
+  const el3 = document.getElementById("statsObstacles");
+  if (el3) el3.textContent = obsArr.length > 0 ? `Node ${obsArr.join(', ')}` : 'Không có';
+
+  // Kiểm tra có trọng số tùy chỉnh không
+  const el4 = document.getElementById("statsWeightInfo");
+  if (el4) {
+    const hasCustomWeight = Object.values(edgeWeights).some(w => w !== 1);
+    el4.textContent = hasCustomWeight ? 'Tùy chỉnh' : 'Đồng nhất (=1)';
+  }
+}
+
+function renderBenchmarkChart(results) {
+  const labels = results.map(r => `${r.medal} ${r.name}`);
   const ctx = document.getElementById('algoComparisonChart').getContext('2d');
   if (algoChartInstance) algoChartInstance.destroy();
   algoChartInstance = new Chart(ctx, {
-    type: 'bar', data: {
-      labels, datasets: [
-        { label: 'Số bước', data: results.map(r => r.success ? r.pathLen : 0), backgroundColor: '#005ab4', borderRadius: 6, barPercentage: 0.7 },
-        { label: 'Node duyệt', data: results.map(r => r.success ? r.visited : 0), backgroundColor: '#aac7ff', borderRadius: 6, barPercentage: 0.7 },
-        { label: 'Thời gian (ms)', data: results.map(r => r.success ? r.time : 0), backgroundColor: '#bd5700', borderRadius: 6, barPercentage: 0.7 }
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Số bước di chuyển', data: results.map(r => r.success ? r.pathLen : 0), backgroundColor: '#005ab4', borderRadius: 6, barPercentage: 0.7 },
+        { label: 'Node đã duyệt', data: results.map(r => r.success ? r.visited : 0), backgroundColor: '#aac7ff', borderRadius: 6, barPercentage: 0.7 },
+        { label: 'Chi phí (Cost)', data: results.map(r => r.success ? r.cost : 0), backgroundColor: '#16a34a', borderRadius: 6, barPercentage: 0.7 }
       ]
     },
     options: {
-      responsive: true, maintainAspectRatio: false, animation: { duration: 600, easing: 'easeOutQuart' },
-      scales: { y: { beginAtZero: true, grid: { color: '#e1e3e4' }, ticks: { color: '#414753', font: { size: 11 } } }, x: { grid: { display: false }, ticks: { color: '#414753', font: { size: 12, weight: 'bold' } } } },
-      plugins: { legend: { position: 'top', labels: { color: '#191c1d', font: { size: 12, family: 'Inter', weight: '600' }, boxWidth: 14, padding: 16 } }, tooltip: { backgroundColor: '#191c1d', cornerRadius: 10, padding: 12 } }
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 800, easing: 'easeOutQuart' },
+      scales: {
+        y: { beginAtZero: true, grid: { color: '#e1e3e430' }, ticks: { color: '#414753', font: { size: 11 } }, title: { display: true, text: 'Giá trị', color: '#717785', font: { size: 12, weight: 'bold' } } },
+        x: { grid: { display: false }, ticks: { color: '#414753', font: { size: 12, weight: 'bold' } } }
+      },
+      plugins: {
+        legend: { position: 'top', labels: { color: '#191c1d', font: { size: 12, weight: '600' }, boxWidth: 14, padding: 16 } },
+        tooltip: { backgroundColor: '#191c1d', cornerRadius: 10, padding: 12, titleFont: { size: 13, weight: 'bold' } }
+      }
     }
   });
-  let html = `<table class="w-full text-left text-xs border-separate border-spacing-y-1 mt-2"><thead><tr class="text-[10px] uppercase font-bold text-on-surface-variant tracking-widest"><th class="px-2 py-1">Hạng</th><th class="px-2 py-1">Thuật toán</th><th class="px-2 py-1 text-center">Node</th><th class="px-2 py-1 text-center">Bước</th><th class="px-2 py-1 text-center">ms</th><th class="px-2 py-1 text-center">KQ</th></tr></thead><tbody>`;
+}
+
+function renderCompareResultTable(results) {
+  let html = `<table class="w-full text-left text-xs border-separate border-spacing-y-1 mt-2">
+    <thead><tr class="text-[10px] uppercase font-bold text-on-surface-variant tracking-widest">
+      <th class="px-3 py-2">Hạng</th>
+      <th class="px-3 py-2">Thuật toán</th>
+      <th class="px-3 py-2 text-center">Node duyệt</th>
+      <th class="px-3 py-2 text-center">Số bước</th>
+      <th class="px-3 py-2 text-center">Chi phí</th>
+      <th class="px-3 py-2 text-center">Thời gian</th>
+      <th class="px-3 py-2 text-center">Tối ưu?</th>
+    </tr></thead><tbody>`;
+
   for (let r of results) {
+    const info = ALGO_ANALYSIS[r.algo];
     const bg = r.rank === 1 ? 'bg-green-50' : r.rank === 2 ? 'bg-blue-50' : r.rank === 3 ? 'bg-amber-50' : 'bg-surface-container-low/40';
-    const badge = r.success ? '<span class="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-[10px] font-bold">✓</span>' : '<span class="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-[10px] font-bold">✗</span>';
-    html += `<tr class="${bg} rounded"><td class="px-2 py-2 font-black text-center">${r.medal || r.rank}</td><td class="px-2 py-2 font-bold text-primary">${r.name}</td><td class="text-center px-2">${r.success ? r.visited : '—'}</td><td class="text-center px-2">${r.success ? r.pathLen : '—'}</td><td class="text-center px-2">${r.time.toFixed(3)}</td><td class="text-center px-2">${badge}</td></tr>`;
+    const optBadge = info.optimal
+      ? '<span class="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-[10px] font-bold">✅ Có</span>'
+      : '<span class="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-[10px] font-bold">❌ Không</span>';
+    html += `<tr class="${bg} rounded">
+      <td class="px-3 py-2.5 font-black text-center text-base">${r.medal}</td>
+      <td class="px-3 py-2.5"><span class="font-bold text-primary">${info.icon} ${r.name}</span></td>
+      <td class="text-center px-3 font-bold">${r.success ? r.visited : '—'}</td>
+      <td class="text-center px-3 font-bold">${r.success ? r.pathLen : '—'}</td>
+      <td class="text-center px-3 font-bold">${r.success ? r.cost : '—'}</td>
+      <td class="text-center px-3 font-mono">${r.time.toFixed(3)} ms</td>
+      <td class="text-center px-3">${optBadge}</td>
+    </tr>`;
   }
   html += '</tbody></table>';
   document.getElementById("algoCompareResult").innerHTML = html;
-  showToast("So sánh hoàn tất!", "success");
+}
+
+function renderBenchmarkTable(results) {
+  let html = `<table class="w-full text-left text-sm border-separate border-spacing-y-2">
+    <thead><tr class="text-[10px] uppercase font-bold text-on-surface-variant tracking-widest">
+      <th class="px-4 py-2">Thuật toán</th>
+      <th class="px-4 py-2">Đường đi tìm được</th>
+      <th class="px-4 py-2 text-center">Số bước</th>
+      <th class="px-4 py-2 text-center">Node duyệt</th>
+      <th class="px-4 py-2 text-center">Chi phí</th>
+      <th class="px-4 py-2 text-center">Tối ưu?</th>
+      <th class="px-4 py-2">Nhận xét</th>
+    </tr></thead><tbody>`;
+
+  for (let r of results) {
+    const info = ALGO_ANALYSIS[r.algo];
+    const bg = r.rank === 1 ? 'bg-green-50 border-l-4 border-green-500' : r.rank === 2 ? 'bg-blue-50' : r.rank === 3 ? 'bg-amber-50' : 'bg-surface-container-low/40';
+    const optBadge = info.optimal
+      ? '<span class="px-2 py-1 bg-green-100 text-green-700 rounded-lg text-[10px] font-bold inline-block">✅ Có</span>'
+      : '<span class="px-2 py-1 bg-red-100 text-red-700 rounded-lg text-[10px] font-bold inline-block">❌ Không</span>';
+    const pathDisplay = r.success ? `<code class="text-xs bg-slate-100 px-2 py-1 rounded-lg font-mono text-primary font-bold">${r.pathStr}</code>` : '<span class="text-red-500 font-bold">Không tìm được</span>';
+
+    html += `<tr class="${bg} rounded-xl">
+      <td class="px-4 py-3">
+        <div class="flex items-center gap-2">
+          <span class="text-lg">${info.icon}</span>
+          <div>
+            <span class="font-bold text-on-surface block">${r.name}</span>
+            <span class="text-[10px] text-on-surface-variant">${r.medal} Hạng ${r.rank}</span>
+          </div>
+        </div>
+      </td>
+      <td class="px-4 py-3">${pathDisplay}</td>
+      <td class="px-4 py-3 text-center font-black text-lg text-primary">${r.success ? r.pathLen : '—'}</td>
+      <td class="px-4 py-3 text-center font-black text-lg" style="color:${info.color}">${r.success ? r.visited : '—'}</td>
+      <td class="px-4 py-3 text-center font-bold">${r.success ? r.cost : '—'}</td>
+      <td class="px-4 py-3 text-center">${optBadge}</td>
+      <td class="px-4 py-3 text-xs text-on-surface-variant max-w-[200px]">${info.optimalNote}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  document.getElementById("benchmarkTableArea").innerHTML = html;
+}
+
+function renderEvaluationCards() {
+  const order = ['astar', 'bfs', 'ucs', 'greedy', 'dfs'];
+  let html = '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">';
+
+  for (let algo of order) {
+    const info = ALGO_ANALYSIS[algo];
+    const isChamp = algo === 'astar';
+    const borderClass = isChamp ? 'border-2 border-green-500 shadow-lg shadow-green-500/10' : 'border border-outline-variant/20';
+    const champBadge = isChamp ? '<span class="absolute -top-3 left-4 px-3 py-1 bg-green-500 text-white text-[10px] font-black rounded-full uppercase tracking-wider shadow-sm">🏆 Khuyến nghị</span>' : '';
+
+    html += `<div class="relative bg-surface-container-lowest rounded-2xl ${borderClass} p-5 hover:shadow-md transition-all">
+      ${champBadge}
+      <div class="flex items-center gap-3 mb-3 ${isChamp ? 'mt-2' : ''}">
+        <span class="text-2xl">${info.icon}</span>
+        <div>
+          <h4 class="font-bold text-on-surface text-sm">${info.fullName}</h4>
+          <span class="text-[10px] text-on-surface-variant">${info.dataStructure}</span>
+        </div>
+      </div>
+      <p class="text-xs text-on-surface-variant mb-3 leading-relaxed">${info.evaluation}</p>
+      <div class="space-y-2">
+        <div>
+          <span class="text-[10px] font-bold text-green-700 uppercase tracking-wider block mb-1">✅ Ưu điểm</span>
+          <ul class="space-y-0.5">
+            ${info.pros.map(p => `<li class="text-[11px] text-on-surface-variant flex items-start gap-1"><span class="text-green-500 mt-0.5 shrink-0">•</span>${p}</li>`).join('')}
+          </ul>
+        </div>
+        <div>
+          <span class="text-[10px] font-bold text-red-700 uppercase tracking-wider block mb-1">❌ Nhược điểm</span>
+          <ul class="space-y-0.5">
+            ${info.cons.map(c => `<li class="text-[11px] text-on-surface-variant flex items-start gap-1"><span class="text-red-500 mt-0.5 shrink-0">•</span>${c}</li>`).join('')}
+          </ul>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  html += '</div>';
+  document.getElementById("algoEvaluationArea").innerHTML = html;
+}
+
+// ★ Main comparison handler
+document.getElementById("compareAllBtn").addEventListener("click", () => {
+  if (!targets.size) { showToast("Chọn điểm giao ở tab Tự động trước!", "error"); return; }
+  updateScenarioCard();
+  const results = runBenchmarkComparison();
+  if (!results.length) { showToast("Không tìm được đường!", "error"); return; }
+  renderBenchmarkChart(results);
+  renderCompareResultTable(results);
+  renderBenchmarkTable(results);
+  renderEvaluationCards();
+  showToast("📊 So sánh hoàn tất!", "success");
 });
+
+// ★ Auto-populate khi mở tab Thống kê
+function initStatsTab() {
+  updateScenarioCard();
+  if (!targets.size) return; // Chưa chọn target → để trống
+  const results = runBenchmarkComparison();
+  if (!results.length) return;
+  renderBenchmarkChart(results);
+  renderCompareResultTable(results);
+  renderBenchmarkTable(results);
+  renderEvaluationCards();
+}
 
 // ==================== Event Listeners ====================
 document.querySelectorAll("#startNode,#algoSel,#orderModeSel,#deliveryModeSel").forEach(el =>
