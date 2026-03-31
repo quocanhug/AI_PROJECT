@@ -28,7 +28,7 @@
 Dự án xây dựng một hệ thống xe robot 4WD giao hàng tự hành kết hợp:
 
 1. **Giao diện Web** mô phỏng bản đồ 2D với 5 thuật toán tìm kiếm AI, animation trực quan từng bước
-2. **Xe robot thực tế** dò line trên lưới sàn 4×5 (20 node), rẽ đúng hướng tại giao lộ, tránh vật cản
+2. **Xe robot thực tế** dò line trên lưới sàn 3×5 (15 node), rẽ đúng hướng tại giao lộ, tránh vật cản
 
 Hệ thống giao tiếp **hai chiều real-time** qua WebSocket: Web tính đường → gửi cho Robot → Robot phản hồi telemetry/vật cản → Web tái định tuyến.
 
@@ -233,10 +233,8 @@ Node IDs:           Track thực tế:
  5 ── 6 ── 7 ── 8 ── 9       ●─────●─────●─────●─────●
  │    │    │    │    │        │     │     │     │     │
 10 ──11 ──12 ──13 ──14       ●─────●─────●─────●─────●
- │    │    │    │    │        │     │     │     │     │
-15 ──16 ──17 ──18 ──19       ●─────●─────●─────●─────●
 
-Grid: 4 hàng × 5 cột
+Grid: 3 hàng × 5 cột
 Khoảng cách giữa 2 node kề: ~25cm
 Mỗi ● = giao lộ (intersection)
 Mỗi ─ = line trên sàn
@@ -250,7 +248,7 @@ Mỗi ─ = line trên sàn
 
 | Message | Payload | Mô tả |
 |---|---|---|
-| `ROUTE` | `{path: [15,10,5], initialDir: 2}` | Gửi lộ trình (mảng node ID) |
+| `ROUTE` | `{path: [10,5,0], initialDir: 2}` | Gửi lộ trình (mảng node ID) |
 | `STOP` | `{}` | Dừng bình thường |
 | `ESTOP` | `{}` | Dừng khẩn cấp |
 | `RESUME` | `{}` | Tiếp tục route đã dừng |

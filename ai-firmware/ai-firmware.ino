@@ -38,7 +38,7 @@ volatile UIMode currentMode = MODE_MANUAL;
 bool line_mode = false;
 bool is_auto_running = false;
 
-int currentPath[20]; 
+int currentPath[15]; 
 int pathLength = 0;
 int currentTargetNode = -1;
 int currentPathIndex = 0;
@@ -104,7 +104,7 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
     JsonArray pathArr = doc["path"].as<JsonArray>();
     pathLength = 0;
     for (JsonVariant v : pathArr) {
-      if (pathLength < 20) currentPath[pathLength++] = v.as<int>();
+      if (pathLength < 15) currentPath[pathLength++] = v.as<int>();
     }
     currentPathIndex = 0;
     
@@ -245,11 +245,11 @@ void setup() {
       String pathStr = r->getParam("path")->value();
       pathLength = 0;
       int startIdx = 0; int commaIdx = pathStr.indexOf(',');
-      while (commaIdx != -1 && pathLength < 20) {
+      while (commaIdx != -1 && pathLength < 15) {
         currentPath[pathLength++] = pathStr.substring(startIdx, commaIdx).toInt();
         startIdx = commaIdx + 1; commaIdx = pathStr.indexOf(',', startIdx);
       }
-      if (startIdx < pathStr.length() && pathLength < 20) currentPath[pathLength++] = pathStr.substring(startIdx).toInt();
+      if (startIdx < pathStr.length() && pathLength < 15) currentPath[pathLength++] = pathStr.substring(startIdx).toInt();
       if(pathLength > 1) currentTargetNode = currentPath[1];
     }
     

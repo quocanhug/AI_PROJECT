@@ -2,7 +2,7 @@
 #include "do_line.h"
 
 // ================= Extern từ main.ino (dùng cho MODE_DELIVERY & MODE_AI_ROUTE) =================
-extern int currentPath[20];
+extern int currentPath[15];
 extern int pathLength;
 extern int currentPathIndex;
 extern int currentDir;
@@ -14,11 +14,10 @@ extern void gripOpen();
 extern void gripClose();
 
 // ================= Tọa độ node trên bản đồ (dùng tính hướng rẽ) =================
-const int node_coords[20][2] = {
+const int node_coords[15][2] = {
   {30, 30}, {100, 30}, {170, 30}, {240, 30}, {310, 30},
   {30, 100}, {100, 100}, {170, 100}, {240, 100}, {310, 100},
-  {30, 170}, {100, 170}, {170, 170}, {240, 170}, {310, 170},
-  {30, 240}, {100, 240}, {170, 240}, {240, 240}, {310, 240}
+  {30, 170}, {100, 170}, {170, 170}, {240, 170}, {310, 170}
 };
 
 int getTargetDirection(int nodeA, int nodeB) {
@@ -78,8 +77,8 @@ const float TRACK_WIDTH_M = 0.1150f;
 
 // ================= Tham số điều khiển (GIÁ TRỊ GỐC ĐÃ CHẠY TỐT) =================
 float v_base   = 0.4f;
-float v_boost  = 0.18f;  // ★ Tăng từ 0.11: sửa lệch mạnh hơn khi L1+M hoặc R1+M
-float v_hard   = 0.25f;  // ★ Tăng từ 0.13: sửa lệch rất mạnh khi chỉ L1 hoặc R1 (không M)
+float v_boost  = 0.15f;  
+float v_hard   = 0.20f; 
 float v_search = 0.2f;
 float vF = v_base * 0.90f;
 
@@ -91,10 +90,10 @@ const unsigned long CTRL_DT_MS = 10;
 volatile long encL_count = 0, encR_count = 0, encL_total = 0, encR_total = 0;
 volatile uint32_t encL_last_us=0, encR_last_us=0;
 float vL_ema=0.0f, vR_ema=0.0f;  // ★ non-static: extern bởi main.ino cho telemetry
-const float EMA_B = 0.5f;   // ★ Giảm từ 0.7: phản ứng nhanh hơn khi lệch
+const float EMA_B = 0.7f;   // ★ Tăng từ 0.5: lọc mượt hơn, ít giật
 
 const int PWM_MIN_RUN = 75;
-const int PWM_SLEW    = 30;  // ★ Tăng từ 8: motor đáp ứng nhanh hơn khi sửa hướng
+const int PWM_SLEW    = 15;  // ★ Giảm từ 30: motor thay đổi từ từ hơn, xe chạy mượt
 static int pwmL_prev=0, pwmR_prev=0;
 
 enum Side {NONE, LEFT, RIGHT};
@@ -394,16 +393,22 @@ void do_line_loop() {
         const int TURN_PWM = 160;
         bool turnOk = true;
 
+        // ★ Dừng hẳn trước khi quay để xoay chính xác
+        motorsStop(); delay(300);
+
         if (diff == 1) {
-          turnOk = spin_left_deg(60.0, TURN_PWM);
+          turnOk = spin_left_deg(65.0, TURN_PWM);
           Serial.println("  >> INIT LEFT");
         } else if (diff == 3) {
-          turnOk = spin_right_deg(60.0, TURN_PWM);
+          turnOk = spin_right_deg(65.0, TURN_PWM);
           Serial.println("  >> INIT RIGHT");
         } else if (diff == 2) {
           turnOk = spin_right_deg(115.0, TURN_PWM);
           Serial.println("  >> INIT U-TURN");
         }
+
+        // ★ Dừng hẳn sau khi quay xong
+        motorsStop(); delay(200);
 
         if (!turnOk) {
           Serial.println("  ❗ INIT TURN FAILED — dừng route");
@@ -564,11 +569,18 @@ void do_line_loop() {
             int diff = (targetDir - currentDir + 4) % 4;
             const int TURN_PWM = 160;
             bool turnOk = true;
-            // ★ Góc 60° × hệ số 1.5 = ~90° thực tế
-            if (diff == 1) { turnOk = spin_left_deg(60.0, TURN_PWM); Serial.println("  >> LEFT"); }
-            else if (diff == 3) { turnOk = spin_right_deg(60.0, TURN_PWM); Serial.println("  >> RIGHT"); }
-            else if (diff == 2) { turnOk = spin_right_deg(115.0, TURN_PWM); Serial.println("  >> U-TURN"); }
+
+            // ★ Dừng hẳn trước khi quay để xoay chính xác
+            motorsStop(); delay(300);
+
+            // ★ Góc 65° × hệ số 1.5 = 97.5 thực tế ma sát yếu bù trừ
+            if (diff == 1) { turnOk = spin_left_deg(65.0, TURN_PWM); Serial.println("  >> LEFT"); }
+            else if (diff == 3) { turnOk = spin_right_deg(65.0, TURN_PWM); Serial.println("  >> RIGHT"); }
+            else if (diff == 2) { turnOk = spin_right_deg(126.0, TURN_PWM); Serial.println("  >> U-TURN"); }
             else { Serial.println("  >> STRAIGHT"); }
+
+            // ★ Dừng hẳn sau khi quay xong
+            motorsStop(); delay(200);
 
             // ★ FIX: Xử lý spin thất bại (timeout hoặc abort)
             if (!turnOk) {

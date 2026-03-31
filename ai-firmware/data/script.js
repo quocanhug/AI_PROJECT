@@ -14,15 +14,13 @@ let deliveryInProgress = false;
 let graph = {
   0: [1, 5], 1: [0, 2, 6], 2: [1, 3, 7], 3: [2, 4, 8], 4: [3, 9],
   5: [0, 6, 10], 6: [1, 5, 7, 11], 7: [2, 6, 8, 12], 8: [3, 7, 9, 13], 9: [4, 8, 14],
-  10: [5, 11, 15], 11: [6, 10, 12, 16], 12: [7, 11, 13, 17], 13: [8, 12, 14, 18], 14: [9, 13, 19],
-  15: [10, 16], 16: [11, 15, 17], 17: [12, 16, 18], 18: [13, 17, 19], 19: [14, 18]
+  10: [5, 11], 11: [6, 10, 12], 12: [7, 11, 13], 13: [8, 12, 14], 14: [9, 13]
 };
 const edgeWeights = {};
 const coords = {
   0: [30, 30], 1: [100, 30], 2: [170, 30], 3: [240, 30], 4: [310, 30],
   5: [30, 100], 6: [100, 100], 7: [170, 100], 8: [240, 100], 9: [310, 100],
-  10: [30, 170], 11: [100, 170], 12: [170, 170], 13: [240, 170], 14: [310, 170],
-  15: [30, 240], 16: [100, 240], 17: [170, 240], 18: [240, 240], 19: [310, 240]
+  10: [30, 170], 11: [100, 170], 12: [170, 170], 13: [240, 170], 14: [310, 170]
 };
 const TARGET_COLORS = ["#ba1a1a", "#964400", "#465f89", "#0873df", "#bd5700", "#2e4770"];
 let targets = new Set([4]), obstacles = new Set(), finalCalculatedPath = [];
@@ -66,7 +64,7 @@ function createRobotIndicator() {
   robotIndicator = g;
 }
 function updateRobotIndicator(nodeId, dir) {
-  if (!robotIndicator || nodeId < 0 || nodeId >= 20) return;
+  if (!robotIndicator || nodeId < 0 || nodeId >= 15) return;
   const [x, y] = coords[nodeId]; const rot = DIR_ROTATION[dir];
   robotIndicator.setAttribute("transform", `translate(${x},${y}) rotate(${rot})`);
   robotIndicator.style.display = "";
@@ -142,7 +140,7 @@ function handleWsMessage(data) {
   else if (data.type === "ROUTE_ACK") showToast(`Route nạp: ${data.commands} node`, "success");
   else if (data.type === "OBSTACLE_DETECTED") {
     const obsNode = data.obstacleNode !== undefined ? data.obstacleNode :
-      (data.position ? data.position.row * 5 + data.position.col : -1);
+      (data.position ? data.position.row * 5 + data.position.col : -1);  // 3×5 grid: still row*5+col
     showToast(`⚠️ Vật cản tại Node ${obsNode}!`, "error");
     updateRobotState("OBSTACLE");
     handleDynamicReroute(data);
@@ -167,11 +165,11 @@ function handleWsMessage(data) {
 function handleDynamicReroute(data) {
   // Lấy node vật cản và node robot
   const obsNode = data.obstacleNode !== undefined ? data.obstacleNode :
-    (data.position ? data.position.row * 5 + data.position.col : -1);
+    (data.position ? data.position.row * 5 + data.position.col : -1);  // 3×5 grid: still row*5+col
   const robotNode = data.robotNode !== undefined ? data.robotNode :
     (data.robot_position ? data.robot_position.row * 5 + data.robot_position.col : -1);
 
-  if (obsNode >= 0 && obsNode < 20) obstacles.add(obsNode);
+  if (obsNode >= 0 && obsNode < 15) obstacles.add(obsNode);
 
   // Cập nhật hướng robot từ ESP32
   if (data.robotDir !== undefined) {
@@ -302,11 +300,11 @@ function toggleEdge(a, b) {
 
 // ==================== Map Nodes ====================
 const startNodeEl = document.getElementById("startNode");
-for (let i = 0; i < 20; i++) { let o = document.createElement("option"); o.value = i; o.innerText = "Node " + i; if (i === 15) o.selected = true; startNodeEl.appendChild(o); }
+for (let i = 0; i < 15; i++) { let o = document.createElement("option"); o.value = i; o.innerText = "Node " + i; if (i === 10) o.selected = true; startNodeEl.appendChild(o); }
 
 function initNodes() {
   const layer = document.getElementById("nodeLayer"); layer.innerHTML = "";
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 15; i++) {
     const [x, y] = coords[i];
     const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
     g.setAttribute("class", "node-group"); g.setAttribute("id", "svg-node-" + i);
@@ -330,7 +328,7 @@ function setMapTool(tool) {
   updateEdgeSelUI();
 }
 function updateEdgeSelUI() {
-  for (let i = 0; i < 20; i++) document.getElementById("svg-node-" + i).classList.remove("node-edge-sel");
+  for (let i = 0; i < 15; i++) document.getElementById("svg-node-" + i).classList.remove("node-edge-sel");
   if (edgeSelFirst !== null) document.getElementById("svg-node-" + edgeSelFirst).classList.add("node-edge-sel");
 }
 
@@ -380,7 +378,7 @@ function handleNodeClick(nid) {
 // ==================== Update Node Visuals (no path calculation) ====================
 function updateNodeVisuals() {
   const sn = parseInt(document.getElementById("startNode").value);
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 15; i++) {
     let cls = "node-group";
     if (i === sn) cls += " node-start";
     else if (obstacles.has(i)) cls += " node-obstacle";
@@ -670,7 +668,7 @@ function animReset() {
 function animStop() { anim.playing = false; if (anim.timer) { clearTimeout(anim.timer); anim.timer = null; } }
 
 function animClearVis() {
-  for (let i = 0; i < 20; i++) document.getElementById("svg-node-" + i).classList.remove("node-explored", "node-frontier", "node-current", "node-final-path");
+  for (let i = 0; i < 15; i++) document.getElementById("svg-node-" + i).classList.remove("node-explored", "node-frontier", "node-current", "node-final-path");
   const fl = document.getElementById("flowLayer"); if (fl) fl.innerHTML = '';
 }
 
@@ -723,7 +721,7 @@ function animRenderStep(step) {
         el.classList.add("node-final-path");
       }
     }
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 15; i++) {
       document.getElementById("svg-node-" + i).classList.remove("node-explored", "node-frontier", "node-current");
     }
     flowLayer.innerHTML = ''; // Clear flow edges for new segment
@@ -807,7 +805,7 @@ function calculateOverallPath() {
   if (anim.active) return; // Don't interfere with animation
   const sn = parseInt(document.getElementById("startNode").value);
   const deliveryMode = document.getElementById("deliveryModeSel").value;
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 15; i++) {
     let cls = "node-group";
     if (i === sn) cls += " node-start"; else if (obstacles.has(i)) cls += " node-obstacle";
     document.getElementById("svg-node-" + i).setAttribute("class", cls);
