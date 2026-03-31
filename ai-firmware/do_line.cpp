@@ -634,14 +634,17 @@ void do_line_loop() {
     }
   }
   else {
-    // ★ PID dò line: CHỈ 3 mắt giữa
+   // ★ PID dò line: 3 mắt giữa + L2/R2 hỗ trợ khi lệch nặng
     if      ( M && !L1 && !R1) { last_seen = NONE;  vL_tgt = v_base;           vR_tgt = v_base; }
     else if ( L1 &&  M && !R1) { last_seen = LEFT;  vL_tgt = v_base - v_boost; vR_tgt = v_base + v_boost; }
     else if ( L1 && !M       ) { last_seen = LEFT;  vL_tgt = v_base - v_hard;  vR_tgt = v_base + v_hard; }
     else if ( R1 &&  M && !L1) { last_seen = RIGHT; vL_tgt = v_base + v_boost; vR_tgt = v_base - v_boost; }
     else if ( R1 && !M       ) { last_seen = RIGHT; vL_tgt = v_base + v_hard;  vR_tgt = v_base - v_hard; }
+    // ★ FIX: L2 hoặc R2 nhận line riêng lẻ (xe lệch rất nặng) → sửa mạnh
+    else if ( L2 && !L1 && !M && !R1 && !R2) { last_seen = LEFT;  vL_tgt = -vF * 0.5f; vR_tgt = vF * 0.5f; }  // Quay phải tìm line
+    else if ( R2 && !L1 && !M && !R1 && !L2) { last_seen = RIGHT; vL_tgt = vF * 0.5f;  vR_tgt = -vF * 0.5f; } // Quay trái tìm line
     else if (!L1 && !M && !R1) {
-      // Mất line 3 mắt giữa
+      // Mất line 3 mắt giữa (L2/R2 cũng không có)
       if (!seen_line_ever && is_auto_running) {
         // ★ FIX: Xe đặt trước line → bò chậm tới khi tìm thấy
         vL_tgt = v_search; vR_tgt = v_search;
@@ -651,7 +654,11 @@ void do_line_loop() {
         recovering = true; rec_t0 = millis();
         if (last_seen == LEFT)       { vL_tgt = -vF; vR_tgt =  vF; }
         else if (last_seen == RIGHT) { vL_tgt =  vF; vR_tgt = -vF; }
-        else                         { vL_tgt = v_base; vR_tgt = v_base; }
+        else {
+          // ★ FIX: last_seen==NONE (chưa biết lệch bên nào) → quay nhẹ sang trái tìm line
+          // thay vì chạy thẳng vô nghĩa
+          vL_tgt = -vF * 0.4f; vR_tgt = vF * 0.4f;
+        }
       }
     }
     else { vL_tgt = v_base; vR_tgt = v_base; }
