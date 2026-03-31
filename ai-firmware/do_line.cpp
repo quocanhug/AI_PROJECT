@@ -317,7 +317,8 @@ bool move_forward_distance_until_line(double dist_m, int pwmAbs){
   while (true){
     if (!g_line_enabled){ motorsStop(); return false; }
     long cL, cR; noInterrupts(); cL = encL_total; cR = encR_total; interrupts();
-    if (digitalRead(M_SENSOR) == LOW){ motorsStop(); return true; }
+    // ★ FIX: Check cả 3 mắt giữa (L1, M, R1) thay vì chỉ M
+    if (digitalRead(M_SENSOR) == LOW || digitalRead(L1_SENSOR) == LOW || digitalRead(R1_SENSOR) == LOW){ motorsStop(); return true; }
     bool left_done  = (labs(cL - sL) >= target);
     bool right_done = (labs(cR - sR) >= target);
     if (left_done && right_done) break;
@@ -427,7 +428,7 @@ void do_line_loop() {
         currentDir = targetDir;
 
         // Sau khi xoay xong, tiến tìm line
-        move_forward_distance_until_line(0.10, 120);
+        move_forward_distance_until_line(0.10, 90);  // ★ PWM giảm 120→90: chậm hơn, dễ bắt line
       } else {
         Serial.println("  >> INIT STRAIGHT (hướng đã chuẩn)");
       }
@@ -603,7 +604,7 @@ void do_line_loop() {
           // ★ Tăng index SAU khi đã rẽ
           currentPathIndex++;
           // ★ Tìm line thông minh: tiến tối đa 10cm, dừng ngay khi M chạm vạch
-          move_forward_distance_until_line(0.10, 120);
+          move_forward_distance_until_line(0.10, 90);  // ★ PWM giảm 120→90: chậm hơn, dễ bắt line
         }
         return;
       }
