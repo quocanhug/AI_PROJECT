@@ -103,7 +103,7 @@ bool avoiding = false;
 static volatile bool g_line_enabled = true;
 bool recovering = false;
 unsigned long rec_t0 = 0;
-const unsigned long RECOV_TIME_MS = 6000;
+const unsigned long RECOV_TIME_MS = 3000;
 
 // ★ Node cúôi cùng xe đứng trên giao lộ (trước khi tăng currentPathIndex)
 int lastConfirmedNodeIdx = 0;
@@ -473,14 +473,17 @@ void do_line_loop() {
   // ===== AI Route: vật cản → dừng, báo Web =====
   if (currentMode == MODE_AI_ROUTE && obs_latched && !avoiding) {
     motorsStop();
-    int robotNode = (currentPathIndex < pathLength) ? currentPath[currentPathIndex] : 0;
-    int obstacleNode = (currentPathIndex + 1 < pathLength) ? currentPath[currentPathIndex + 1] : robotNode;
+    obs_latched = false;  // ★ Xóa cờ ngay để không rớ vào lần sau
+    // ★ Dùng lastConfirmedNodeIdx: node xe đứng thực tế
+    //   currentPathIndex = lastConfirmedNodeIdx + 1 (node đang tiến tới, cũng là node bị chặn)
+    int robotNode    = (lastConfirmedNodeIdx < pathLength) ? currentPath[lastConfirmedNodeIdx] : 0;
+    int obstacleNode = (currentPathIndex    < pathLength) ? currentPath[currentPathIndex]    : robotNode;
     extern void wsBroadcast(const char*);
     String msg = "{\"type\":\"OBSTACLE_DETECTED\","
                  "\"robotNode\":" + String(robotNode) + ","
                  "\"obstacleNode\":" + String(obstacleNode) + ","
                  "\"robotDir\":" + String(currentDir) + ","
-                 "\"current_step\":" + String(currentPathIndex) + ","
+                 "\"current_step\":" + String(lastConfirmedNodeIdx) + ","
                  "\"distance_cm\":" + String(us_dist_cm, 1) + "}";
     wsBroadcast(msg.c_str());
     Serial.printf("[AI_ROUTE] OBSTACLE! robot@node%d blocked@node%d\n", robotNode, obstacleNode);
@@ -537,6 +540,8 @@ void do_line_loop() {
         if (pathLength > 0) {
           // ★ Kiểm tra đã đến đích chưa
           if (currentPathIndex >= pathLength - 1) {
+            // ★ Nhích thêm 2cm để tâm xe đến đúng tâm node đích
+            move_forward_distance(0.02, 90);
             motorsStop(); delay(200);
             Serial.printf("[AI_ROUTE] ARRIVED at node %d\n", currentPath[pathLength-1]);
 
@@ -600,15 +605,43 @@ void do_line_loop() {
             }
 
             currentDir = targetDir;
-            lastConfirmedNodeIdx = currentPathIndex;  // ★ Lưu node cũ TRƯỚC khi tăng
-            // ★ currentPathIndex++ dời ra SAU khi tìm được line mới
-            //   Đảm bảo pathIndex chỉ tăng khi xe đã thực sự đứng trên segment mới
+            lastConfirmedNodeIdx = currentPathIndex;
             bool lineFound = move_forward_distance_until_line(0.10, 90);
-            currentPathIndex++;  // tăng dù có thấy line hay không (đã qua node)
+            currentPathIndex++;
             if (!lineFound) {
-              // Không tìm được line sau khi rẻ → vào recovering ngay
-              recovering = true; rec_t0 = millis();
-              Serial.println("  ⚠️ Line not found after turn — entering recovery");
+              // ★ Không tìm được line sau khi rẻ/U-turn
+              // Chuẩn hướng: quét rộng hơn (200ms trái + 200ms phải x2)
+              Serial.println("  ⚠️ Line not found after turn — wide scan");
+              bool foundWide = false;
+              for (int sweep = 0; sweep < 2 && !foundWide; sweep++) {
+                // Quét trái 200ms
+                motorWriteLR_signed(-90, 90);
+                unsigned long ts = millis();
+                while (millis() - ts < 200) {
+                  if (!g_line_enabled) { motorsStop(); return; }
+                  if (digitalRead(L2_SENSOR)==LOW || digitalRead(L1_SENSOR)==LOW ||
+                      digitalRead(M_SENSOR)==LOW  || digitalRead(R1_SENSOR)==LOW ||
+                      digitalRead(R2_SENSOR)==LOW) { motorsStop(); foundWide = true; break; }
+                  delay(5);
+                }
+                if (foundWide) break;
+                motorsStop(); delay(50);
+                // Quét phải 200ms
+                motorWriteLR_signed(90, -90);
+                ts = millis();
+                while (millis() - ts < 200) {
+                  if (!g_line_enabled) { motorsStop(); return; }
+                  if (digitalRead(L2_SENSOR)==LOW || digitalRead(L1_SENSOR)==LOW ||
+                      digitalRead(M_SENSOR)==LOW  || digitalRead(R1_SENSOR)==LOW ||
+                      digitalRead(R2_SENSOR)==LOW) { motorsStop(); foundWide = true; break; }
+                  delay(5);
+                }
+                motorsStop(); delay(50);
+              }
+              if (!foundWide) {
+                // Vẫn không thấy → vào recovering
+                recovering = true; rec_t0 = millis();
+              }
             }
           }
         }
