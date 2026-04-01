@@ -1920,65 +1920,91 @@ document.getElementById("animSpeedSlider").addEventListener("input", (e) => {
 });
 
 // ==================== Manual D-Pad ====================
+// ==================== Manual D-Pad ====================
+
+// Hàm xử lý logic tính toán lộ trình và gọi xe về kho
+function returnHome() {
+  const sn = parseInt(document.getElementById("startNode").value);
+  let startCalcNode = robotCurrentNode;
+
+  // Nếu chưa có vị trí hiện tại (ví dụ vừa load trang), lấy node xuất phát làm mặc định
+  if (startCalcNode === -1) {
+    startCalcNode = sn;
+  }
+
+  // Nếu xe đã ở kho và không trong quá trình giao hàng
+  if (startCalcNode === sn && !deliveryInProgress) {
+    showToast("Xe đã ở vị trí xuất phát (Kho)!", "info");
+    return;
+  }
+
+  // Tính toán đường đi từ node hiện tại về kho
+  const algo = document.getElementById("algoSel").value || "astar";
+  const result = findPathAnimated(startCalcNode, sn, algo);
+
+  if (!result) {
+    showToast("❌ Không tìm được đường về kho (vướng vật cản)!", "error");
+    return;
+  }
+
+  // Chuyển đổi thành lệnh điều hướng và gửi qua WebSocket
+  const cmds = pathToCommands(result.path, robotCurrentDir);
+
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    wsSend({
+      type: "ROUTE",
+      commands: cmds,
+      total_steps: cmds.length,
+      algorithm: algo,
+      path: result.path,
+      startNode: startCalcNode,
+      initialDir: JS_TO_CPP_DIR[robotCurrentDir],
+    });
+
+    // Cập nhật giao diện trạng thái
+    deliveryInProgress = true;
+    const banner = document.getElementById("deliveryStatusBanner");
+    const icon = document.getElementById("deliveryStatusIcon");
+    const text = document.getElementById("deliveryStatusText");
+    if (banner) {
+      banner.classList.remove("hidden");
+      banner.className =
+        "flex items-center gap-2 rounded-xl p-3 bg-blue-50 border border-blue-200";
+      icon.textContent = "🏠";
+      icon.className = "text-lg text-blue-600 animate-pulse";
+      text.textContent = `Đang tự động quay về kho (Node ${sn})...`;
+      text.className = "text-sm font-bold text-blue-700";
+    }
+
+    // Chạy mô phỏng UI đoạn đường về
+    animRunSingle(result, getAlgoName(algo), "🏠 Về kho");
+    showToast("🏠 Đang điều động xe về kho...", "success");
+  } else {
+    showToast("❌ Mất kết nối WebSocket với xe!", "error");
+  }
+}
+
+// Cập nhật lại hàm sendCommand để tách biệt return_home và estop
 async function sendCommand(cmd) {
+  // Bắt riêng lệnh return_home để xử lý tìm đường
+  if (cmd === "/return_home") {
+    returnHome();
+    return;
+  }
+
+  // Các lệnh điều khiển thủ công khác
   try {
     await fetch(cmd);
   } catch (e) {}
-  if (cmd === "/estop" || cmd === "/return_home") {
+
+  // Nút Dừng khẩn cấp
+  if (cmd === "/estop") {
     wsSend({ type: "ESTOP" });
     resetRobotToStart();
   }
+
   showToast("Lệnh: " + cmd, "info");
 }
-async function send(path) {
-  try {
-    await fetch(path);
-  } catch (e) {}
-}
-let activeHold = { btn: null, pid: null };
-function guard(fn) {
-  return (e) => {
-    if (currentMode !== "manual") {
-      e.preventDefault();
-      return;
-    }
-    return fn(e);
-  };
-}
-document.querySelectorAll(".hold").forEach((btn) => {
-  btn.addEventListener(
-    "pointerdown",
-    guard((e) => {
-      e.preventDefault();
-      activeHold = { btn, pid: e.pointerId };
-      btn.classList.add("active-hold");
-      btn.setPointerCapture(e.pointerId);
-      send(btn.dataset.path);
-    }),
-    { passive: false },
-  );
-  const release = guard((e) => {
-    e.preventDefault();
-    if (activeHold.btn === btn && activeHold.pid === e.pointerId) {
-      btn.classList.remove("active-hold");
-      send("/stop");
-      activeHold = { btn: null, pid: null };
-    }
-    try {
-      btn.releasePointerCapture(e.pointerId);
-    } catch (_) {}
-  });
-  btn.addEventListener("pointerup", release, { passive: false });
-  btn.addEventListener("pointercancel", release, { passive: false });
-});
-document.getElementById("stopBtn").addEventListener(
-  "pointerdown",
-  guard((e) => {
-    e.preventDefault();
-    send("/stop");
-  }),
-  { passive: false },
-);
 
 // ==================== Init ====================
 initNodes();
