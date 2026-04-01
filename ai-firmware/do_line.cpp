@@ -16,7 +16,7 @@ extern void gripClose();
 
 // ================= Tọa độ node trên bản đồ (dùng tính hướng rẽ)
 // ================= Grid thuc te: 4x2 o (5 cot x 3 hang) = 15 node (0-14)
-// Moi o: 25cm rong x 35cm cao, xe 22cm
+// Moi o: 25cm rong x 35cm cao,
 const int NODE_COUNT = 15;
 const int node_coords[15][2] = {{30, 30},   {100, 30},  {170, 30},  {240, 30},
                                 {310, 30},  {30, 100},  {100, 100}, {170, 100},
@@ -25,7 +25,8 @@ const int node_coords[15][2] = {{30, 30},   {100, 30},  {170, 30},  {240, 30},
 
 int getTargetDirection(int nodeA, int nodeB) {
   // ★ FIX C3: Validate node index to prevent OOB access
-  if (nodeA < 0 || nodeA >= NODE_COUNT || nodeB < 0 || nodeB >= NODE_COUNT) return -1;
+  if (nodeA < 0 || nodeA >= NODE_COUNT || nodeB < 0 || nodeB >= NODE_COUNT)
+    return -1;
   int dx = node_coords[nodeB][0] - node_coords[nodeA][0];
   int dy = node_coords[nodeB][1] - node_coords[nodeA][1];
   if (dy > 0)
@@ -119,8 +120,8 @@ const unsigned long RECOV_TIME_MS = 3000; // 3s timeout (luoi nho 35x25cm)
 
 // Recovery: LUI + QUET NHE trai/phai, KHONG quay dau
 int recov_sweep_count = 0;
-const int RECOV_MAX_SWEEPS = 8; // 8 sweep (trai-phai luan phien)
-bool recov_did_backup = false;   // da lui lan 1 chua
+const int RECOV_MAX_SWEEPS = 8;       // 8 sweep (trai-phai luan phien)
+bool recov_did_backup = false;        // da lui lan 1 chua
 bool recov_did_second_backup = false; // da lui lan 2 chua
 
 int lastConfirmedNodeIdx = 0;
@@ -150,8 +151,11 @@ void IRAM_ATTR encR_isr() {
 
 // ================= Utils =================
 inline int clamp255(int v) { return v < 0 ? 0 : (v > 255 ? 255 : v); }
-// ★ FIX M4: Signed clamp [-255, 255] for PWM that can be negative (recovery sweep)
-inline int clampSigned255(int v) { return v < -255 ? -255 : (v > 255 ? 255 : v); }
+// ★ FIX M4: Signed clamp [-255, 255] for PWM that can be negative (recovery
+// sweep)
+inline int clampSigned255(int v) {
+  return v < -255 ? -255 : (v > 255 ? 255 : v);
+}
 inline float clampf(float v, float lo, float hi) {
   return v < lo ? lo : (v > hi ? hi : v);
 }
@@ -243,12 +247,25 @@ static float readDistanceCM_filtered() {
   float samples[3];
   for (int i = 0; i < 3; i++) {
     samples[i] = readDistanceCM();
-    if (i < 2) delayMicroseconds(500);
+    if (i < 2)
+      delayMicroseconds(500);
   }
   // Sort 3 values to get median
-  if (samples[0] > samples[1]) { float t = samples[0]; samples[0] = samples[1]; samples[1] = t; }
-  if (samples[1] > samples[2]) { float t = samples[1]; samples[1] = samples[2]; samples[2] = t; }
-  if (samples[0] > samples[1]) { float t = samples[0]; samples[0] = samples[1]; samples[1] = t; }
+  if (samples[0] > samples[1]) {
+    float t = samples[0];
+    samples[0] = samples[1];
+    samples[1] = t;
+  }
+  if (samples[1] > samples[2]) {
+    float t = samples[1];
+    samples[1] = samples[2];
+    samples[2] = t;
+  }
+  if (samples[0] > samples[1]) {
+    float t = samples[0];
+    samples[0] = samples[1];
+    samples[1] = t;
+  }
   float d = samples[1]; // median
   if (d < 2.0f || d > 200.0f)
     d = 999.0f;
@@ -641,7 +658,7 @@ void do_line_loop() {
         delay(300);
 
         if (diff == 1) {
-          turnOk = spin_left_deg(60.0, TURN_PWM);  // 60*1.5=90 do chinh xac
+          turnOk = spin_left_deg(60.0, TURN_PWM); // 60*1.5=90 do chinh xac
           Serial.println("  >> INIT LEFT");
         } else if (diff == 3) {
           turnOk = spin_right_deg(60.0, TURN_PWM); // 60*1.5=90 do chinh xac
@@ -685,29 +702,46 @@ void do_line_loop() {
             motorWriteLR_signed(-90, 90);
             unsigned long ts = millis();
             while (millis() - ts < 250) {
-              if (!g_line_enabled) { motorsStop(); return; }
-              if (digitalRead(L2_SENSOR) == LOW || digitalRead(L1_SENSOR) == LOW ||
-                  digitalRead(M_SENSOR) == LOW || digitalRead(R1_SENSOR) == LOW ||
+              if (!g_line_enabled) {
+                motorsStop();
+                return;
+              }
+              if (digitalRead(L2_SENSOR) == LOW ||
+                  digitalRead(L1_SENSOR) == LOW ||
+                  digitalRead(M_SENSOR) == LOW ||
+                  digitalRead(R1_SENSOR) == LOW ||
                   digitalRead(R2_SENSOR) == LOW) {
-                motorsStop(); foundWide = true; break;
+                motorsStop();
+                foundWide = true;
+                break;
               }
               delay(5);
             }
-            if (foundWide) break;
-            motorsStop(); delay(50);
+            if (foundWide)
+              break;
+            motorsStop();
+            delay(50);
             // Quet phai
             motorWriteLR_signed(90, -90);
             ts = millis();
             while (millis() - ts < 250) {
-              if (!g_line_enabled) { motorsStop(); return; }
-              if (digitalRead(L2_SENSOR) == LOW || digitalRead(L1_SENSOR) == LOW ||
-                  digitalRead(M_SENSOR) == LOW || digitalRead(R1_SENSOR) == LOW ||
+              if (!g_line_enabled) {
+                motorsStop();
+                return;
+              }
+              if (digitalRead(L2_SENSOR) == LOW ||
+                  digitalRead(L1_SENSOR) == LOW ||
+                  digitalRead(M_SENSOR) == LOW ||
+                  digitalRead(R1_SENSOR) == LOW ||
                   digitalRead(R2_SENSOR) == LOW) {
-                motorsStop(); foundWide = true; break;
+                motorsStop();
+                foundWide = true;
+                break;
               }
               delay(5);
             }
-            motorsStop(); delay(50);
+            motorsStop();
+            delay(50);
           }
           lineFoundAfterTurn = foundWide;
           if (!foundWide) {
@@ -766,10 +800,11 @@ void do_line_loop() {
   updateObstacleState();
 
   // ===== AI Route: vat can -> dung, bao Web =====
-  if ((currentMode == MODE_AI_ROUTE || currentMode == MODE_DELIVERY) && obs_latched && !avoiding) {
+  if ((currentMode == MODE_AI_ROUTE || currentMode == MODE_DELIVERY) &&
+      obs_latched && !avoiding) {
     motorsStop();
     obs_latched = false;
-    obs_hit = 0;  // ★ FIX L1: Reset hit counter to prevent immediate re-latch
+    obs_hit = 0; // ★ FIX L1: Reset hit counter to prevent immediate re-latch
     int robotNode = (lastConfirmedNodeIdx < pathLength)
                         ? currentPath[lastConfirmedNodeIdx]
                         : 0;
@@ -844,7 +879,10 @@ void do_line_loop() {
           motorWriteLR_signed(130, -130);
           unsigned long t0 = millis();
           while (millis() - t0 < 3500) {
-            if (!g_line_enabled) { motorsStop(); return; }  // ★ FIX L3: ESTOP check
+            if (!g_line_enabled) {
+              motorsStop();
+              return;
+            } // ★ FIX L3: ESTOP check
             if (onLine(M_SENSOR) || onLine(L1_SENSOR) || onLine(R1_SENSOR))
               break;
             delay(5);
@@ -916,13 +954,15 @@ void do_line_loop() {
             delay(300);
 
             // ★ FIX M5: Reset PID i_term before turn to prevent motor jerk
-            pidL.i_term = 0; pidL.prev_err = 0;
-            pidR.i_term = 0; pidR.prev_err = 0;
+            pidL.i_term = 0;
+            pidL.prev_err = 0;
+            pidR.i_term = 0;
+            pidR.prev_err = 0;
 
             const int TURN_PWM = 160;
             bool turnOk = true;
             if (diff == 1) {
-              turnOk = spin_left_deg(60.0, TURN_PWM);  // 60*1.5=90 do
+              turnOk = spin_left_deg(60.0, TURN_PWM); // 60*1.5=90 do
               Serial.println("  >> LEFT");
             } else if (diff == 3) {
               turnOk = spin_right_deg(60.0, TURN_PWM); // 60*1.5=90 do
@@ -1113,7 +1153,10 @@ void do_line_loop() {
         motorWriteLR_signed(-REV_PWM, -REV_PWM);
         unsigned long bk = millis();
         while (millis() - bk < 500) {
-          if (!g_line_enabled) { motorsStop(); return; }
+          if (!g_line_enabled) {
+            motorsStop();
+            return;
+          }
           if (digitalRead(L2_SENSOR) == LOW || digitalRead(L1_SENSOR) == LOW ||
               digitalRead(M_SENSOR) == LOW || digitalRead(R1_SENSOR) == LOW ||
               digitalRead(R2_SENSOR) == LOW) {
@@ -1129,12 +1172,13 @@ void do_line_loop() {
           cL = encL_total;
           cR = encR_total;
           interrupts();
-          if (labs(cL - sL) >= revTarget && labs(cR - sR) >= revTarget) break;
+          if (labs(cL - sL) >= revTarget && labs(cR - sR) >= revTarget)
+            break;
           delay(5);
         }
         motorsStop();
         delay(100);
-        rec_t0 = millis();     // Reset timer cho sweep phase
+        rec_t0 = millis(); // Reset timer cho sweep phase
         recov_sweep_count = 0;
         return;
       }
@@ -1153,7 +1197,10 @@ void do_line_loop() {
         motorWriteLR_signed(-REV_PWM, -REV_PWM);
         unsigned long bk = millis();
         while (millis() - bk < 500) {
-          if (!g_line_enabled) { motorsStop(); return; }
+          if (!g_line_enabled) {
+            motorsStop();
+            return;
+          }
           if (digitalRead(L2_SENSOR) == LOW || digitalRead(L1_SENSOR) == LOW ||
               digitalRead(M_SENSOR) == LOW || digitalRead(R1_SENSOR) == LOW ||
               digitalRead(R2_SENSOR) == LOW) {
@@ -1169,7 +1216,8 @@ void do_line_loop() {
           cL = encL_total;
           cR = encR_total;
           interrupts();
-          if (labs(cL - sL) >= revTarget && labs(cR - sR) >= revTarget) break;
+          if (labs(cL - sL) >= revTarget && labs(cR - sR) >= revTarget)
+            break;
           delay(5);
         }
         motorsStop();
