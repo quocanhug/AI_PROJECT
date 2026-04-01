@@ -4,7 +4,6 @@
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 #include "do_line.h"
-#include "route_interpreter.h"
 
 const char* ssid = "ESP32-Car";
 const char* password = "12345678";
@@ -39,7 +38,7 @@ volatile UIMode currentMode = MODE_MANUAL;
 bool line_mode = false;
 bool is_auto_running = false;
 
-int currentPath[20]; 
+int currentPath[15]; 
 int pathLength = 0;
 int currentTargetNode = -1;
 int currentPathIndex = 0;
@@ -56,6 +55,7 @@ void forward(); void backward(); void left(); void right(); void stopCar();
 void forwardLeft(); void forwardRight(); void backwardLeft(); void backwardRight();
 void gripOpen(); void gripClose();
 void applyCurrentMotion();
+void handleWsMessage(AsyncWebSocketClient* client, char* msg);  // Forward decl — tránh lỗi compile khi gọi trước khi định nghĩa
 
 // ================= WebSocket Broadcast =================
 void wsBroadcast(const char* msg) {
@@ -76,8 +76,14 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
     case WS_EVT_DATA: {
       AwsFrameInfo *info = (AwsFrameInfo*)arg;
       if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
-        data[len] = 0;
-        handleWsMessage(client, (char*)data);
+        // ★ BUG FIX #1 — WS buffer overflow:
+        //   data[len]=0 có thể OOB vì buffer có đúng 'len' byte (không có room cho null).
+        //   Dùng stack buffer cố định 512B — đủ chứa mọi message trong protocol này.
+        char msgBuf[512];
+        size_t copyLen = (len < 511) ? len : 511;
+        memcpy(msgBuf, data, copyLen);
+        msgBuf[copyLen] = '\0';
+        handleWsMessage(client, msgBuf);
       }
       break;
     }
@@ -105,7 +111,9 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
     JsonArray pathArr = doc["path"].as<JsonArray>();
     pathLength = 0;
     for (JsonVariant v : pathArr) {
-      if (pathLength < 20) currentPath[pathLength++] = v.as<int>();
+      // ★ BUG FIX #8 — Node validation: chặn node ngoài range [0,14] để tránh OOB access
+      int node = v.as<int>();
+      if (node >= 0 && node < 15 && pathLength < 15) currentPath[pathLength++] = node;
     }
     currentPathIndex = 0;
     
@@ -131,15 +139,27 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
   else if (strcmp(type, "STOP") == 0 || strcmp(type, "ESTOP") == 0) {
     stopCar();
     do_line_abort();
-    route_abort();
     currentMode = MODE_MANUAL;
     line_mode = false;
     is_auto_running = false;
+    // ★ BUG FIX #9 — ESTOP xóa path hẳn (không cho resume sau emergency stop)
+    //   STOP thường giữ path để có thể resume. ESTOP là khẩn cấp → xóa sạch.
+    if (strcmp(type, "ESTOP") == 0) {
+      pathLength = 0;
+      currentPathIndex = 0;
+    }
     client->text("{\"type\":\"ACK\",\"action\":\"STOPPED\"}");
   }
   else if (strcmp(type, "RESUME") == 0) {
-    if (currentMode == MODE_AI_ROUTE) {
-      do_line_setup();
+    // ★ BUG FIX #7 — RESUME logic sai:
+    //   Check cũ: (currentMode == MODE_AI_ROUTE) → false sau STOP vì mode đã về MANUAL!
+    //   Check mới: (pathLength > 0) — có route là có thể resume, bất kể mode hiện tại.
+    // ★ BUG FIX #2 — RESUME reset route:
+    //   Gọi do_line_resume() thay vì do_line_setup() — giữ nguyên lastConfirmedNodeIdx
+    //   và currentDir, chỉ bật lại motor/PID và căn chỉnh hướng.
+    if (pathLength > 0) {
+      do_line_resume();
+      currentMode = MODE_AI_ROUTE;
       line_mode = true;
       is_auto_running = true;
       client->text("{\"type\":\"ACK\",\"action\":\"RESUMED\"}");
@@ -151,17 +171,49 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
 static unsigned long lastTelemetryMs = 0;
 const unsigned long TELEMETRY_INTERVAL_MS = 200;
 
+// ★ Extern sensor/speed/encoder data từ do_line.cpp để gửi telemetry đầy đủ
+extern float us_dist_cm;
+extern float vL_ema, vR_ema;
+extern volatile long encL_total, encR_total;  // ★ Dùng tính quãng đường (cm)
+
+// Sensor pins (dùng đọc trạng thái cho telemetry)
+#define TELE_L2 34
+#define TELE_L1 32
+#define TELE_M  33
+#define TELE_R1 27
+#define TELE_R2 25
+
 void sendTelemetry() {
   if (ws.count() == 0) return;
-  if (currentMode == MODE_AI_ROUTE) {
-    // Gửi telemetry với vị trí node hiện tại (intersection-based)
-    int robotNode = (currentPathIndex < pathLength) ? currentPath[currentPathIndex] : currentPath[pathLength-1];
-    String json = "{\"type\":\"TELEMETRY\",\"state\":\"";
-    json += is_auto_running ? "FOLLOWING_LINE" : "IDLE";
-    json += "\",\"step\":" + String(currentPathIndex);
+  if (currentMode == MODE_AI_ROUTE && is_auto_running) {
+    // ★ BUG FIX M1: currentPathIndex trỏ vào node ĐANG TIẾN TỚI, không phải node đang đứng.
+    //   Dùng lastConfirmedNodeIdx để lấy node robot thực sự đang đứng trên.
+    extern int lastConfirmedNodeIdx;
+    int robotNode = (lastConfirmedNodeIdx < pathLength) ? currentPath[lastConfirmedNodeIdx] : currentPath[pathLength-1];
+    
+    // ★ Đọc cảm biến line (LOW = trên vạch)
+    int s0 = digitalRead(TELE_L2) == LOW ? 1 : 0;
+    int s1 = digitalRead(TELE_L1) == LOW ? 1 : 0;
+    int s2 = digitalRead(TELE_M)  == LOW ? 1 : 0;
+    int s3 = digitalRead(TELE_R1) == LOW ? 1 : 0;
+    int s4 = digitalRead(TELE_R2) == LOW ? 1 : 0;
+    
+    // ★ BUG FIX #5 — Distance hardcoded:
+    //   20.42f = CIRC*100, 60 = PPR_EFFECTIVE (macro trong do_line.cpp, không extern được)
+    //   extern CIRC để tự động đúng khi thay bánh / cậu encoder.
+    extern const float CIRC;  // = 2*pi*WHEEL_RADIUS_M, định nghĩa trong do_line.cpp
+    float dist_cm = ((float)(encL_total + encR_total) / 2.0f) / 60.0f * CIRC * 100.0f;
+
+    String json = "{\"type\":\"TELEMETRY\",\"state\":\"FOLLOWING_LINE\"";
+    json += ",\"step\":" + String(currentPathIndex);
     json += ",\"total\":" + String(pathLength);
     json += ",\"robotNode\":" + String(robotNode);
-    json += ",\"robotDir\":" + String(currentDir) + "}";
+    json += ",\"robotDir\":" + String(currentDir);
+    json += ",\"speedL\":" + String(vL_ema, 3);
+    json += ",\"speedR\":" + String(vR_ema, 3);
+    json += ",\"distance\":" + String(dist_cm, 1);
+    json += ",\"obstacle\":" + String(us_dist_cm, 1);
+    json += ",\"sensors\":[" + String(s0) + "," + String(s1) + "," + String(s2) + "," + String(s3) + "," + String(s4) + "]}";
     ws.textAll(json);
   }
 }
@@ -190,9 +242,6 @@ void setup() {
   ws.onEvent(onWsEvent);
   server.addHandler(&ws);
 
-  // Route interpreter callback
-  route_set_ws_callback(wsBroadcast);
-
   server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
 
   server.on("/setMode", HTTP_GET, [](AsyncWebServerRequest* r){
@@ -208,13 +257,11 @@ void setup() {
     } else if (m == "ai_route") {
       stopCar();
       do_line_setup();
-      route_setup();
       currentMode = MODE_AI_ROUTE;
       line_mode = true;
       is_auto_running = true;
     } else if (m == "manual") {
       do_line_abort();
-      route_abort();
       stopCar();
       currentMode = MODE_MANUAL;
       line_mode = false;
@@ -231,11 +278,11 @@ void setup() {
       String pathStr = r->getParam("path")->value();
       pathLength = 0;
       int startIdx = 0; int commaIdx = pathStr.indexOf(',');
-      while (commaIdx != -1 && pathLength < 20) {
+      while (commaIdx != -1 && pathLength < 15) {
         currentPath[pathLength++] = pathStr.substring(startIdx, commaIdx).toInt();
         startIdx = commaIdx + 1; commaIdx = pathStr.indexOf(',', startIdx);
       }
-      if (startIdx < pathStr.length() && pathLength < 20) currentPath[pathLength++] = pathStr.substring(startIdx).toInt();
+      if (startIdx < pathStr.length() && pathLength < 15) currentPath[pathLength++] = pathStr.substring(startIdx).toInt();
       if(pathLength > 1) currentTargetNode = currentPath[1];
     }
     
@@ -249,21 +296,39 @@ void setup() {
   });
 
   server.on("/estop", HTTP_GET, [](AsyncWebServerRequest *r){
-    stopCar(); do_line_abort(); route_abort();
+    stopCar(); do_line_abort();
     currentMode = MODE_MANUAL; line_mode = false; is_auto_running = false;
     r->send(200, "text/plain", "E-STOP ACTIVATED");
   });
 
   server.on("/resume", HTTP_GET, [](AsyncWebServerRequest *r){
-    if(currentMode != MODE_MANUAL) {
-      stopCar(); do_line_setup();
-      line_mode = true; is_auto_running = true;
+    // ★ BUG FIX #7 — Chỉ cần pathLength > 0 (sau STOP mode là MANUAL, không phải AI_ROUTE)
+    // ★ BUG FIX #2 — Dùng do_line_resume() thành do_line_setup() để giữ route state
+    if (pathLength > 0) {
+      do_line_resume();
+      currentMode = MODE_AI_ROUTE;
+      line_mode = true;
+      is_auto_running = true;
+      Serial.printf("[RESUME] Resuming from node %d, dir=%d\n", currentPath[currentPathIndex], currentDir);
+      r->send(200, "application/json",
+        "{\"status\":\"RESUMED\",\"pathIndex\":" + String(currentPathIndex) +
+        ",\"robotDir\":" + String(currentDir) + "}");
+    } else {
+      r->send(200, "application/json", "{\"status\":\"NO_ROUTE\"}");
     }
-    r->send(200, "text/plain", "RESUMED");
   });
 
   server.on("/return_home", HTTP_GET, [](AsyncWebServerRequest *r){
-    r->send(200, "text/plain", "RETURNING HOME");
+    // Dừng robot và trả vị trí hiện tại để web tính đường về
+    stopCar(); do_line_abort();
+    int robotNode = (currentPathIndex < pathLength) ? currentPath[currentPathIndex] : 0;
+    currentMode = MODE_MANUAL;
+    line_mode = false;
+    is_auto_running = false;
+    Serial.printf("[RETURN_HOME] Robot at node %d, dir %d\n", robotNode, currentDir);
+    r->send(200, "application/json",
+      "{\"status\":\"STOPPED\",\"robotNode\":" + String(robotNode) + 
+      ",\"robotDir\":" + String(currentDir) + "}");
   });
 
   server.on("/api/stats", HTTP_GET, [](AsyncWebServerRequest *r){
