@@ -384,6 +384,7 @@ void forwardRight() {
   else { ledcWrite(LEDC_CHANNEL_ENA, speed_linear); ledcWrite(LEDC_CHANNEL_ENB, diagScale(speed_linear)); } 
 }
 
+
 void backwardLeft() { 
   digitalWrite(IN1,LOW); digitalWrite(IN2,HIGH); digitalWrite(IN3,LOW); digitalWrite(IN4,HIGH); 
   ledcWrite(LEDC_CHANNEL_ENA, diagScale(speed_linear)); ledcWrite(LEDC_CHANNEL_ENB, speed_linear); 
