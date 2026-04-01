@@ -600,9 +600,16 @@ void do_line_loop() {
             }
 
             currentDir = targetDir;
-            lastConfirmedNodeIdx = currentPathIndex;  // ★ Lưu node TRƯỚC khi tăng
-            currentPathIndex++;
-            move_forward_distance_until_line(0.10, 90);
+            lastConfirmedNodeIdx = currentPathIndex;  // ★ Lưu node cũ TRƯỚC khi tăng
+            // ★ currentPathIndex++ dời ra SAU khi tìm được line mới
+            //   Đảm bảo pathIndex chỉ tăng khi xe đã thực sự đứng trên segment mới
+            bool lineFound = move_forward_distance_until_line(0.10, 90);
+            currentPathIndex++;  // tăng dù có thấy line hay không (đã qua node)
+            if (!lineFound) {
+              // Không tìm được line sau khi rẻ → vào recovering ngay
+              recovering = true; rec_t0 = millis();
+              Serial.println("  ⚠️ Line not found after turn — entering recovery");
+            }
           }
         }
         return;
@@ -668,8 +675,13 @@ void do_line_loop() {
       noInterrupts(); encL_count = 0; encR_count = 0; interrupts();
       t_prev = millis(); return;
     } else {
-      // ★ Lùi thẳng trong khi đợi timeout — không quay trái phải
-      vL_tgt = -v_base * 0.7f; vR_tgt = -v_base * 0.7f;
+      // ★ Lùi có điều hướng theo last_seen (không quay tại chỗ)
+      // last_seen==LEFT: xe lệch phải, line ă cạnh trái → lùi + điều hướng đuôi xe sang trái
+      // last_seen==RIGHT: xe lệch trái, line ă cạnh phải → lùi + điều hướng đuôi xe sang phải
+      // (điều hướng khi lùi: NGƯỢC với tiến)
+      if      (last_seen == LEFT)  { vL_tgt = -v_base + v_boost; vR_tgt = -v_base - v_boost; }
+      else if (last_seen == RIGHT) { vL_tgt = -v_base - v_boost; vR_tgt = -v_base + v_boost; }
+      else                         { vL_tgt = -v_base * 0.7f;    vR_tgt = -v_base * 0.7f; }
     }
   }
   else {
