@@ -106,7 +106,7 @@ bool avoiding = false;
 static volatile bool g_line_enabled = true;
 bool recovering = false;
 unsigned long rec_t0 = 0;
-const unsigned long RECOV_TIME_MS = 5000;
+const unsigned long RECOV_TIME_MS = 5000;  // 5s cho xe tim line
 
 // Recovery phase tracking
 enum RecovPhase { RECOV_SWEEP, RECOV_REVERSE };
@@ -481,7 +481,6 @@ void do_line_loop() {
       motorsStop();
       return;
     }
-    // Neu dang recovering, bad_t khong reset -> recovery handler ben duoi xu ly
   } else {
     bad_t = millis();
     if (recovering) {
@@ -733,8 +732,8 @@ void do_line_loop() {
     }
 
     // ===== CHIEN THUAT RECOVERY 2 PHA =====
-    // Phase 1: Xoay tai cho quet trai-phai tim line
-    // Phase 2: Lui co dieu huong ve phia line
+    // Phase 1 (RECOV_SWEEP): Xoay tai cho quet trai-phai tim line
+    // Phase 2 (RECOV_REVERSE): Lui co dieu huong ve phia line
     if (recov_phase == RECOV_SWEEP) {
       unsigned long elapsed = millis() - rec_t0;
 
@@ -808,7 +807,7 @@ void do_line_loop() {
       }
       else if (!seen_line_ever) { vL_tgt = 0; vR_tgt = 0; }
       else {
-        // Mat line -> giam toc + lech ve huong cuoi cung, cho bad_t timeout kich hoat recovery
+        // Mat line -> giam toc + lech ve huong cuoi, cho bad_t timeout kich hoat recovery
         if (last_seen == LEFT) {
           vL_tgt = v_base * 0.3f;
           vR_tgt = v_base * 0.5f;
