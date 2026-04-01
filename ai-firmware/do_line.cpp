@@ -1,13 +1,8 @@
 #include <Arduino.h>
 #include "do_line.h"
 
-<<<<<<< Updated upstream
-// ================= Extern từ main.ino (dùng cho MODE_DELIVERY & MODE_AI_ROUTE) =================
-extern int currentPath[20];
-=======
 // ================= Extern từ main.ino =================
 extern int currentPath[15];
->>>>>>> Stashed changes
 extern int pathLength;
 extern int currentPathIndex;
 extern int currentDir;
@@ -18,17 +13,11 @@ extern volatile UIMode currentMode;
 extern void gripOpen();
 extern void gripClose();
 
-<<<<<<< Updated upstream
-// ================= Tọa độ node trên bản đồ (dùng tính hướng rẽ) =================
-const int node_coords[20][2] = {
-=======
 // ================= Tọa độ node trên bản đồ =================
 const int node_coords[15][2] = {
->>>>>>> Stashed changes
   {30, 30}, {100, 30}, {170, 30}, {240, 30}, {310, 30},
   {30, 100}, {100, 100}, {170, 100}, {240, 100}, {310, 100},
-  {30, 170}, {100, 170}, {170, 170}, {240, 170}, {310, 170},
-  {30, 240}, {100, 240}, {170, 240}, {240, 240}, {310, 240}
+  {30, 170}, {100, 170}, {170, 170}, {240, 170}, {310, 170}
 };
 
 int getTargetDirection(int nodeA, int nodeB) {
@@ -72,26 +61,16 @@ int getTargetDirection(int nodeA, int nodeB) {
 #define TRIG_PIN 21
 #define ECHO_PIN 19
 
-<<<<<<< Updated upstream
-const float OBSTACLE_TH_CM = 25.0f;  // ★ Tăng từ 20→25cm: thêm khoảng cách phanh
-const unsigned long US_TIMEOUT = 8000;
-=======
 const float OBSTACLE_TH_CM = 25.0f;
 volatile unsigned long echo_start_us = 0;
 volatile unsigned long echo_dur_us = 0;
 volatile bool echo_ready = false;
->>>>>>> Stashed changes
 
 float us_dist_cm = 999.0f;
 static unsigned long us_last_ms = 0;
 static uint8_t obs_hit = 0;
 static bool obs_latched = false;
 const float OBSTACLE_ON_CM  = OBSTACLE_TH_CM;
-<<<<<<< Updated upstream
-const float OBSTACLE_OFF_CM = 30.0f;  // ★ Hysteresis: phải > 30cm mới xóa cờ vật cản
-const uint8_t OBS_HIT_N = 2;
-const unsigned long US_PERIOD_MS = 25;
-=======
 const float OBSTACLE_OFF_CM = 30.0f;
 const uint8_t OBS_HIT_N = 3;
 const unsigned long US_PERIOD_MS = 30; // Chu kỳ trigger sonar (tránh dội âm)
@@ -104,7 +83,6 @@ void IRAM_ATTR echo_isr() {
     echo_ready = true;
   }
 }
->>>>>>> Stashed changes
 
 // ================= Thông số cơ khí =================
 const float WHEEL_RADIUS_M = 0.0325f;
@@ -113,8 +91,8 @@ const float TRACK_WIDTH_M = 0.1150f;
 
 // ================= Tham số điều khiển =================
 float v_base   = 0.4f;
-float v_boost  = 0.11f;
-float v_hard   = 0.13f;
+float v_boost  = 0.15f;  
+float v_hard   = 0.20f; 
 float v_search = 0.2f;
 
 PID pidL{300.0f, 8.0f, 0.00f, 0, 0, 0, 255};
@@ -123,14 +101,6 @@ PID pidR{300.0f, 8.0f, 0.00f, 0, 0, 0, 255};
 const unsigned long CTRL_DT_US = 10000; // 10ms
 volatile long encL_count = 0, encR_count = 0, encL_total = 0, encR_total = 0;
 volatile uint32_t encL_last_us=0, encR_last_us=0;
-<<<<<<< Updated upstream
-float vL_ema=0.0f, vR_ema=0.0f;  // ★ non-static: extern bởi main.ino cho telemetry
-const float EMA_B = 0.5f;   // ★ Giảm từ 0.7: phản ứng nhanh hơn khi lệch
-
-const int PWM_MIN_RUN = 75;
-const int PWM_SLEW    = 30;  // ★ Tăng từ 8: motor đáp ứng nhanh hơn khi sửa hướng
-static int pwmL_prev=0, pwmR_prev=0;
-=======
 float vL_ema=0.0f, vR_ema=0.0f;
 const float EMA_B = 0.85f;
 
@@ -139,7 +109,6 @@ const int PWM_SLEW    = 15;
 static int pwmL_prev=0, pwmR_prev=0;
 static unsigned long t_prev_us = 0;
 static unsigned long bad_t  = 0;
->>>>>>> Stashed changes
 
 enum Side {NONE, LEFT, RIGHT};
 Side last_seen = NONE;
@@ -148,16 +117,12 @@ bool avoiding = false;
 static volatile bool g_line_enabled = true;
 bool recovering = false;
 unsigned long rec_t0 = 0;
-<<<<<<< Updated upstream
-const unsigned long RECOV_TIME_MS = 6000;
-=======
 const unsigned long RECOV_TIME_MS = 3500;
 
 int lastConfirmedNodeIdx = 0;
 const unsigned long INTERSECTION_DEBOUNCE_MS = 600;
 unsigned long last_intersection_time = 0;
 bool needs_initial_turn = false;
->>>>>>> Stashed changes
 
 // ================= ISR encoder =================
 void IRAM_ATTR encL_isr(){
@@ -205,10 +170,7 @@ void motorsStop(){
 float ticksToVel(long ticks, float dt_s){ return ((float)ticks / (float)PPR_EFFECTIVE * CIRC) / dt_s; }
 
 int pidStep(PID &pid, float v_target, float v_meas, float dt_s){
-<<<<<<< Updated upstream
-=======
   if (dt_s < 0.001f) dt_s = 0.001f;
->>>>>>> Stashed changes
   float err = v_target - v_meas;
   pid.i_term += pid.Ki * err * dt_s;
   pid.i_term = clampf(pid.i_term, pid.out_min, pid.out_max);
@@ -218,34 +180,7 @@ int pidStep(PID &pid, float v_target, float v_meas, float dt_s){
   return clamp255((int)u);
 }
 
-<<<<<<< Updated upstream
-// ================= HC-SR04 =================
-float readDistanceCM(){
-  digitalWrite(TRIG_PIN, LOW); delayMicroseconds(2);
-  digitalWrite(TRIG_PIN, HIGH); delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
-  unsigned long dur = pulseIn(ECHO_PIN, HIGH, US_TIMEOUT);
-  if (dur == 0) return -1;
-  return dur * 0.0343f / 2.0f;
-}
-
-static float readDistanceCM_filtered(){
-  float a[3];
-  for (int i = 0; i < 3; i++){
-    float d = readDistanceCM();
-    if (d < 2.0f || d > 200.0f) d = 999.0f;
-    a[i] = d;
-    delay(2);
-  }
-  if (a[1] < a[0]) { float t=a[0]; a[0]=a[1]; a[1]=t; }
-  if (a[2] < a[1]) { float t=a[1]; a[1]=a[2]; a[2]=t; }
-  if (a[1] < a[0]) { float t=a[0]; a[0]=a[1]; a[1]=t; }
-  return a[1];
-}
-
-=======
 // Đọc Sonar Non-Blocking
->>>>>>> Stashed changes
 static inline void updateObstacleState(){
   unsigned long now = millis();
   if (now - us_last_ms >= US_PERIOD_MS) {
@@ -388,17 +323,8 @@ bool move_forward_distance_until_line(double dist_m, int pwmAbs){
   while (true){
     if (!g_line_enabled){ motorsStop(); return false; }
     long cL, cR; noInterrupts(); cL = encL_total; cR = encR_total; interrupts();
-<<<<<<< Updated upstream
-    if (digitalRead(M_SENSOR) == LOW){ motorsStop(); return true; }
-    bool left_done  = (labs(cL - sL) >= target);
-    bool right_done = (labs(cR - sR) >= target);
-    if (left_done && right_done) break;
-    if (left_done && !right_done)      motorWriteLR_signed(0, +pwmAbs);
-    else if (!left_done && right_done) motorWriteLR_signed(+pwmAbs, 0);
-=======
     if (digitalRead(M_SENSOR) == LOW || digitalRead(L1_SENSOR) == LOW || digitalRead(R1_SENSOR) == LOW){ motorsStop(); return true; }
     if (labs(cL - sL) >= target && labs(cR - sR) >= target) break;
->>>>>>> Stashed changes
     delay(1);
   }
   motorsStop();
@@ -407,8 +333,6 @@ bool move_forward_distance_until_line(double dist_m, int pwmAbs){
 
 void do_line_abort(){ g_line_enabled = false; motorsStop(); }
 
-<<<<<<< Updated upstream
-=======
 void do_line_resume() {
   g_line_enabled = true;
   seen_line_ever = true;   
@@ -424,7 +348,6 @@ void do_line_resume() {
   needs_initial_turn = true;  
 }
 
->>>>>>> Stashed changes
 void avoidObstacle(){
   const int TURN_PWM = 150;
   const int FWD_PWM  = 100;
@@ -451,27 +374,18 @@ void do_line_setup() {
   pinMode(M_SENSOR,  INPUT); pinMode(R1_SENSOR, INPUT); pinMode(R2_SENSOR, INPUT);
   
   pinMode(ENC_L, INPUT_PULLUP); pinMode(ENC_R, INPUT_PULLUP);
-<<<<<<< Updated upstream
-  attachInterrupt(digitalPinToInterrupt(ENC_L), encL_isr, RISING);
-  attachInterrupt(digitalPinToInterrupt(ENC_R), encR_isr, RISING);
-=======
   detachInterrupt(digitalPinToInterrupt(ENC_L));
   detachInterrupt(digitalPinToInterrupt(ENC_R));
   attachInterrupt(digitalPinToInterrupt(ENC_L), encL_isr, RISING);
   attachInterrupt(digitalPinToInterrupt(ENC_R), encR_isr, RISING);
   
   // Khởi tạo ngắt cho Sonar
->>>>>>> Stashed changes
   pinMode(TRIG_PIN, OUTPUT); pinMode(ECHO_PIN, INPUT);
   detachInterrupt(digitalPinToInterrupt(ECHO_PIN));
   attachInterrupt(digitalPinToInterrupt(ECHO_PIN), echo_isr, CHANGE);
 
   g_line_enabled = true; seen_line_ever = false;
   vL_ema = 0.0f; vR_ema = 0.0f; pwmL_prev = 0; pwmR_prev = 0;
-<<<<<<< Updated upstream
-  us_last_ms = 0; us_dist_cm = 999.0f; obs_hit = 0; obs_latched = false;
-  pidL.i_term = 0; pidL.prev_err = 0; pidR.i_term = 0; pidR.prev_err = 0;
-=======
   us_last_ms = millis(); us_dist_cm = 999.0f; obs_hit = 0; obs_latched = false;
   pidL.i_term = 0; pidL.prev_err = 0; pidR.i_term = 0; pidR.prev_err = 0;
   last_intersection_time = 0;
@@ -480,18 +394,12 @@ void do_line_setup() {
   needs_initial_turn = true; 
   t_prev_us = micros();
   bad_t  = millis();
->>>>>>> Stashed changes
   motorsStop();
 }
 
 void do_line_loop() {
   if (!g_line_enabled) { motorsStop(); return; }
 
-<<<<<<< Updated upstream
-  static unsigned long t_prev = millis();
-  static unsigned long bad_t = millis();
-  static unsigned long last_intersection_time = 0;
-=======
   if (needs_initial_turn) {
     needs_initial_turn = false;
     if ((currentMode == MODE_DELIVERY || currentMode == MODE_AI_ROUTE)
@@ -522,7 +430,6 @@ void do_line_loop() {
       return;
     }
   }
->>>>>>> Stashed changes
 
   bool L2 = onLine(L2_SENSOR), L1 = onLine(L1_SENSOR);
   bool M  = onLine(M_SENSOR);
@@ -542,25 +449,8 @@ void do_line_loop() {
   updateObstacleState();
 
   if (currentMode == MODE_AI_ROUTE && obs_latched && !avoiding) {
-<<<<<<< Updated upstream
-    motorsStop();
-    int robotNode = (currentPathIndex < pathLength) ? currentPath[currentPathIndex] : 0;
-    int obstacleNode = (currentPathIndex + 1 < pathLength) ? currentPath[currentPathIndex + 1] : robotNode;
-    extern void wsBroadcast(const char*);
-    String msg = "{\"type\":\"OBSTACLE_DETECTED\","
-                 "\"robotNode\":" + String(robotNode) + ","
-                 "\"obstacleNode\":" + String(obstacleNode) + ","
-                 "\"robotDir\":" + String(currentDir) + ","
-                 "\"current_step\":" + String(currentPathIndex) + ","
-                 "\"distance_cm\":" + String(us_dist_cm, 1) + "}";
-    wsBroadcast(msg.c_str());
-    Serial.printf("[AI_ROUTE] OBSTACLE! robot@node%d blocked@node%d\n", robotNode, obstacleNode);
-    currentMode = MODE_MANUAL;
-    is_auto_running = false;
-=======
     motorsStop(); obs_latched = false;
     currentMode = MODE_MANUAL; is_auto_running = false;
->>>>>>> Stashed changes
     line_mode = false; do_line_abort(); return;
   }
 
@@ -571,91 +461,21 @@ void do_line_loop() {
 
   float vL_tgt = 0, vR_tgt = 0;
 
-<<<<<<< Updated upstream
-  // ============================================================
-  // ★ GIAO LỘ: L2 hoặc R2 phát hiện line ngang (perpendicular)
-  // ============================================================
-  bool at_intersection = (L2 || R2);
-
-=======
   // ================= GIAO LỘ =================
   bool at_intersection = (L2 && R2 && (L1 || M || R1));
->>>>>>> Stashed changes
   if (at_intersection) {
     if (millis() - last_intersection_time > INTERSECTION_DEBOUNCE_MS) {
       last_intersection_time = millis();
       motorsStop(); delay(400); 
 
-<<<<<<< Updated upstream
-    // --- MODE_LINE_ONLY: đi thẳng qua giao lộ ---
-    if (currentMode == MODE_LINE_ONLY) {
-      if (millis() - last_intersection_time > 1500) {
-        last_intersection_time = millis();
-        motorsStop(); delay(200);
-=======
       if (currentMode == MODE_LINE_ONLY) {
->>>>>>> Stashed changes
         move_forward_distance(0.06, 120);
         last_seen = NONE; recovering = false;
         return;
       }
-<<<<<<< Updated upstream
-      vL_tgt = v_base * 0.8f; vR_tgt = v_base * 0.8f;
-    }
-
-    // --- MODE_DELIVERY / MODE_AI_ROUTE: xử lý node ---
-    else if (currentMode == MODE_DELIVERY || currentMode == MODE_AI_ROUTE) {
-      if (millis() - last_intersection_time > 1500) {
-        last_intersection_time = millis();
-        motorsStop(); delay(200);
-
-        // ★ FIX: Tiến ~5cm vào TÂM giao lộ TRƯỚC khi xoay
-        // Lý do: L2/R2 nằm ở đầu xe, nhưng trục quay nằm giữa 2 bánh
-        // Nếu xoay ngay → trục quay chưa ở tâm → xe lệch khỏi line sau rẽ
-        move_forward_distance(0.02, 100);
-        motorsStop(); delay(100);
-
-=======
       else if (currentMode == MODE_DELIVERY || currentMode == MODE_AI_ROUTE) {
->>>>>>> Stashed changes
         if (pathLength > 0) {
           if (currentPathIndex >= pathLength - 1) {
-<<<<<<< Updated upstream
-            motorsStop();
-            if (currentMode == MODE_DELIVERY) {
-              gripOpen(); delay(1500); gripClose();
-            } else {
-              Serial.println("[AI_ROUTE] DESTINATION REACHED");
-              extern void wsBroadcast(const char*);
-              String msg = "{\"type\":\"COMPLETED\",\"robotNode\":" + String(currentPath[pathLength-1]) +
-                           ",\"robotDir\":" + String(currentDir) + "}";
-              wsBroadcast(msg.c_str());
-            }
-            delivered_count++;
-            currentMode = MODE_MANUAL;
-            is_auto_running = false;
-            line_mode = false; do_line_abort(); return;
-          }
-
-          // ★ FIX: Tính hướng rẽ TRƯỚC khi tăng index
-          int curNode = currentPath[currentPathIndex];
-          int nxtNode = currentPath[currentPathIndex + 1];
-          int targetDir = getTargetDirection(curNode, nxtNode);
-          Serial.printf("[NODE] path[%d]=node%d -> node%d, dir %d->%d\n",
-                        currentPathIndex, curNode, nxtNode, currentDir, targetDir);
-
-          if (targetDir != -1) {
-            int diff = (targetDir - currentDir + 4) % 4;
-            const int TURN_PWM = 160;
-            bool turnOk = true;
-            // ★ C++ dirs 0=down,1=right,2=up,3=left (non-CW order)
-            if (diff == 1) { turnOk = spin_left_deg(62.0, TURN_PWM); Serial.println("  >> LEFT"); }
-            else if (diff == 3) { turnOk = spin_right_deg(62.0, TURN_PWM); Serial.println("  >> RIGHT"); }
-            else if (diff == 2) { turnOk = spin_right_deg(125.0, TURN_PWM); Serial.println("  >> U-TURN"); }
-            else { Serial.println("  >> STRAIGHT"); }
-
-            // ★ FIX: Xử lý spin thất bại (timeout hoặc abort)
-=======
             move_forward_distance(0.02, 90); motorsStop();
             if (currentMode == MODE_DELIVERY) { gripOpen(); delay(1500); gripClose(); }
             delivered_count++; currentMode = MODE_MANUAL; is_auto_running = false;
@@ -685,75 +505,18 @@ void do_line_loop() {
 
             motorsStop(); delay(300); 
 
->>>>>>> Stashed changes
             if (!turnOk) {
               currentMode = MODE_MANUAL; is_auto_running = false;
               line_mode = false; do_line_abort(); return;
             }
             currentDir = targetDir;
-<<<<<<< Updated upstream
-=======
             lastConfirmedNodeIdx = currentPathIndex;
             move_forward_distance_until_line(0.12, 90);
             currentPathIndex++;
->>>>>>> Stashed changes
           }
-
-          // ★ Tăng index SAU khi đã rẽ
-          currentPathIndex++;
-          // ★ Tìm line thông minh: tiến tối đa 10cm, dừng ngay khi M chạm vạch
-          move_forward_distance_until_line(0.10, 120);
         }
         return;
       }
-<<<<<<< Updated upstream
-      // Debounce: chạy chậm qua vùng giao lộ
-      last_seen = NONE;
-      vL_tgt = v_base * 0.8f; vR_tgt = v_base * 0.8f;
-    }
-
-    // --- Các mode khác ---
-    else {
-      vL_tgt = v_base * 0.8f; vR_tgt = v_base * 0.8f;
-    }
-  }
-
-  // ============================================================
-  // ★ DÒ LINE: CHỈ dùng 3 mắt giữa L1, M, R1
-  // ============================================================
-  else if (recovering) {
-    if (L1 || M || R1) { recovering = false; motorsStop(); }
-    else if (millis() - rec_t0 >= RECOV_TIME_MS) {
-      recovering = false; motorsStop();
-      noInterrupts(); encL_count = 0; encR_count = 0; interrupts();
-      t_prev = millis(); return;
-    } else {
-      if (last_seen == LEFT)       { vL_tgt = -vF; vR_tgt =  vF; }
-      else if (last_seen == RIGHT) { vL_tgt =  vF; vR_tgt = -vF; }
-      else                         { vL_tgt = v_base; vR_tgt = v_base; }
-    }
-  }
-  else {
-    // ★ PID dò line: CHỈ 3 mắt giữa
-    if      ( M && !L1 && !R1) { last_seen = NONE;  vL_tgt = v_base;           vR_tgt = v_base; }
-    else if ( L1 &&  M && !R1) { last_seen = LEFT;  vL_tgt = v_base - v_boost; vR_tgt = v_base + v_boost; }
-    else if ( L1 && !M       ) { last_seen = LEFT;  vL_tgt = v_base - v_hard;  vR_tgt = v_base + v_hard; }
-    else if ( R1 &&  M && !L1) { last_seen = RIGHT; vL_tgt = v_base + v_boost; vR_tgt = v_base - v_boost; }
-    else if ( R1 && !M       ) { last_seen = RIGHT; vL_tgt = v_base + v_hard;  vR_tgt = v_base - v_hard; }
-    else if (!L1 && !M && !R1) {
-      // Mất line 3 mắt giữa
-      if (!seen_line_ever && is_auto_running) {
-        // ★ FIX: Xe đặt trước line → bò chậm tới khi tìm thấy
-        vL_tgt = v_search; vR_tgt = v_search;
-      }
-      else if (!seen_line_ever) { vL_tgt = 0; vR_tgt = 0; }
-      else {
-        recovering = true; rec_t0 = millis();
-        if (last_seen == LEFT)       { vL_tgt = -vF; vR_tgt =  vF; }
-        else if (last_seen == RIGHT) { vL_tgt =  vF; vR_tgt = -vF; }
-        else                         { vL_tgt = v_base; vR_tgt = v_base; }
-      }
-=======
     }
   }
 
@@ -790,7 +553,6 @@ void do_line_loop() {
     else if (lost_all) {
       if (!seen_line_ever && is_auto_running) { vL_tgt = v_search; vR_tgt = v_search; }
       else { recovering = true; rec_t0 = millis(); }
->>>>>>> Stashed changes
     }
     else { vL_tgt = v_base; vR_tgt = v_base; }
   }

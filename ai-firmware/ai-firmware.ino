@@ -4,7 +4,6 @@
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 #include "do_line.h"
-#include "route_interpreter.h"
 
 const char* ssid = "ESP32-Car";
 const char* password = "12345678";
@@ -44,12 +43,7 @@ AsyncWebSocket ws("/ws");
 volatile UIMode currentMode = MODE_MANUAL;
 bool line_mode = false;
 bool is_auto_running = false;
-<<<<<<< Updated upstream
-
-int currentPath[20]; 
-=======
 int currentPath[15]; 
->>>>>>> Stashed changes
 int pathLength = 0;
 int currentTargetNode = -1;
 int currentPathIndex = 0;
@@ -63,13 +57,8 @@ volatile Motion curMotion = STOPPED;
 
 void forward(); void backward(); void left(); void right(); void stopCar();
 void forwardLeft(); void forwardRight(); void backwardLeft(); void backwardRight();
-<<<<<<< Updated upstream
-void gripOpen(); void gripClose();
-void applyCurrentMotion();
-=======
 void gripOpen(); void gripClose(); void applyCurrentMotion();
 void handleWsMessage(AsyncWebSocketClient* client, char* msg);
->>>>>>> Stashed changes
 
 // ================= WebSocket Broadcast =================
 void wsBroadcast(const char* msg) {
@@ -90,16 +79,11 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
     case WS_EVT_DATA: {
       AwsFrameInfo *info = (AwsFrameInfo*)arg;
       if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
-<<<<<<< Updated upstream
-        data[len] = 0;
-        handleWsMessage(client, (char*)data);
-=======
         char msgBuf[512];
         size_t copyLen = (len < 511) ? len : 511;
         memcpy(msgBuf, data, copyLen);
         msgBuf[copyLen] = '\0';
         handleWsMessage(client, msgBuf);
->>>>>>> Stashed changes
       }
       break;
     }
@@ -124,12 +108,8 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
     JsonArray pathArr = doc["path"].as<JsonArray>();
     pathLength = 0;
     for (JsonVariant v : pathArr) {
-<<<<<<< Updated upstream
-      if (pathLength < 20) currentPath[pathLength++] = v.as<int>();
-=======
       int node = v.as<int>();
       if (node >= 0 && node < 15 && pathLength < 15) currentPath[pathLength++] = node;
->>>>>>> Stashed changes
     }
     currentPathIndex = 0;
     
@@ -152,17 +132,9 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
   else if (strcmp(type, "STOP") == 0 || strcmp(type, "ESTOP") == 0) {
     stopCar();
     do_line_abort();
-    route_abort();
     currentMode = MODE_MANUAL;
     line_mode = false;
     is_auto_running = false;
-<<<<<<< Updated upstream
-    client->text("{\"type\":\"ACK\",\"action\":\"STOPPED\"}");
-  }
-  else if (strcmp(type, "RESUME") == 0) {
-    if (currentMode == MODE_AI_ROUTE) {
-      do_line_setup();
-=======
     if (strcmp(type, "ESTOP") == 0) {
       pathLength = 0;
       currentPathIndex = 0;
@@ -173,7 +145,6 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
     if (pathLength > 0) {
       do_line_resume();
       currentMode = MODE_AI_ROUTE;
->>>>>>> Stashed changes
       line_mode = true;
       is_auto_running = true;
       client->text("{\"type\":\"ACK\",\"action\":\"RESUMED\"}");
@@ -185,16 +156,10 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
 static unsigned long lastTelemetryMs = 0;
 const unsigned long TELEMETRY_INTERVAL_MS = 200;
 
-<<<<<<< Updated upstream
-// ★ Extern sensor/speed data từ do_line.cpp để gửi telemetry đầy đủ
-extern float us_dist_cm;
-extern float vL_ema, vR_ema;
-=======
 extern float us_dist_cm;
 extern float vL_ema, vR_ema;
 extern volatile long encL_total, encR_total; 
 extern const float CIRC; 
->>>>>>> Stashed changes
 
 #define TELE_L2 34
 #define TELE_L1 32
@@ -206,31 +171,14 @@ void sendTelemetry() {
   if (ws.count() == 0) return;
   
   if (currentMode == MODE_AI_ROUTE && is_auto_running) {
-<<<<<<< Updated upstream
-    int robotNode = (currentPathIndex < pathLength) ? currentPath[currentPathIndex] : currentPath[pathLength-1];
-=======
     extern int lastConfirmedNodeIdx;
     int robotNode = (lastConfirmedNodeIdx < pathLength) ? currentPath[lastConfirmedNodeIdx] : currentPath[pathLength-1];
->>>>>>> Stashed changes
     
     int s0 = digitalRead(TELE_L2) == LOW ? 1 : 0;
     int s1 = digitalRead(TELE_L1) == LOW ? 1 : 0;
     int s2 = digitalRead(TELE_M)  == LOW ? 1 : 0;
     int s3 = digitalRead(TELE_R1) == LOW ? 1 : 0;
     int s4 = digitalRead(TELE_R2) == LOW ? 1 : 0;
-<<<<<<< Updated upstream
-    
-    String json = "{\"type\":\"TELEMETRY\",\"state\":\"FOLLOWING_LINE\"";
-    json += ",\"step\":" + String(currentPathIndex);
-    json += ",\"total\":" + String(pathLength);
-    json += ",\"robotNode\":" + String(robotNode);
-    json += ",\"robotDir\":" + String(currentDir);
-    json += ",\"speedL\":" + String(vL_ema, 3);
-    json += ",\"speedR\":" + String(vR_ema, 3);
-    json += ",\"obstacle\":" + String(us_dist_cm, 1);
-    json += ",\"sensors\":[" + String(s0) + "," + String(s1) + "," + String(s2) + "," + String(s3) + "," + String(s4) + "]}";
-    ws.textAll(json);
-=======
 
     // Đọc biến đếm 32-bit an toàn 
     long safeL, safeR;
@@ -262,7 +210,6 @@ void sendTelemetry() {
     char buffer[256];
     serializeJson(doc, buffer);
     ws.textAll(buffer);
->>>>>>> Stashed changes
   }
 }
 
@@ -293,13 +240,6 @@ void setup() {
 
   ws.onEvent(onWsEvent);
   server.addHandler(&ws);
-<<<<<<< Updated upstream
-
-  // Route interpreter callback
-  route_set_ws_callback(wsBroadcast);
-
-=======
->>>>>>> Stashed changes
   server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
 
   server.on("/setMode", HTTP_GET, [](AsyncWebServerRequest* r){
@@ -310,27 +250,11 @@ void setup() {
       stopCar(); do_line_setup();
       currentMode = MODE_LINE_ONLY; line_mode = true; is_auto_running = true;
     } else if (m == "ai_route") {
-<<<<<<< Updated upstream
-      stopCar();
-      do_line_setup();
-      route_setup();
-      currentMode = MODE_AI_ROUTE;
-      line_mode = true;
-      is_auto_running = true;
-    } else if (m == "manual") {
-      do_line_abort();
-      route_abort();
-      stopCar();
-      currentMode = MODE_MANUAL;
-      line_mode = false;
-      is_auto_running = false;
-=======
       stopCar(); do_line_setup();
       currentMode = MODE_AI_ROUTE; line_mode = true; is_auto_running = true;
     } else if (m == "manual") {
       do_line_abort(); stopCar();
       currentMode = MODE_MANUAL; line_mode = false; is_auto_running = false;
->>>>>>> Stashed changes
     }
     r->send(200,"text/plain", m);
   });
@@ -343,11 +267,11 @@ void setup() {
       String pathStr = r->getParam("path")->value();
       pathLength = 0;
       int startIdx = 0; int commaIdx = pathStr.indexOf(',');
-      while (commaIdx != -1 && pathLength < 20) {
+      while (commaIdx != -1 && pathLength < 15) {
         currentPath[pathLength++] = pathStr.substring(startIdx, commaIdx).toInt();
         startIdx = commaIdx + 1; commaIdx = pathStr.indexOf(',', startIdx);
       }
-      if (startIdx < pathStr.length() && pathLength < 20) currentPath[pathLength++] = pathStr.substring(startIdx).toInt();
+      if (startIdx < pathStr.length() && pathLength < 15) currentPath[pathLength++] = pathStr.substring(startIdx).toInt();
       if(pathLength > 1) currentTargetNode = currentPath[1];
     }
     
@@ -357,17 +281,12 @@ void setup() {
   });
 
   server.on("/estop", HTTP_GET, [](AsyncWebServerRequest *r){
-    stopCar(); do_line_abort(); route_abort();
+    stopCar(); do_line_abort();
     currentMode = MODE_MANUAL; line_mode = false; is_auto_running = false;
     r->send(200, "text/plain", "E-STOP ACTIVATED");
   });
 
   server.on("/resume", HTTP_GET, [](AsyncWebServerRequest *r){
-<<<<<<< Updated upstream
-    if(currentMode != MODE_MANUAL) {
-      stopCar(); do_line_setup();
-      line_mode = true; is_auto_running = true;
-=======
     if (pathLength > 0) {
       do_line_resume();
       currentMode = MODE_AI_ROUTE; line_mode = true; is_auto_running = true;
@@ -375,21 +294,15 @@ void setup() {
         "{\"status\":\"RESUMED\",\"pathIndex\":" + String(currentPathIndex) + ",\"robotDir\":" + String(currentDir) + "}");
     } else {
       r->send(200, "application/json", "{\"status\":\"NO_ROUTE\"}");
->>>>>>> Stashed changes
     }
-    r->send(200, "text/plain", "RESUMED");
   });
 
   server.on("/return_home", HTTP_GET, [](AsyncWebServerRequest *r){
-<<<<<<< Updated upstream
-    r->send(200, "text/plain", "RETURNING HOME");
-=======
     stopCar(); do_line_abort();
     int robotNode = (currentPathIndex < pathLength) ? currentPath[currentPathIndex] : 0;
     currentMode = MODE_MANUAL; line_mode = false; is_auto_running = false;
     r->send(200, "application/json",
       "{\"status\":\"STOPPED\",\"robotNode\":" + String(robotNode) + ",\"robotDir\":" + String(currentDir) + "}");
->>>>>>> Stashed changes
   });
 
   server.on("/api/stats", HTTP_GET, [](AsyncWebServerRequest *r){
