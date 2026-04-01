@@ -56,8 +56,8 @@ int getTargetDirection(int nodeA, int nodeB) {
 #define TRIG_PIN 21
 #define ECHO_PIN 19
 
-const float OBSTACLE_ON_CM  = 25.0f;   // Phát hiện vật cản (bật cờ)
-const float OBSTACLE_OFF_CM = 30.0f;   // Xóa cờ (hysteresis: phải > 30cm)
+const float OBSTACLE_ON_CM  = 15.0f;   // ★ Giảm 25→15: lưới 25-30cm, 25cm sẽ detect node kế tiếp
+const float OBSTACLE_OFF_CM = 20.0f;   // ★ Giảm 30→20: hysteresis theo OBSTACLE_ON
 const uint8_t OBS_HIT_N = 2;           // Cần 2 lần đọc liên tiếp mới latch
 const unsigned long US_PERIOD_MS = 25; // Polling sonar mỗi 25ms
 const unsigned long US_TIMEOUT   = 3000; // pulseIn timeout (µs) — ★ giảm từ 8000: tránh block loop quá lâu khi sonar lỗi
@@ -369,16 +369,16 @@ void do_line_resume() {
 void avoidObstacle(){
   const int TURN_PWM = 150;
   const int FWD_PWM  = 100;
-  // ★ BUG FIX #5 — Giảm delay từ 500ms xuống 100ms:
-  //   delay(500) × 7 = 3.5s block → WebSocket lag, telemetry đứng, STOP không nhận kịp.
-  //   100ms đủ cho motor ổn định giữa các bước.
-  spin_left_deg(40.0, TURN_PWM); motorsStop(); delay(100);
-  move_forward_distance(0.2, FWD_PWM); motorsStop(); delay(100);
-  spin_right_deg(40.0, TURN_PWM); motorsStop(); delay(100);
-  move_forward_distance(0.15, FWD_PWM); motorsStop(); delay(100);
-  spin_right_deg(50.0, TURN_PWM); motorsStop(); delay(100);
-  move_forward_distance_until_line(0.6, FWD_PWM); motorsStop(); delay(100);
-  spin_left_deg(15.0, TURN_PWM); motorsStop(); delay(100);
+  // ★ Scale cho lưới nhỏ 25-30cm:
+  //   Trước: fwd 20+15cm + until_line 60cm = 95cm (gần 4 ô!)
+  //   Sau:   fwd 8+6cm + until_line 20cm = 34cm (~1.2 ô) — an toàn
+  spin_left_deg(30.0, TURN_PWM); motorsStop(); delay(100);
+  move_forward_distance(0.08, FWD_PWM); motorsStop(); delay(100);
+  spin_right_deg(30.0, TURN_PWM); motorsStop(); delay(100);
+  move_forward_distance(0.06, FWD_PWM); motorsStop(); delay(100);
+  spin_right_deg(35.0, TURN_PWM); motorsStop(); delay(100);
+  move_forward_distance_until_line(0.20, FWD_PWM); motorsStop(); delay(100);
+  spin_left_deg(10.0, TURN_PWM); motorsStop(); delay(100);
 }
 
 // ================= Setup =================
@@ -500,6 +500,7 @@ void do_line_loop() {
       currentPathIndex++;
       last_intersection_time = millis();  // Chống trigger lại intersection
       seen_line_ever = true;              // Đã trên track → không cần auto-search
+      bad_t = millis();  // ★ FIX: Reset lost-line timeout sau intersection/turn
       return;
     }
   }
@@ -513,15 +514,21 @@ void do_line_loop() {
 
   if (L2 || L1 || M || R1 || R2) seen_line_ever = true;
 
-  // Mất line hoàn toàn (5 mắt OFF) > 1s → dừng
-  // ★ FIX: KHÔNG dừng nếu đang tìm line lúc khởi đầu
+  // Mất line hoàn toàn (5 mắt OFF) > 400ms → vào recovery
+  // ★ FIX: KHÔNG can thiệp khi đã đang recovering (recovery có timeout riêng 3s)
   bool lost_all = !L2 && !L1 && !M && !R1 && !R2;
   if (lost_all) {
     if (!seen_line_ever && is_auto_running) {
       // Đang bò tìm line → KHÔNG dừng, để code ở dưới xử lý
       bad_t = millis();  // Reset timeout
-    } else if (millis() - bad_t > 1000) {
-      recovering = false; avoiding = false; motorsStop();
+    } else if (recovering) {
+      // ★ Đang recovery → để recovery handler xử lý, KHÔNG giết nó
+      // (recovery có RECOV_TIME_MS = 3s timeout riêng)
+    } else if (millis() - bad_t > 400) {
+      // ★ Mất line quá 400ms → vào recovery thay vì chỉ dừng chết
+      Serial.println("[LINE] Lost >400ms → entering RECOVERY");
+      recovering = true; rec_t0 = millis();
+      motorsStop();
       noInterrupts(); encL_count = 0; encR_count = 0; interrupts();
       t_prev = millis(); return;
     }
@@ -722,6 +729,7 @@ void do_line_loop() {
             }
           }
         }
+        bad_t = millis();  // ★ FIX: Reset lost-line timeout sau intersection/turn
         return;
       }
       // Debounce: trong thời gian debounce → chạy thẳng bình thường
@@ -749,7 +757,8 @@ void do_line_loop() {
                       lastConfirmedNodeIdx, currentPath[lastConfirmedNodeIdx]);
         {
           const int REV_PWM = 80;
-          const long revTarget = countsForDistance(0.30);
+          // ★ Giảm 30→12cm: 30cm = 1 ô lưới, lùi quá sẽ qua giao lộ trước!
+          const long revTarget = countsForDistance(0.12);
           long sL, sR; noInterrupts(); sL = encL_total; sR = encR_total; interrupts();
           motorWriteLR_signed(-REV_PWM, -REV_PWM);
           while (true) {
