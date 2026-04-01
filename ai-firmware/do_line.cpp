@@ -490,6 +490,7 @@ void do_line_loop() {
           int targetDir = getTargetDirection(curNode, nxtNode);
           int diff = (targetDir != -1) ? (targetDir - currentDir + 4) % 4 : 0;
 
+          
           if (diff == 0) {
             lastConfirmedNodeIdx = currentPathIndex;
             currentPathIndex++;
