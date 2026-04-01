@@ -69,7 +69,7 @@ static bool obs_latched = false;
 
 // ================= Thông số cơ khí =================
 const float WHEEL_RADIUS_M = 0.0325f;
-const float CIRC = 2.0f * 3.1415926f * WHEEL_RADIUS_M;
+extern const float CIRC = 2.0f * 3.1415926f * WHEEL_RADIUS_M;  // extern: cho ai-firmware.ino truy cập
 const float TRACK_WIDTH_M = 0.1150f;
 
 // ================= Tham số điều khiển (GIÁ TRỊ GỐC ĐÃ CHẠY TỐT) =================

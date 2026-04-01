@@ -93,6 +93,13 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
   }
 }
 
+// Sensor pins (dùng đọc trạng thái cho telemetry + RESUME check)
+#define TELE_L2 34
+#define TELE_L1 32
+#define TELE_M  33
+#define TELE_R1 27
+#define TELE_R2 25
+
 void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
   StaticJsonDocument<1024> doc;
   DeserializationError jsonErr = deserializeJson(doc, msg);
@@ -193,12 +200,6 @@ extern float us_dist_cm;
 extern float vL_ema, vR_ema;
 extern volatile long encL_total, encR_total;  // ★ Dùng tính quãng đường (cm)
 
-// Sensor pins (dùng đọc trạng thái cho telemetry)
-#define TELE_L2 34
-#define TELE_L1 32
-#define TELE_M  33
-#define TELE_R1 27
-#define TELE_R2 25
 
 void sendTelemetry() {
   if (ws.count() == 0) return;
