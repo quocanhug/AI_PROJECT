@@ -114,7 +114,13 @@ bool avoiding = false;
 static volatile bool g_line_enabled = true;
 bool recovering = false;
 unsigned long rec_t0 = 0;
-const unsigned long RECOV_TIME_MS = 3000;
+const unsigned long RECOV_TIME_MS = 5000;  // ★ Tăng từ 3s→5s: cho xe thêm thời gian tìm line
+
+// ★ Recovery phase tracking
+enum RecovPhase { RECOV_SWEEP, RECOV_REVERSE };
+RecovPhase recov_phase = RECOV_SWEEP;
+int recov_sweep_count = 0;  // Đếm số lần sweep đã thử
+const int RECOV_MAX_SWEEPS = 4;  // Tối đa 4 sweep trước khi chuyển sang reverse
 
 // ★ Node cúôi cùng xe đứng trên giao lộ (trước khi tăng currentPathIndex)
 int lastConfirmedNodeIdx = 0;
@@ -515,19 +521,31 @@ void do_line_loop() {
 
   if (L2 || L1 || M || R1 || R2) seen_line_ever = true;
 
-  // Mất line hoàn toàn (5 mắt OFF) > 1s → dừng
-  // ★ FIX: KHÔNG dừng nếu đang tìm line lúc khởi đầu
+  // ★ Mất line hoàn toàn (5 mắt OFF) → xử lý recovery thay vì dừng cứng
   bool lost_all = !L2 && !L1 && !M && !R1 && !R2;
   if (lost_all) {
     if (!seen_line_ever && is_auto_running) {
       // Đang bò tìm line → KHÔNG dừng, để code ở dưới xử lý
       bad_t = millis();  // Reset timeout
-    } else if (millis() - bad_t > 1000) {
-      recovering = false; avoiding = false; motorsStop();
-      noInterrupts(); encL_count = 0; encR_count = 0; interrupts();
-      t_prev = millis(); return;
+    } else if (!recovering && seen_line_ever && millis() - bad_t > 300) {
+      // ★ Mất line > 300ms (giảm từ 1s): vào recovery ngay thay vì chờ quá lâu
+      Serial.println("[LINE] Lost >300ms → entering RECOVERY");
+      recovering = true;
+      rec_t0 = millis();
+      recov_phase = RECOV_SWEEP;
+      recov_sweep_count = 0;
+      motorsStop();
+      return;
     }
-  } else { bad_t = millis(); }
+    // Nếu đang recovering, bad_t không reset → recovery handler bên dưới xử lý
+  } else {
+    bad_t = millis();
+    // ★ Nếu đang recovering mà tìm lại được line → thoát recovery ngay
+    if (recovering) {
+      recovering = false;
+      Serial.println("[LINE] Recovery SUCCESS — line found!");
+    }
+  }
 
   updateObstacleState();
 
@@ -727,16 +745,33 @@ void do_line_loop() {
   // ============================================================
   else if (recovering) {
     // ★ Dừng recovering khi BẤT KỲ cảm biến nào thấy line (kể cả L2/R2)
-    if (L2 || L1 || M || R1 || R2) { recovering = false; motorsStop(); }
-    else if (millis() - rec_t0 >= RECOV_TIME_MS) {
+    if (L2 || L1 || M || R1 || R2) {
+      recovering = false;
+      motorsStop();
+      Serial.println("[RECOV] Line found during recovery!");
+      bad_t = millis();
+      // Reset PID state để tránh jerk khi resume
+      vL_ema = 0; vR_ema = 0;
+      pwmL_prev = 0; pwmR_prev = 0;
+      pidL.i_term = 0; pidL.prev_err = 0;
+      pidR.i_term = 0; pidR.prev_err = 0;
+      noInterrupts(); encL_count = 0; encR_count = 0; interrupts();
+      t_prev = millis();
+      return;
+    }
+
+    // ★ Timeout recovery → lùi về node + báo Web
+    if (millis() - rec_t0 >= RECOV_TIME_MS) {
       recovering = false; motorsStop();
-      // ★ AI_ROUTE: lùi thẳng về node đã xác nhận, báo Web từ đúng node đó
+      Serial.println("[RECOV] TIMEOUT — all recovery failed");
+
+      // ★ AI_ROUTE/DELIVERY: lùi thẳng về node đã xác nhận, báo Web từ đúng node đó
       if ((currentMode == MODE_AI_ROUTE || currentMode == MODE_DELIVERY) && is_auto_running) {
-        Serial.printf("[RECOV] Timeout! Lùi về node[%d]=%d\n",
+        Serial.printf("[RECOV] Lùi về node[%d]=%d\n",
                       lastConfirmedNodeIdx, currentPath[lastConfirmedNodeIdx]);
         {
-          const int REV_PWM = 80;
-          const long revTarget = countsForDistance(0.30);
+          const int REV_PWM = 90;
+          const long revTarget = countsForDistance(0.35);  // ★ Lùi xa hơn (35cm)
           long sL, sR; noInterrupts(); sL = encL_total; sR = encR_total; interrupts();
           motorWriteLR_signed(-REV_PWM, -REV_PWM);
           while (true) {
@@ -766,23 +801,81 @@ void do_line_loop() {
       }
       noInterrupts(); encL_count = 0; encR_count = 0; interrupts();
       t_prev = millis(); return;
-    } else {
-      // ★ Lùi vào điều hướng mạnh:
-      //   last_seen==LEFT : đuôi xe cần vừa hướng về line (bên trái)
-      //     → bánh trái lùi mạnh, bánh phải lùi chậm → đuôi vòng sang trái
-      //   last_seen==RIGHT: ngược lại
-      //   last_seen==NONE : đảo chiều scan theo 500ms tránh chỉ dao động tại chỗ
+    }
+
+    // =============================================
+    // ★★★ CHIẾN THUẬT RECOVERY 2 PHA ★★★
+    // Phase 1 (RECOV_SWEEP): Xoay tại chỗ quét trái-phải tìm line
+    //   - Ưu tiên quét về phía last_seen trước
+    //   - Mỗi sweep 400ms, tăng dần thời gian sweep
+    //   - Tối đa RECOV_MAX_SWEEPS lần
+    // Phase 2 (RECOV_REVERSE): Lùi có điều hướng về phía line
+    //   - Lùi mạnh hơn, vòng rộng hơn
+    // =============================================
+
+    if (recov_phase == RECOV_SWEEP) {
+      // ★ Sweep scan: xoay tại chỗ tìm line
+      unsigned long elapsed = millis() - rec_t0;
+      // Mỗi sweep kéo dài (300 + sweep_count*100) ms
+      unsigned long sweep_duration = 300 + recov_sweep_count * 100;
+      // Tổng thời gian cho sweep phase = tổng các sweep_duration
+      // Xác định đang ở sweep nào và hướng nào
+
+      // Tính hướng sweep: nếu biết last_seen, quét về phía đó trước
+      bool sweepToLeft;
       if (last_seen == LEFT) {
-        vL_tgt = -vF;          // bánh trái lùi mạnh
-        vR_tgt = -vF * 0.2f;   // bánh phải lùi yếu → đuôi vòng trái bắt line
+        sweepToLeft = (recov_sweep_count % 2 == 0);  // Trái trước
       } else if (last_seen == RIGHT) {
-        vL_tgt = -vF * 0.2f;   // bánh trái lùi yếu
-        vR_tgt = -vF;          // bánh phải lùi mạnh → đuôi vòng phải bắt line
+        sweepToLeft = (recov_sweep_count % 2 != 0);  // Phải trước
       } else {
-        // NONE: đổi hướng vòng mỗi 600ms để quét cả hai phía
-        bool scanLeft = ((millis() - rec_t0) / 600) % 2 == 0;
-        vL_tgt = scanLeft ? -vF        : -vF * 0.2f;
-        vR_tgt = scanLeft ? -vF * 0.2f : -vF;
+        sweepToLeft = (recov_sweep_count % 2 == 0);  // Mặc định trái trước
+      }
+
+      // PWM cho sweep: xoay tại chỗ với tốc độ vừa phải
+      const int SWEEP_PWM = 120;
+      if (sweepToLeft) {
+        vL_tgt = -v_base * 0.6f;  // bánh trái lùi
+        vR_tgt =  v_base * 0.6f;  // bánh phải tiến → xoay trái
+      } else {
+        vL_tgt =  v_base * 0.6f;  // bánh trái tiến
+        vR_tgt = -v_base * 0.6f;  // bánh phải lùi → xoay phải
+      }
+
+      // Kiểm tra khi nào chuyển sang sweep tiếp theo
+      // Tính tổng thời gian sweep đã dùng
+      unsigned long total_sweep_time = 0;
+      for (int i = 0; i <= recov_sweep_count && i < RECOV_MAX_SWEEPS; i++) {
+        total_sweep_time += 300 + i * 100;
+      }
+      if (elapsed > total_sweep_time) {
+        recov_sweep_count++;
+        if (recov_sweep_count >= RECOV_MAX_SWEEPS) {
+          // ★ Đã sweep đủ → chuyển sang phase lùi
+          recov_phase = RECOV_REVERSE;
+          Serial.println("[RECOV] Sweep exhausted → switching to REVERSE");
+        } else {
+          Serial.printf("[RECOV] Sweep #%d\n", recov_sweep_count);
+        }
+      }
+    }
+    else if (recov_phase == RECOV_REVERSE) {
+      // ★ Phase 2: Lùi mạnh có điều hướng
+      //   last_seen==LEFT : line ở bên trái → lùi vòng qua trái
+      //   last_seen==RIGHT: line ở bên phải → lùi vòng qua phải
+      //   last_seen==NONE : đổi chiều lùi mỗi 500ms
+      const float v_rev = v_base * 0.8f;  // ★ Lùi mạnh hơn (80% thay vì 50%)
+      if (last_seen == LEFT) {
+        vL_tgt = -v_rev;           // bánh trái lùi mạnh
+        vR_tgt = -v_rev * 0.3f;   // bánh phải lùi yếu → đuôi vòng trái
+      } else if (last_seen == RIGHT) {
+        vL_tgt = -v_rev * 0.3f;   // bánh trái lùi yếu
+        vR_tgt = -v_rev;           // bánh phải lùi mạnh → đuôi vòng phải
+      } else {
+        // NONE: đổi hướng vòng mỗi 500ms để quét cả hai phía
+        unsigned long rev_elapsed = millis() - rec_t0;
+        bool scanLeft = (rev_elapsed / 500) % 2 == 0;
+        vL_tgt = scanLeft ? -v_rev       : -v_rev * 0.3f;
+        vR_tgt = scanLeft ? -v_rev*0.3f  : -v_rev;
       }
     }
   }
@@ -807,11 +900,18 @@ void do_line_loop() {
       }
       else if (!seen_line_ever) { vL_tgt = 0; vR_tgt = 0; }
       else {
-        // ★ Mất line hoàn toàn → vào recovering, lùi có điều hướng
-        recovering = true; rec_t0 = millis();
-        if      (last_seen == LEFT)  { vL_tgt = -v_base + v_boost; vR_tgt = -v_base - v_boost; }
-        else if (last_seen == RIGHT) { vL_tgt = -v_base - v_boost; vR_tgt = -v_base + v_boost; }
-        else                         { vL_tgt = -v_base * 0.7f;    vR_tgt = -v_base * 0.7f; }
+        // ★ Mất line hoàn toàn → recovery sẽ được kích hoạt bởi bad_t timeout (300ms)
+        //   Trong khi chờ timeout, tiếp tục chạy hướng cuối cùng (braking nhẹ)
+        if (last_seen == LEFT) {
+          vL_tgt = v_base * 0.3f;  // Giảm tốc + lệch trái tìm line
+          vR_tgt = v_base * 0.5f;
+        } else if (last_seen == RIGHT) {
+          vL_tgt = v_base * 0.5f;  // Giảm tốc + lệch phải tìm line
+          vR_tgt = v_base * 0.3f;
+        } else {
+          vL_tgt = v_base * 0.3f;  // Giảm tốc chạy chậm
+          vR_tgt = v_base * 0.3f;
+        }
       }
     }
     else { vL_tgt = v_base; vR_tgt = v_base; }
