@@ -7,12 +7,8 @@
   <title>RoboControl — Hệ thống Điều khiển Robot AI</title>
   <meta name="description"
     content="AI Robot Pathfinder Dashboard — Hệ thống xe robot giao hàng với thuật toán tìm kiếm AI" />
-  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
-    rel="stylesheet" />
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
-    rel="stylesheet" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="tailwind.min.js"></script>
+  <script src="chart.min.js"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -54,7 +50,7 @@
             "inverse-on-surface": "#f0f1f2",
             "inverse-primary": "#aac7ff",
           },
-          fontFamily: { "headline": ["Inter"], "body": ["Inter"], "label": ["Inter"] },
+          fontFamily: { "headline": ["system-ui","sans-serif"], "body": ["system-ui","sans-serif"], "label": ["system-ui","sans-serif"] },
           borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" },
         },
       },
@@ -70,7 +66,7 @@
     <!-- Brand + Group Info -->
     <div class="p-6">
       <div class="flex items-center gap-2 mb-6">
-        <span class="material-symbols-outlined text-primary text-3xl">precision_manufacturing</span>
+        <span class="text-primary text-2xl">🤖</span>
         <h1 class="font-black tracking-tighter text-xl text-primary uppercase">RoboControl</h1>
       </div>
       <div class="bg-surface-container-lowest rounded-xl p-4 shadow-sm">
@@ -91,27 +87,27 @@
     <div class="mt-auto p-4 space-y-1">
       <nav class="space-y-1 mb-8">
         <a class="nav-link active-nav" id="nav-manual" onclick="switchTab('manual')" href="#">
-          <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">pan_tool</span>
+          <span style="font-size:1.2rem">🖐️</span>
           <span class="text-sm font-bold uppercase tracking-wide">Thủ công</span>
         </a>
         <a class="nav-link" id="nav-auto" onclick="switchTab('auto')" href="#">
-          <span class="material-symbols-outlined">smart_toy</span>
+          <span style="font-size:1.2rem">🤖</span>
           <span class="text-sm font-bold uppercase tracking-wide">Tự động</span>
         </a>
         <a class="nav-link" id="nav-stats" onclick="switchTab('stats')" href="#">
-          <span class="material-symbols-outlined">bar_chart</span>
+          <span style="font-size:1.2rem">📊</span>
           <span class="text-sm font-bold uppercase tracking-wide">Thống kê</span>
         </a>
       </nav>
       <div class="pt-4 border-t border-outline-variant/30 space-y-1">
         <a class="flex items-center gap-3 px-4 py-2 rounded-xl text-on-surface-variant hover:text-primary transition-all"
           href="#">
-          <span class="material-symbols-outlined text-xl">settings</span><span class="text-sm font-medium">Cài
+          <span style="font-size:1.1rem">⚙️</span><span class="text-sm font-medium">Cài
             đặt</span>
         </a>
         <a class="flex items-center gap-3 px-4 py-2 rounded-xl text-on-surface-variant hover:text-primary transition-all"
           href="#">
-          <span class="material-symbols-outlined text-xl">help</span><span class="text-sm font-medium">Trợ giúp</span>
+          <span style="font-size:1.1rem">❓</span><span class="text-sm font-medium">Trợ giúp</span>
         </a>
       </div>
       <!-- System Status -->
@@ -139,12 +135,12 @@
       </div>
       <div class="flex items-center gap-4">
         <div class="flex items-center gap-2 bg-surface-container-high px-4 py-2 rounded-full">
-          <span class="material-symbols-outlined text-primary text-sm">schedule</span>
+          <span class="text-primary text-sm">🕐</span>
           <span class="text-sm font-black text-on-surface tracking-tight" id="real-time-clock">--:--:-- --</span>
         </div>
         <div
           class="w-10 h-10 rounded-full bg-primary-fixed flex items-center justify-center border-2 border-surface shadow-sm">
-          <span class="material-symbols-outlined text-primary">robot_2</span>
+          <span class="text-primary">🤖</span>
         </div>
       </div>
     </header>
@@ -159,7 +155,7 @@
           class="bg-surface-container-lowest p-8 rounded-[2rem] shadow-sm border border-outline-variant/30 flex flex-col items-center">
           <div class="flex items-center justify-between w-full mb-8">
             <div class="flex items-center gap-3">
-              <span class="material-symbols-outlined text-primary text-2xl">settings_remote</span>
+              <span class="text-primary text-2xl">🎮</span>
               <h3 class="text-lg font-black uppercase tracking-widest text-on-surface">Bộ điều hướng</h3>
             </div>
             <span
@@ -169,31 +165,31 @@
           <!-- Large D-Pad -->
           <div class="grid grid-cols-3 grid-rows-3 gap-6 w-full max-w-md aspect-square">
             <button class="dpad-btn hold" data-path="/fwd_left"><span
-                class="material-symbols-outlined rotate-[-45deg] text-3xl group-hover:text-primary">arrow_upward</span></button>
+                class="rotate-[-45deg] text-3xl group-hover:text-primary">⬆</span></button>
             <button class="dpad-btn hold" data-path="/forward"><span
-                class="material-symbols-outlined text-4xl group-hover:text-primary">arrow_upward</span></button>
+                class="text-4xl group-hover:text-primary">⬆</span></button>
             <button class="dpad-btn hold" data-path="/fwd_right"><span
-                class="material-symbols-outlined rotate-[45deg] text-3xl group-hover:text-primary">arrow_upward</span></button>
+                class="rotate-[45deg] text-3xl group-hover:text-primary">⬆</span></button>
             <button class="dpad-btn hold" data-path="/left"><span
-                class="material-symbols-outlined text-4xl group-hover:text-primary">arrow_back</span></button>
+                class="text-4xl group-hover:text-primary">⬅</span></button>
             <button
               class="bg-error text-on-error hover:brightness-110 transition-all rounded-[2rem] flex items-center justify-center shadow-xl shadow-error/20 active:scale-90 duration-150"
               id="stopBtn" data-path="/stop"><span class="font-black tracking-tighter text-sm uppercase">Dừng
                 khẩn</span></button>
             <button class="dpad-btn hold" data-path="/right"><span
-                class="material-symbols-outlined text-4xl group-hover:text-primary">arrow_forward</span></button>
+                class="text-4xl group-hover:text-primary">➡</span></button>
             <button class="dpad-btn hold" data-path="/back_left"><span
-                class="material-symbols-outlined rotate-[-135deg] text-3xl group-hover:text-primary">arrow_upward</span></button>
+                class="rotate-[-135deg] text-3xl group-hover:text-primary">⬆</span></button>
             <button class="dpad-btn hold" data-path="/backward"><span
-                class="material-symbols-outlined text-4xl group-hover:text-primary">arrow_downward</span></button>
+                class="text-4xl group-hover:text-primary">⬇</span></button>
             <button class="dpad-btn hold" data-path="/back_right"><span
-                class="material-symbols-outlined rotate-[135deg] text-3xl group-hover:text-primary">arrow_upward</span></button>
+                class="rotate-[135deg] text-3xl group-hover:text-primary">⬆</span></button>
           </div>
           <div class="mt-8 flex gap-4 w-full justify-center">
             <button
               class="bg-primary text-on-primary px-8 py-4 rounded-2xl shadow-lg shadow-primary/20 hover:brightness-110 transition-all font-bold text-sm uppercase tracking-widest flex items-center gap-2"
               onclick="sendCommand('/return_home')">
-              <span class="material-symbols-outlined">home</span> Về điểm xuất phát
+              🏠 Về điểm xuất phát
             </button>
           </div>
         </div>
@@ -201,7 +197,7 @@
         <div class="grid grid-cols-3 gap-6">
           <div
             class="bg-surface-container-lowest p-6 rounded-3xl shadow-sm border border-outline-variant/20 flex flex-col items-center gap-2">
-            <span class="material-symbols-outlined text-primary text-3xl">sensors</span>
+            <span class="text-primary text-3xl">📡</span>
             <span class="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Cảm biến line</span>
             <div class="flex gap-1 mt-1" id="sensorDotsManual">
               <span class="w-3 h-3 rounded-full bg-surface-container" id="sm0"></span>
@@ -213,14 +209,14 @@
           </div>
           <div
             class="bg-surface-container-lowest p-6 rounded-3xl shadow-sm border border-outline-variant/20 flex flex-col items-center gap-2">
-            <span class="material-symbols-outlined text-primary text-3xl">height</span>
+            <span class="text-primary text-3xl">📏</span>
             <span class="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Sonar
               (HC-SR04)</span>
             <span class="text-xs font-bold" id="sonarStatus">-- cm</span>
           </div>
           <div
             class="bg-surface-container-lowest p-6 rounded-3xl shadow-sm border border-outline-variant/20 flex flex-col items-center gap-2">
-            <span class="material-symbols-outlined text-primary text-3xl">speed</span>
+            <span class="text-primary text-3xl">⚡</span>
             <span class="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Encoder</span>
             <span class="text-xs font-bold text-green-600" id="encoderStatus">Hoạt động</span>
           </div>
@@ -239,7 +235,7 @@
                   class="text-xl text-on-surface-variant font-medium">m/s</span></h3>
             </div>
             <div class="bg-primary-fixed w-12 h-12 rounded-2xl flex items-center justify-center">
-              <span class="material-symbols-outlined text-primary text-2xl">speed</span>
+              <span class="text-primary text-2xl">⚡</span>
             </div>
           </div>
           <div class="h-2 bg-surface-container rounded-full overflow-hidden">
@@ -257,7 +253,7 @@
                   class="text-xl text-on-surface-variant font-medium">cm</span></h3>
             </div>
             <div class="bg-green-100 w-12 h-12 rounded-2xl flex items-center justify-center">
-              <span class="material-symbols-outlined text-green-600 text-2xl">straighten</span>
+              <span class="text-green-600 text-2xl">📐</span>
             </div>
           </div>
         </div>
@@ -265,7 +261,7 @@
         <section class="bg-surface-container-lowest p-8 rounded-[2rem] shadow-sm border border-primary/20 flex-1">
           <div class="flex items-center gap-3 mb-6">
             <div class="bg-primary/10 p-2 rounded-xl"><span
-                class="material-symbols-outlined text-primary">location_on</span></div>
+                class="text-primary">📍</span></div>
             <h3 class="text-lg font-black uppercase tracking-widest text-on-surface">Trạng thái Robot</h3>
           </div>
           <div class="space-y-4">
@@ -299,9 +295,12 @@
       <!-- Top Status Row -->
       <div class="grid grid-cols-5 gap-4">
         <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm border border-outline-variant/10">
-          <span class="text-[10px] font-bold text-on-surface-variant tracking-widest uppercase block mb-1">Thứ tự
-            giao</span>
-          <span class="text-2xl font-black text-primary" id="autoOrderNum">#--/--</span>
+          <span class="text-[10px] font-bold text-on-surface-variant tracking-widest uppercase block mb-1">Thời gian
+            duyệt</span>
+          <div class="flex items-baseline gap-1">
+            <span class="text-2xl font-black text-primary" id="autoComputeTime">--</span>
+            <span class="text-xs font-bold text-on-surface-variant italic">ms</span>
+          </div>
         </div>
         <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm border border-outline-variant/10">
           <span class="text-[10px] font-bold text-on-surface-variant tracking-widest uppercase block mb-1">Số bước di
@@ -339,40 +338,58 @@
           class="col-span-8 bg-surface-container-lowest rounded-2xl shadow-sm overflow-hidden flex flex-col border border-outline-variant/10 min-h-[500px]">
           <div class="p-4 border-b border-outline-variant/5 flex justify-between items-center">
             <div class="flex items-center gap-3">
-              <span class="material-symbols-outlined text-primary">map</span>
+              <span class="text-primary">🗺️</span>
               <h2 class="font-bold text-on-surface">Bản đồ Node Lưới — Khu vực Giao hàng</h2>
             </div>
-            <div class="flex bg-surface-container-low p-1 rounded-lg">
+            <div class="flex bg-surface-container-low p-1 rounded-lg flex-wrap gap-0.5">
+              <button class="map-tool-btn" id="toolStart" onclick="setMapTool('start')">
+                📌 Xuất phát
+              </button>
               <button class="map-tool-btn active" id="toolTarget" onclick="setMapTool('target')">
-                <span class="material-symbols-outlined text-sm">location_on</span> Chọn điểm Giao hàng
+                📍 Điểm giao
               </button>
               <button class="map-tool-btn" id="toolObstacle" onclick="setMapTool('obstacle')">
-                <span class="material-symbols-outlined text-sm">block</span> Đặt Vật cản
+                🚫 Vật cản
+              </button>
+              <button class="map-tool-btn" id="toolEdge" onclick="setMapTool('edge')">
+                🔗 Edge
+              </button>
+              <button class="map-tool-btn" id="toolWeight" onclick="setMapTool('weight')">
+                ⚖️ Trọng số
               </button>
             </div>
           </div>
           <div class="flex-1 relative bg-slate-50 overflow-hidden p-4">
-            <svg id="agvMap" viewBox="0 0 340 270" class="w-full h-full">
+            <svg id="agvMap" viewBox="0 0 340 200" class="w-full h-full">
               <g class="track-lines">
-                <line x1="30" y1="30" x2="100" y2="30" />
-                <line x1="170" y1="30" x2="310" y2="30" />
-                <line x1="30" y1="100" x2="310" y2="100" />
-                <line x1="30" y1="170" x2="100" y2="170" />
-                <line x1="170" y1="170" x2="310" y2="170" />
-                <line x1="30" y1="240" x2="100" y2="240" />
-                <line x1="170" y1="240" x2="310" y2="240" />
-                <line x1="30" y1="30" x2="30" y2="240" />
-                <line x1="100" y1="30" x2="100" y2="100" />
-                <line x1="100" y1="170" x2="100" y2="240" />
-                <line x1="170" y1="30" x2="170" y2="240" />
-                <line x1="240" y1="30" x2="240" y2="240" />
-                <line x1="310" y1="100" x2="310" y2="170" />
               </g>
               <g id="pathLayer"></g>
               <g id="nodeLayer"></g>
+              <g id="robotLayer"></g>
             </svg>
           </div>
           <!-- Legend -->
+          <!-- Animation Controls -->
+          <div id="animationControls" class="hidden border-t border-outline-variant/5 p-3">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <div class="flex items-center gap-1">
+                <button onclick="animPlay()" id="animPlayBtn" class="anim-ctrl-btn" title="Play">▶</button>
+                <button onclick="animPause()" id="animPauseBtn" class="anim-ctrl-btn" title="Pause">⏸</button>
+                <button onclick="animStepFwd()" class="anim-ctrl-btn" title="Step">⏭</button>
+                <button onclick="animReset()" class="anim-ctrl-btn" title="Reset">🔄</button>
+              </div>
+              <div class="flex items-center gap-2 flex-1 max-w-[200px]">
+                <span class="text-[9px] font-bold text-on-surface-variant whitespace-nowrap">CHẬM</span>
+                <input type="range" id="animSpeedSlider" min="1" max="100" value="50" class="flex-1">
+                <span class="text-[9px] font-bold text-on-surface-variant whitespace-nowrap">NHANH</span>
+              </div>
+              <div class="flex items-center gap-3 text-[11px] font-semibold">
+                <span>Step: <b class="text-on-surface" id="animStepNum">0</b>/<b id="animTotalSteps">0</b></span>
+                <span class="flex items-center gap-1"><span class="anim-legend-dot" style="background:#f59e0b"></span> <b class="text-amber-700" id="animExploredCount">0</b></span>
+                <span class="flex items-center gap-1"><span class="anim-legend-dot" style="background:#3b82f6"></span> <b class="text-blue-700" id="animFrontierCount">0</b></span>
+              </div>
+            </div>
+          </div>
           <div id="deliveryLegend"
             class="hidden p-3 border-t border-outline-variant/5 flex flex-wrap gap-2 items-center justify-center text-xs font-semibold text-on-surface-variant">
           </div>
@@ -383,7 +400,7 @@
           <!-- Algorithm Config -->
           <div class="bg-surface-container-lowest p-5 rounded-2xl shadow-sm border border-outline-variant/10">
             <div class="flex items-center gap-2 mb-4">
-              <span class="material-symbols-outlined text-primary text-xl">tune</span>
+              <span class="text-primary text-xl">⚙️</span>
               <h3 class="font-bold text-on-surface">Cấu hình thuật toán</h3>
             </div>
             <div class="space-y-4">
@@ -416,6 +433,14 @@
                 </select>
               </div>
             </div>
+            <div class="pt-2 space-y-2">
+              <button class="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-primary-container text-on-primary px-4 py-3 rounded-xl text-sm font-bold shadow-lg shadow-primary/20 hover:brightness-110 transition-all active:scale-[0.98]" onclick="animStart()">
+                ⏯ MÔ PHỎNG THUẬT TOÁN
+              </button>
+              <button class="w-full flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-3 rounded-xl text-sm font-bold shadow-lg shadow-green-600/20 hover:bg-green-700 transition-all active:scale-[0.98]" id="deliverBtn2" onclick="document.getElementById('deliverBtn').click()">
+                🚀 NẠP LỘ TRÌNH & CHO XE CHẠY
+              </button>
+            </div>
           </div>
           <!-- Command Buttons -->
           <div class="grid grid-cols-2 gap-3">
@@ -423,20 +448,20 @@
               class="flex flex-col items-center justify-center p-4 bg-white border border-outline-variant/20 rounded-xl hover:bg-slate-50 transition-colors group"
               onclick="sendCommand('/return_home')">
               <span
-                class="material-symbols-outlined text-primary mb-1 group-active:scale-90 transition-transform">warehouse</span>
+                class="text-primary mb-1 group-active:scale-90 transition-transform text-xl">🏭</span>
               <span class="text-xs font-bold text-primary">VỀ KHO</span>
             </button>
             <button
               class="flex flex-col items-center justify-center p-4 bg-white border border-outline-variant/20 rounded-xl hover:bg-slate-50 transition-colors group"
               onclick="sendCommand('/resume')">
               <span
-                class="material-symbols-outlined text-on-surface-variant mb-1 group-active:scale-90 transition-transform">skip_next</span>
+                class="text-on-surface-variant mb-1 group-active:scale-90 transition-transform text-xl">⏭</span>
               <span class="text-xs font-bold text-on-surface-variant">TIẾP TỤC</span>
             </button>
             <button
               class="col-span-2 flex items-center justify-center gap-3 p-4 bg-error text-on-error rounded-xl font-black tracking-wider shadow-lg shadow-error/20 active:scale-[0.98] transition-all"
               onclick="sendCommand('/estop')">
-              <span class="material-symbols-outlined">emergency_home</span> DỪNG KHẨN CẤP (E-STOP)
+              ⚠️ DỪNG KHẨN CẤP (E-STOP)
             </button>
           </div>
         </div>
@@ -449,13 +474,13 @@
           <button
             class="text-xs font-bold text-primary bg-primary/10 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-primary/20 transition-colors"
             id="deliverBtn">
-            <span class="material-symbols-outlined text-sm">play_circle</span> NẠP LỘ TRÌNH & BẮT ĐẦU
+            ▶ NẠP LỘ TRÌNH & BẮT ĐẦU
           </button>
         </div>
         <!-- Delivery Order Info -->
         <div class="px-4 pt-3 space-y-2" id="deliveryInfoArea">
           <div class="flex items-start gap-2 bg-primary-fixed/30 rounded-xl p-3">
-            <span class="material-symbols-outlined text-primary text-lg mt-0.5">format_list_numbered</span>
+            <span class="text-primary text-lg mt-0.5">📋</span>
             <div>
               <span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant block">Thứ tự giao
                 đơn</span>
@@ -463,7 +488,7 @@
             </div>
           </div>
           <div class="flex items-start gap-2 bg-green-50 rounded-xl p-3">
-            <span class="material-symbols-outlined text-green-600 text-lg mt-0.5">route</span>
+            <span class="text-green-600 text-lg mt-0.5">🛣️</span>
             <div>
               <span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant block">Lộ trình các
                 node đi qua</span>
@@ -475,7 +500,7 @@
         <div class="px-4 pt-2" id="deliveryStatusArea">
           <div class="flex items-center gap-2 rounded-xl p-3 bg-surface-container-high/50 hidden"
             id="deliveryStatusBanner">
-            <span class="material-symbols-outlined text-lg" id="deliveryStatusIcon">hourglass_empty</span>
+            <span class="text-lg" id="deliveryStatusIcon">⏳</span>
             <span class="text-sm font-bold" id="deliveryStatusText">Đang chờ giao hàng...</span>
           </div>
         </div>
@@ -489,6 +514,40 @@
     <!-- ================================================ -->
     <main id="panel-stats" class="panel-view flex-1 p-8 overflow-y-auto hide-scrollbar">
       <div class="max-w-7xl mx-auto space-y-8">
+
+        <!-- ★ Scenario Info Card (Dynamic — reflects current map config) -->
+        <div class="bg-gradient-to-r from-primary to-primary-container p-6 rounded-3xl shadow-lg text-white">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="text-3xl">🧪</span>
+            <div>
+              <h3 class="text-lg font-black uppercase tracking-wide">Kịch bản so sánh thuật toán</h3>
+              <p class="text-sm opacity-90">Dữ liệu phân tích dựa trên cấu hình bản đồ hiện tại ở tab Tự động</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mt-4">
+            <div class="bg-white/15 backdrop-blur-sm rounded-2xl p-4">
+              <span class="text-[10px] font-bold uppercase tracking-widest opacity-80 block mb-1">Bản đồ</span>
+              <span class="text-base font-black">Grid 3×5 (15 node)</span>
+            </div>
+            <div class="bg-white/15 backdrop-blur-sm rounded-2xl p-4">
+              <span class="text-[10px] font-bold uppercase tracking-widest opacity-80 block mb-1">📌 Xuất phát</span>
+              <span class="text-base font-black" id="statsStartNode">Node 10</span>
+            </div>
+            <div class="bg-white/15 backdrop-blur-sm rounded-2xl p-4">
+              <span class="text-[10px] font-bold uppercase tracking-widest opacity-80 block mb-1">📍 Đích đến</span>
+              <span class="text-base font-black" id="statsTargetNodes">--</span>
+            </div>
+            <div class="bg-white/15 backdrop-blur-sm rounded-2xl p-4">
+              <span class="text-[10px] font-bold uppercase tracking-widest opacity-80 block mb-1">🚫 Vật cản</span>
+              <span class="text-base font-black" id="statsObstacles">Không có</span>
+            </div>
+            <div class="bg-white/15 backdrop-blur-sm rounded-2xl p-4">
+              <span class="text-[10px] font-bold uppercase tracking-widest opacity-80 block mb-1">⚖️ Trọng số</span>
+              <span class="text-base font-black" id="statsWeightInfo">Đồng nhất (=1)</span>
+            </div>
+          </div>
+        </div>
+
         <!-- KPI Row -->
         <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div
@@ -531,19 +590,49 @@
           <div class="col-span-12 bg-surface-container-lowest p-8 rounded-3xl shadow-sm border border-slate-100">
             <div class="flex items-center justify-between mb-6">
               <div>
-                <h3 class="text-lg font-bold tracking-tight">So sánh 5 Thuật toán Tìm đường</h3>
-                <p class="text-xs text-on-surface-variant">So sánh Số bước, Node đã duyệt, Thời gian tính toán giữa các
-                  thuật toán</p>
+                <h3 class="text-lg font-bold tracking-tight">📊 So sánh 5 Thuật toán Tìm đường</h3>
+                <p class="text-xs text-on-surface-variant">So sánh Số bước, Node đã duyệt, Thời gian tính toán giữa các thuật toán</p>
               </div>
               <button
                 class="flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:bg-primary/90 transition-all"
                 id="compareAllBtn">
-                <span class="material-symbols-outlined text-lg">analytics</span> So Sánh Tất Cả
+                📊 So Sánh Tất Cả
               </button>
             </div>
             <div class="h-80"><canvas id="algoComparisonChart"></canvas></div>
-            <div id="algoCompareResult" class="mt-4 text-sm text-on-surface-variant"></div>
+            <!-- ★ Detailed Analysis Table (populated by JS) -->
+            <div id="algoCompareResult" class="mt-6 text-sm text-on-surface-variant"></div>
           </div>
+
+          <!-- ★ Detailed Algorithm Analysis Table (pre-populated with benchmark data) -->
+          <div class="col-span-12 bg-surface-container-lowest p-8 rounded-3xl shadow-sm border border-slate-100">
+            <div class="flex items-center gap-3 mb-6">
+              <span class="text-2xl">🏆</span>
+              <div>
+                <h3 class="text-lg font-bold tracking-tight">Bảng phân tích chi tiết thuật toán</h3>
+                <p class="text-xs text-on-surface-variant">Kịch bản: Node 10 → Node 4 | Vật cản: 7, 8 | Trọng số = 1</p>
+              </div>
+            </div>
+            <div class="overflow-x-auto" id="benchmarkTableArea">
+              <!-- This will be populated by JS on page load and when compareAllBtn is clicked -->
+            </div>
+          </div>
+
+          <!-- ★ Algorithm Evaluation Cards -->
+          <div class="col-span-12 bg-surface-container-lowest p-8 rounded-3xl shadow-sm border border-slate-100">
+            <div class="flex items-center gap-3 mb-6">
+              <span class="text-2xl">📖</span>
+              <div>
+                <h3 class="text-lg font-bold tracking-tight">Đánh giá chi tiết từng thuật toán</h3>
+                <p class="text-xs text-on-surface-variant">Ưu điểm, nhược điểm và nhận xét thực tế</p>
+              </div>
+            </div>
+            <div id="algoEvaluationArea">
+              <!-- Populated by renderEvaluationCards() when Compare All is clicked -->
+              <p class="text-sm text-on-surface-variant text-center py-6">Nhấn <b>"📊 So Sánh Tất Cả"</b> để xem đánh giá chi tiết</p>
+            </div>
+          </div>
+
 
           <!-- Order History -->
           <div class="col-span-12 bg-surface-container-lowest p-8 rounded-3xl shadow-sm border border-slate-100">
