@@ -77,7 +77,7 @@ const unsigned long US_PERIOD_MS = 25;
 
 // ================= Thông số cơ khí =================
 const float WHEEL_RADIUS_M = 0.0325f;
-const float CIRC = 2.0f * 3.1415926f * WHEEL_RADIUS_M;
+extern const float CIRC = 2.0f * 3.1415926f * WHEEL_RADIUS_M;
 const float TRACK_WIDTH_M = 0.1150f;
 
 // ================= Tham số điều khiển (GIÁ TRỊ GỐC ĐÃ CHẠY TỐT) =================
@@ -483,6 +483,7 @@ void do_line_loop() {
           is_auto_running = false;
           line_mode = false; do_line_abort(); return;
         }
+      } // ← close: if (targetDir != -1 && targetDir != currentDir)
 
       // ★ BUG FIX #1 — Initial turn: currentPathIndex++ trước khi confirm bắt được line.
       //   Nếu move_forward_distance_until_line() trả về false (không tìm thấy line sau 10cm),
