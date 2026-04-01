@@ -9,6 +9,7 @@
 const char* ssid = "ESP32-Car";
 const char* password = "12345678";
 
+// Motor pins
 #define IN1 12
 #define IN2 14
 #define ENA 13
@@ -16,15 +17,20 @@ const char* password = "12345678";
 #define IN4 2
 #define ENB 15
 
+// Thay thế analogWrite bằng LEDC Hardware Timer
+#define LEDC_CHANNEL_ENA 0
+#define LEDC_CHANNEL_ENB 1
+
 int speed_linear = 130;
 int speed_rot    = 110;
 const int SPEED_MIN  = 60;
 const int SPEED_MAX  = 255;
 const int SPEED_STEP = 10;
-const int DIAG_SCALE = 70; 
+const int DIAG_SCALE = 70;
+
 static inline int diagScale(int v){ return v * DIAG_SCALE / 100; }
 static inline int clamp(int v, int lo, int hi){ return v<lo?lo:(v>hi?hi:v); }
-const bool INVERT_STEER = true; 
+const bool INVERT_STEER = true;
 
 #define SERVO_PIN 18
 const int OPEN_ANGLE  = 120;
@@ -38,13 +44,16 @@ AsyncWebSocket ws("/ws");
 volatile UIMode currentMode = MODE_MANUAL;
 bool line_mode = false;
 bool is_auto_running = false;
+<<<<<<< Updated upstream
 
 int currentPath[20]; 
+=======
+int currentPath[15]; 
+>>>>>>> Stashed changes
 int pathLength = 0;
 int currentTargetNode = -1;
 int currentPathIndex = 0;
-int currentDir = 1; 
-
+int currentDir = 1;
 volatile int delivered_count = 0;
 volatile float avg_time_sec = 0.0;
 volatile int robot_efficiency = 100;
@@ -54,8 +63,13 @@ volatile Motion curMotion = STOPPED;
 
 void forward(); void backward(); void left(); void right(); void stopCar();
 void forwardLeft(); void forwardRight(); void backwardLeft(); void backwardRight();
+<<<<<<< Updated upstream
 void gripOpen(); void gripClose();
 void applyCurrentMotion();
+=======
+void gripOpen(); void gripClose(); void applyCurrentMotion();
+void handleWsMessage(AsyncWebSocketClient* client, char* msg);
+>>>>>>> Stashed changes
 
 // ================= WebSocket Broadcast =================
 void wsBroadcast(const char* msg) {
@@ -76,8 +90,16 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
     case WS_EVT_DATA: {
       AwsFrameInfo *info = (AwsFrameInfo*)arg;
       if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
+<<<<<<< Updated upstream
         data[len] = 0;
         handleWsMessage(client, (char*)data);
+=======
+        char msgBuf[512];
+        size_t copyLen = (len < 511) ? len : 511;
+        memcpy(msgBuf, data, copyLen);
+        msgBuf[copyLen] = '\0';
+        handleWsMessage(client, msgBuf);
+>>>>>>> Stashed changes
       }
       break;
     }
@@ -98,22 +120,22 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
     client->text("{\"type\":\"PONG\"}");
   }
   else if (strcmp(type, "ROUTE") == 0) {
-    // Nạp path node trực tiếp vào currentPath[] — dùng do_line_loop() đã ổn định
     stopCar();
-    
-    // Parse path array từ JSON: [0, 1, 6, 7, 12, ...]
     JsonArray pathArr = doc["path"].as<JsonArray>();
     pathLength = 0;
     for (JsonVariant v : pathArr) {
+<<<<<<< Updated upstream
       if (pathLength < 20) currentPath[pathLength++] = v.as<int>();
+=======
+      int node = v.as<int>();
+      if (node >= 0 && node < 15 && pathLength < 15) currentPath[pathLength++] = node;
+>>>>>>> Stashed changes
     }
     currentPathIndex = 0;
     
-    // Tính hướng ban đầu từ 2 node đầu tiên
     if (doc.containsKey("initialDir")) {
       currentDir = doc["initialDir"] | 0;
     } else if (pathLength >= 2) {
-      // Tự tính từ node_coords trong do_line.cpp
       extern int getTargetDirection(int, int);
       currentDir = getTargetDirection(currentPath[0], currentPath[1]);
     }
@@ -123,7 +145,6 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
     line_mode = true;
     is_auto_running = true;
     
-    // Gửi ACK về Web
     String ack = "{\"type\":\"ROUTE_ACK\",\"commands\":" + String(pathLength) + "}";
     ws.textAll(ack);
     Serial.printf("AI Route: %d nodes loaded, dir=%d\n", pathLength, currentDir);
@@ -135,11 +156,24 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
     currentMode = MODE_MANUAL;
     line_mode = false;
     is_auto_running = false;
+<<<<<<< Updated upstream
     client->text("{\"type\":\"ACK\",\"action\":\"STOPPED\"}");
   }
   else if (strcmp(type, "RESUME") == 0) {
     if (currentMode == MODE_AI_ROUTE) {
       do_line_setup();
+=======
+    if (strcmp(type, "ESTOP") == 0) {
+      pathLength = 0;
+      currentPathIndex = 0;
+    }
+    client->text("{\"type\":\"ACK\",\"action\":\"STOPPED\"}");
+  }
+  else if (strcmp(type, "RESUME") == 0) {
+    if (pathLength > 0) {
+      do_line_resume();
+      currentMode = MODE_AI_ROUTE;
+>>>>>>> Stashed changes
       line_mode = true;
       is_auto_running = true;
       client->text("{\"type\":\"ACK\",\"action\":\"RESUMED\"}");
@@ -151,11 +185,17 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
 static unsigned long lastTelemetryMs = 0;
 const unsigned long TELEMETRY_INTERVAL_MS = 200;
 
+<<<<<<< Updated upstream
 // ★ Extern sensor/speed data từ do_line.cpp để gửi telemetry đầy đủ
 extern float us_dist_cm;
 extern float vL_ema, vR_ema;
+=======
+extern float us_dist_cm;
+extern float vL_ema, vR_ema;
+extern volatile long encL_total, encR_total; 
+extern const float CIRC; 
+>>>>>>> Stashed changes
 
-// Sensor pins (dùng đọc trạng thái cho telemetry)
 #define TELE_L2 34
 #define TELE_L1 32
 #define TELE_M  33
@@ -164,15 +204,21 @@ extern float vL_ema, vR_ema;
 
 void sendTelemetry() {
   if (ws.count() == 0) return;
+  
   if (currentMode == MODE_AI_ROUTE && is_auto_running) {
+<<<<<<< Updated upstream
     int robotNode = (currentPathIndex < pathLength) ? currentPath[currentPathIndex] : currentPath[pathLength-1];
+=======
+    extern int lastConfirmedNodeIdx;
+    int robotNode = (lastConfirmedNodeIdx < pathLength) ? currentPath[lastConfirmedNodeIdx] : currentPath[pathLength-1];
+>>>>>>> Stashed changes
     
-    // ★ Đọc cảm biến line (LOW = trên vạch)
     int s0 = digitalRead(TELE_L2) == LOW ? 1 : 0;
     int s1 = digitalRead(TELE_L1) == LOW ? 1 : 0;
     int s2 = digitalRead(TELE_M)  == LOW ? 1 : 0;
     int s3 = digitalRead(TELE_R1) == LOW ? 1 : 0;
     int s4 = digitalRead(TELE_R2) == LOW ? 1 : 0;
+<<<<<<< Updated upstream
     
     String json = "{\"type\":\"TELEMETRY\",\"state\":\"FOLLOWING_LINE\"";
     json += ",\"step\":" + String(currentPathIndex);
@@ -184,13 +230,51 @@ void sendTelemetry() {
     json += ",\"obstacle\":" + String(us_dist_cm, 1);
     json += ",\"sensors\":[" + String(s0) + "," + String(s1) + "," + String(s2) + "," + String(s3) + "," + String(s4) + "]}";
     ws.textAll(json);
+=======
+
+    // Đọc biến đếm 32-bit an toàn 
+    long safeL, safeR;
+    noInterrupts();
+    safeL = encL_total;
+    safeR = encR_total;
+    interrupts();
+
+    float dist_cm = ((float)(safeL + safeR) / 2.0f) / 60.0f * CIRC * 100.0f;
+
+    // Sử dụng StaticJsonDocument để ngăn phân mảnh Heap thay vì ghép chuỗi String 
+    StaticJsonDocument<256> doc;
+    doc["type"] = "TELEMETRY";
+    doc["state"] = "FOLLOWING_LINE";
+    doc["step"] = currentPathIndex;
+    doc["total"] = pathLength;
+    doc["robotNode"] = robotNode;
+    doc["robotDir"] = currentDir;
+    
+    // Format dạng float 2 chữ số
+    doc["speedL"] = serialized(String(vL_ema, 2));
+    doc["speedR"] = serialized(String(vR_ema, 2));
+    doc["distance"] = serialized(String(dist_cm, 1));
+    doc["obstacle"] = serialized(String(us_dist_cm, 1));
+    
+    JsonArray sensors = doc.createNestedArray("sensors");
+    sensors.add(s0); sensors.add(s1); sensors.add(s2); sensors.add(s3); sensors.add(s4);
+
+    char buffer[256];
+    serializeJson(doc, buffer);
+    ws.textAll(buffer);
+>>>>>>> Stashed changes
   }
 }
 
 void setup() {
   pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);
   pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);
-  pinMode(ENA, OUTPUT); pinMode(ENB, OUTPUT);
+  
+  // Khởi tạo phần cứng PWM (LEDC) [cite: 56]
+  ledcSetup(LEDC_CHANNEL_ENA, 5000, 8);
+  ledcAttachPin(ENA, LEDC_CHANNEL_ENA);
+  ledcSetup(LEDC_CHANNEL_ENB, 5000, 8);
+  ledcAttachPin(ENB, LEDC_CHANNEL_ENB);
 
   gripper.setPeriodHertz(50);
   gripper.attach(SERVO_PIN, 500, 2500);
@@ -207,13 +291,15 @@ void setup() {
   WiFi.softAP(ssid, password);
   Serial.print("Hotspot IP: "); Serial.println(WiFi.softAPIP());
 
-  // WebSocket setup
   ws.onEvent(onWsEvent);
   server.addHandler(&ws);
+<<<<<<< Updated upstream
 
   // Route interpreter callback
   route_set_ws_callback(wsBroadcast);
 
+=======
+>>>>>>> Stashed changes
   server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
 
   server.on("/setMode", HTTP_GET, [](AsyncWebServerRequest* r){
@@ -221,12 +307,10 @@ void setup() {
     String m = r->getParam("m")->value();
 
     if (m == "line_only") {
-      stopCar();
-      do_line_setup();
-      currentMode = MODE_LINE_ONLY;
-      line_mode = true;
-      is_auto_running = true;
+      stopCar(); do_line_setup();
+      currentMode = MODE_LINE_ONLY; line_mode = true; is_auto_running = true;
     } else if (m == "ai_route") {
+<<<<<<< Updated upstream
       stopCar();
       do_line_setup();
       route_setup();
@@ -240,6 +324,13 @@ void setup() {
       currentMode = MODE_MANUAL;
       line_mode = false;
       is_auto_running = false;
+=======
+      stopCar(); do_line_setup();
+      currentMode = MODE_AI_ROUTE; line_mode = true; is_auto_running = true;
+    } else if (m == "manual") {
+      do_line_abort(); stopCar();
+      currentMode = MODE_MANUAL; line_mode = false; is_auto_running = false;
+>>>>>>> Stashed changes
     }
     r->send(200,"text/plain", m);
   });
@@ -260,12 +351,8 @@ void setup() {
       if(pathLength > 1) currentTargetNode = currentPath[1];
     }
     
-    stopCar();
-    do_line_setup();
-    currentMode = MODE_DELIVERY;
-    line_mode = true;
-    is_auto_running = true;
-    
+    stopCar(); do_line_setup();
+    currentMode = MODE_DELIVERY; line_mode = true; is_auto_running = true;
     r->send(200, "text/plain", "OK");
   });
 
@@ -276,15 +363,33 @@ void setup() {
   });
 
   server.on("/resume", HTTP_GET, [](AsyncWebServerRequest *r){
+<<<<<<< Updated upstream
     if(currentMode != MODE_MANUAL) {
       stopCar(); do_line_setup();
       line_mode = true; is_auto_running = true;
+=======
+    if (pathLength > 0) {
+      do_line_resume();
+      currentMode = MODE_AI_ROUTE; line_mode = true; is_auto_running = true;
+      r->send(200, "application/json",
+        "{\"status\":\"RESUMED\",\"pathIndex\":" + String(currentPathIndex) + ",\"robotDir\":" + String(currentDir) + "}");
+    } else {
+      r->send(200, "application/json", "{\"status\":\"NO_ROUTE\"}");
+>>>>>>> Stashed changes
     }
     r->send(200, "text/plain", "RESUMED");
   });
 
   server.on("/return_home", HTTP_GET, [](AsyncWebServerRequest *r){
+<<<<<<< Updated upstream
     r->send(200, "text/plain", "RETURNING HOME");
+=======
+    stopCar(); do_line_abort();
+    int robotNode = (currentPathIndex < pathLength) ? currentPath[currentPathIndex] : 0;
+    currentMode = MODE_MANUAL; line_mode = false; is_auto_running = false;
+    r->send(200, "application/json",
+      "{\"status\":\"STOPPED\",\"robotNode\":" + String(robotNode) + ",\"robotDir\":" + String(currentDir) + "}");
+>>>>>>> Stashed changes
   });
 
   server.on("/api/stats", HTTP_GET, [](AsyncWebServerRequest *r){
@@ -317,13 +422,11 @@ void setup() {
 }
 
 void loop() {
-  // Cleanup disconnected WS clients periodically
   static unsigned long lastCleanup = 0;
   if (millis() - lastCleanup > 1000) { ws.cleanupClients(); lastCleanup = millis(); }
 
   if ((currentMode == MODE_LINE_ONLY || currentMode == MODE_DELIVERY || currentMode == MODE_AI_ROUTE) && is_auto_running) {
     do_line_loop();
-    // Gửi telemetry cho AI Route
     if (currentMode == MODE_AI_ROUTE && millis() - lastTelemetryMs >= TELEMETRY_INTERVAL_MS) {
       lastTelemetryMs = millis();
       sendTelemetry();
@@ -347,14 +450,36 @@ void applyCurrentMotion(){
     default:         stopCar(); break;
   }
 }
-void forward() { digitalWrite(IN1,HIGH); digitalWrite(IN2,LOW); digitalWrite(IN3,HIGH); digitalWrite(IN4,LOW); analogWrite(ENA, speed_linear); analogWrite(ENB, speed_linear); }
-void backward() { digitalWrite(IN1,LOW);  digitalWrite(IN2,HIGH); digitalWrite(IN3,LOW);  digitalWrite(IN4,HIGH); analogWrite(ENA, speed_linear); analogWrite(ENB, speed_linear); }
-void left() { digitalWrite(IN1,LOW);  digitalWrite(IN2,HIGH); digitalWrite(IN3,HIGH); digitalWrite(IN4,LOW); analogWrite(ENA, speed_rot); analogWrite(ENB, speed_rot); }
-void right() { digitalWrite(IN1,HIGH); digitalWrite(IN2,LOW); digitalWrite(IN3,LOW);  digitalWrite(IN4,HIGH); analogWrite(ENA, speed_rot); analogWrite(ENB, speed_rot); }
-void stopCar() { digitalWrite(IN1,LOW); digitalWrite(IN2,LOW); digitalWrite(IN3,LOW); digitalWrite(IN4,LOW); analogWrite(ENA, 0); analogWrite(ENB, 0); }
-void forwardLeft() { digitalWrite(IN1,HIGH); digitalWrite(IN2,LOW); digitalWrite(IN3,HIGH); digitalWrite(IN4,LOW); if (!INVERT_STEER) { analogWrite(ENA, speed_linear); analogWrite(ENB, diagScale(speed_linear)); } else { analogWrite(ENA, diagScale(speed_linear)); analogWrite(ENB, speed_linear); } }
-void forwardRight() { digitalWrite(IN1,HIGH); digitalWrite(IN2,LOW); digitalWrite(IN3,HIGH); digitalWrite(IN4,LOW); if (!INVERT_STEER) { analogWrite(ENA, diagScale(speed_linear)); analogWrite(ENB, speed_linear); } else { analogWrite(ENA, speed_linear); analogWrite(ENB, diagScale(speed_linear)); } }
-void backwardLeft() { digitalWrite(IN1,LOW);  digitalWrite(IN2,HIGH); digitalWrite(IN3,LOW);  digitalWrite(IN4,HIGH); analogWrite(ENA, diagScale(speed_linear)); analogWrite(ENB, speed_linear); }
-void backwardRight() { digitalWrite(IN1,LOW);  digitalWrite(IN2,HIGH); digitalWrite(IN3,LOW);  digitalWrite(IN4,HIGH); analogWrite(ENA, speed_linear); analogWrite(ENB, diagScale(speed_linear)); }
+
+// ================= Điều khiển Motor (Dùng ledcWrite thay cho analogWrite) =================
+// Cập nhật theo  để đảm bảo an toàn tương thích với ESP32Servo
+void forward() { digitalWrite(IN1,HIGH); digitalWrite(IN2,LOW); digitalWrite(IN3,HIGH); digitalWrite(IN4,LOW); ledcWrite(LEDC_CHANNEL_ENA, speed_linear); ledcWrite(LEDC_CHANNEL_ENB, speed_linear); }
+void backward() { digitalWrite(IN1,LOW); digitalWrite(IN2,HIGH); digitalWrite(IN3,LOW); digitalWrite(IN4,HIGH); ledcWrite(LEDC_CHANNEL_ENA, speed_linear); ledcWrite(LEDC_CHANNEL_ENB, speed_linear); }
+void left() { digitalWrite(IN1,LOW); digitalWrite(IN2,HIGH); digitalWrite(IN3,HIGH); digitalWrite(IN4,LOW); ledcWrite(LEDC_CHANNEL_ENA, speed_rot); ledcWrite(LEDC_CHANNEL_ENB, speed_rot); }
+void right() { digitalWrite(IN1,HIGH); digitalWrite(IN2,LOW); digitalWrite(IN3,LOW); digitalWrite(IN4,HIGH); ledcWrite(LEDC_CHANNEL_ENA, speed_rot); ledcWrite(LEDC_CHANNEL_ENB, speed_rot); }
+void stopCar() { digitalWrite(IN1,LOW); digitalWrite(IN2,LOW); digitalWrite(IN3,LOW); digitalWrite(IN4,LOW); ledcWrite(LEDC_CHANNEL_ENA, 0); ledcWrite(LEDC_CHANNEL_ENB, 0); }
+
+void forwardLeft() { 
+  digitalWrite(IN1,HIGH); digitalWrite(IN2,LOW); digitalWrite(IN3,HIGH); digitalWrite(IN4,LOW);
+  if (!INVERT_STEER) { ledcWrite(LEDC_CHANNEL_ENA, speed_linear); ledcWrite(LEDC_CHANNEL_ENB, diagScale(speed_linear)); } 
+  else { ledcWrite(LEDC_CHANNEL_ENA, diagScale(speed_linear)); ledcWrite(LEDC_CHANNEL_ENB, speed_linear); } 
+}
+
+void forwardRight() { 
+  digitalWrite(IN1,HIGH); digitalWrite(IN2,LOW); digitalWrite(IN3,HIGH); digitalWrite(IN4,LOW); 
+  if (!INVERT_STEER) { ledcWrite(LEDC_CHANNEL_ENA, diagScale(speed_linear)); ledcWrite(LEDC_CHANNEL_ENB, speed_linear); } 
+  else { ledcWrite(LEDC_CHANNEL_ENA, speed_linear); ledcWrite(LEDC_CHANNEL_ENB, diagScale(speed_linear)); } 
+}
+
+void backwardLeft() { 
+  digitalWrite(IN1,LOW); digitalWrite(IN2,HIGH); digitalWrite(IN3,LOW); digitalWrite(IN4,HIGH); 
+  ledcWrite(LEDC_CHANNEL_ENA, diagScale(speed_linear)); ledcWrite(LEDC_CHANNEL_ENB, speed_linear); 
+}
+
+void backwardRight() { 
+  digitalWrite(IN1,LOW); digitalWrite(IN2,HIGH); digitalWrite(IN3,LOW); digitalWrite(IN4,HIGH);
+  ledcWrite(LEDC_CHANNEL_ENA, speed_linear); ledcWrite(LEDC_CHANNEL_ENB, diagScale(speed_linear)); 
+}
+
 void gripOpen()  { gripper.write(OPEN_ANGLE); }
 void gripClose() { gripper.write(CLOSE_ANGLE); }
