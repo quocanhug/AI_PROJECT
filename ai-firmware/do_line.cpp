@@ -56,54 +56,46 @@ int getTargetDirection(int nodeA, int nodeB) {
 #define TRIG_PIN 21
 #define ECHO_PIN 19
 
-const float OBSTACLE_TH_CM = 25.0f;  // ★ Tăng từ 20→25cm: thêm khoảng cách phanh
-// ★ BUG FIX #2 — Sonar blocking:
-//   US_TIMEOUT=8000µs → 3×pulseIn + 2×delay(2) = ~26ms block mỗi lần poll.
-//   Gảm xuống 3000µs: đủ detect vật cản 0–51cm, block tối đa 3ms.
+const float OBSTACLE_TH_CM = 25.0f;
 const unsigned long US_TIMEOUT = 3000;
 
 static unsigned long us_last_ms = 0;
-float us_dist_cm = 999.0f;  // ★ non-static: extern bởi main.ino cho telemetry
+float us_dist_cm = 999.0f;
 
 static uint8_t obs_hit = 0;
 static bool obs_latched = false;
 
 const float OBSTACLE_ON_CM  = OBSTACLE_TH_CM;
-const float OBSTACLE_OFF_CM = 30.0f;  // ★ Hysteresis: phải > 30cm mới xóa cờ vật cản
-// ★ BUG FIX #2: Tăng lên 3 để bù cho việc bỏ median filter (của lần đọc đơn).
-//   Với US_PERIOD_MS=25ms: cần 3 chu kỳ liên tiếp (~75ms) mới latched → ít false positive.
+const float OBSTACLE_OFF_CM = 30.0f;
 const uint8_t OBS_HIT_N = 3;
 const unsigned long US_PERIOD_MS = 25;
 
-// ================= Thông số cơ khí =================
+// ================= Thong so co khi =================
 const float WHEEL_RADIUS_M = 0.0325f;
 const float CIRC = 2.0f * 3.1415926f * WHEEL_RADIUS_M;
 const float TRACK_WIDTH_M = 0.1150f;
 
-// ================= Tham số điều khiển (GIÁ TRỊ GỐC ĐÃ CHẠY TỐT) =================
+// ================= Tham so dieu khien =================
 float v_base   = 0.4f;
-float v_boost  = 0.15f;  
-float v_hard   = 0.20f; 
+float v_boost  = 0.15f;
+float v_hard   = 0.20f;
 float v_search = 0.2f;
 float vF = v_base * 0.90f;
 
-// PID (GIÁ TRỊ GỐC)
+// PID
 PID pidL{300.0f, 8.0f, 0.00f, 0, 0, 0, 255};
 PID pidR{300.0f, 8.0f, 0.00f, 0, 0, 0, 255};
 
 const unsigned long CTRL_DT_MS = 10;
 volatile long encL_count = 0, encR_count = 0, encL_total = 0, encR_total = 0;
 volatile uint32_t encL_last_us=0, encR_last_us=0;
-float vL_ema=0.0f, vR_ema=0.0f;  // ★ non-static: extern bởi main.ino cho telemetry
-const float EMA_B = 0.7f;   // ★ Tăng từ 0.5: lọc mượt hơn, ít giật
+float vL_ema=0.0f, vR_ema=0.0f;
+const float EMA_B = 0.7f;
 
 const int PWM_MIN_RUN = 75;
-const int PWM_SLEW    = 15;  // ★ Giảm từ 30: motor thay đổi từ từ hơn, xe chạy mượt
+const int PWM_SLEW    = 15;
 static int pwmL_prev=0, pwmR_prev=0;
 
-// ★ BUG FIX: t_prev và bad_t phải là file-scope static để
-//   do_line_setup() có thể reset chúng — nếu là local-static
-//   bên trong do_line_loop() thì chỉ init 1 lần, sẽ sai từ route thứ 2.
 static unsigned long t_prev = 0;
 static unsigned long bad_t  = 0;
 
@@ -114,22 +106,19 @@ bool avoiding = false;
 static volatile bool g_line_enabled = true;
 bool recovering = false;
 unsigned long rec_t0 = 0;
-const unsigned long RECOV_TIME_MS = 5000;  // ★ Tăng từ 3s→5s: cho xe thêm thời gian tìm line
+const unsigned long RECOV_TIME_MS = 5000;
 
-// ★ Recovery phase tracking
+// Recovery phase tracking
 enum RecovPhase { RECOV_SWEEP, RECOV_REVERSE };
 RecovPhase recov_phase = RECOV_SWEEP;
-int recov_sweep_count = 0;  // Đếm số lần sweep đã thử
-const int RECOV_MAX_SWEEPS = 4;  // Tối đa 4 sweep trước khi chuyển sang reverse
+int recov_sweep_count = 0;
+const int RECOV_MAX_SWEEPS = 4;
 
-// ★ Node cúôi cùng xe đứng trên giao lộ (trước khi tăng currentPathIndex)
 int lastConfirmedNodeIdx = 0;
 
-// ★ Debounce giao lộ: 500ms
 const unsigned long INTERSECTION_DEBOUNCE_MS = 500;
 unsigned long last_intersection_time = 0;
 
-// ★ Initial turn: xoay xe chuẩn hướng khi nhận route mới
 bool needs_initial_turn = false;
 
 // ================= ISR encoder =================
@@ -145,13 +134,7 @@ void IRAM_ATTR encR_isr(){
 // ================= Utils =================
 inline int clamp255(int v){ return v<0?0:(v>255?255:v); }
 inline float clampf(float v, float lo, float hi){ return v<lo?lo:(v>hi?hi:v); }
-// ★ LOW = trên vạch (đúng với module TCRT của bạn)
 inline bool onLine(int pin){ return digitalRead(pin) == LOW; }
-
-inline bool isValidLineSample5(bool L2,bool L1,bool M,bool R1,bool R2){
-  const int on = (int)L2 + L1 + M + R1 + R2;
-  return !(on==0 || on==5);
-}
 
 static inline int shape_pwm(int target, int prev){
   int s = target;
@@ -185,7 +168,6 @@ void motorsStop(){
 float ticksToVel(long ticks, float dt_s){ return ((float)ticks / (float)PPR_EFFECTIVE * CIRC) / dt_s; }
 
 int pidStep(PID &pid, float v_target, float v_meas, float dt_s){
-  // ★ BUG FIX C2: Guard dt_s để tránh D-term blow up khi timing glitch (dt_s ≈ 0)
   if (dt_s < 0.001f) dt_s = 0.001f;
   float err = v_target - v_meas;
   pid.i_term += pid.Ki * err * dt_s;
@@ -206,9 +188,6 @@ float readDistanceCM(){
   return dur * 0.0343f / 2.0f;
 }
 
-// ★ BUG FIX #2 — Sonar blocking:
-//   3×readDistanceCM() median filter = ~26ms block mỗi lần, phá PID timing.
-//   Thay bằng 1 lần đọc (3ms max). OBS_HIT_N=3 đảm bảo đủ debounce.
 static float readDistanceCM_filtered(){
   float d = readDistanceCM();
   if (d < 2.0f || d > 200.0f) d = 999.0f;
@@ -228,7 +207,7 @@ static inline void updateObstacleState(){
   }
 }
 
-// ================= Hình học encoder =================
+// ================= Hinh hoc encoder =================
 long countsForDistance(double dist_m){ return (long)(dist_m / CIRC * PPR_EFFECTIVE + 0.5); }
 
 inline void motorWriteLR_signed(int pwmL, int pwmR){
@@ -244,7 +223,7 @@ static inline double theta_from_counts(long dL, long dR, int signL, int signR){
   return ((double)dR / PPR_EFFECTIVE * CIRC * signR - (double)dL / PPR_EFFECTIVE * CIRC * signL) / TRACK_WIDTH_M;
 }
 
-// ================= Quay theo góc (trả bool: true=OK, false=timeout/abort) =================
+// ================= Quay theo goc =================
 bool spin_left_deg(double deg, int pwmMax){
   const double target = 1.5*deg * 3.141592653589793 / 180.0;
   const double deg_tol = 1.5 * 3.141592653589793 / 180.0;
@@ -256,7 +235,6 @@ bool spin_left_deg(double deg, int pwmMax){
   bool success = true;
   long L0, R0; noInterrupts(); L0 = encL_total; R0 = encR_total; interrupts();
   while (true){
-    // ★ FIX: Kiểm tra abort mỗi vòng lặp — E-STOP có tác dụng ngay
     if (!g_line_enabled) { motorsStop(); return false; }
     long L, R; noInterrupts(); L = encL_total; R = encR_total; interrupts();
     long dL = labs(L - L0), dR = labs(R - R0);
@@ -288,7 +266,6 @@ bool spin_right_deg(double deg, int pwmMax){
   bool success = true;
   long L0, R0; noInterrupts(); L0 = encL_total; R0 = encR_total; interrupts();
   while (true){
-    // ★ FIX: Kiểm tra abort mỗi vòng lặp — E-STOP có tác dụng ngay
     if (!g_line_enabled) { motorsStop(); return false; }
     long L, R; noInterrupts(); L = encL_total; R = encR_total; interrupts();
     long dL = labs(L - L0), dR = labs(R - R0);
@@ -309,7 +286,7 @@ bool spin_right_deg(double deg, int pwmMax){
   return success;
 }
 
-// ================= Tiến theo quãng đường =================
+// ================= Tien theo quang duong =================
 void move_forward_distance(double dist_m, int pwmAbs){
   long target = countsForDistance(dist_m);
   long sL, sR; noInterrupts(); sL = encL_total; sR = encR_total; interrupts();
@@ -334,7 +311,6 @@ bool move_forward_distance_until_line(double dist_m, int pwmAbs){
   while (true){
     if (!g_line_enabled){ motorsStop(); return false; }
     long cL, cR; noInterrupts(); cL = encL_total; cR = encR_total; interrupts();
-    // ★ FIX: Check cả 3 mắt giữa (L1, M, R1) thay vì chỉ M
     if (digitalRead(M_SENSOR) == LOW || digitalRead(L1_SENSOR) == LOW || digitalRead(R1_SENSOR) == LOW){ motorsStop(); return true; }
     bool left_done  = (labs(cL - sL) >= target);
     bool right_done = (labs(cR - sR) >= target);
@@ -349,34 +325,22 @@ bool move_forward_distance_until_line(double dist_m, int pwmAbs){
 
 void do_line_abort(){ g_line_enabled = false; motorsStop(); }
 
-// ★ BUG FIX #2 — RESUME resets route:
-//   do_line_setup() xóa hết state (lastConfirmedNodeIdx=0, currentPathIndex reset về 0)
-//   → robot tưởng mình đang ở node đầu → quay sai hướng khi resume.
-//
-//   do_line_resume() chỉ tái kích hoạt mà KHÔNG đụng vào route state.
-//   Nó reset currentPathIndex về lastConfirmedNodeIdx để needs_initial_turn
-//   tính đúng hướng từ node robot đang đứng thực tế.
 void do_line_resume() {
   g_line_enabled = true;
-  seen_line_ever = true;   // Đừng trigger auto-search từ đầu
+  seen_line_ever = true;
   recovering = false;
   avoiding = false;
 
-  // Reset PID + motor state KHÔNG reset route state
   vL_ema = 0.0f; vR_ema = 0.0f;
   pwmL_prev = 0; pwmR_prev = 0;
   pidL.i_term = 0; pidL.prev_err = 0;
   pidR.i_term = 0; pidR.prev_err = 0;
 
-  // Tránh "lost line > 1s" ngay khi vừa resume
   t_prev = millis();
   bad_t  = millis();
 
-  // ★ QUAN TRỌNG: currentPathIndex phải trỏ về lastConfirmedNodeIdx
-  //   để needs_initial_turn đọc đúng "curNode = currentPath[currentPathIndex]"
-  //   (node robot đang đứng, không phải node đang tiến tới)
   currentPathIndex = lastConfirmedNodeIdx;
-  needs_initial_turn = true;  // Re-align hướng trước khi chạy tiếp
+  needs_initial_turn = true;
 }
 
 void avoidObstacle(){
@@ -399,9 +363,6 @@ void do_line_setup() {
   pinMode(M_SENSOR,  INPUT); pinMode(R1_SENSOR, INPUT); pinMode(R2_SENSOR, INPUT);
   pinMode(ENC_L, INPUT_PULLUP); pinMode(ENC_R, INPUT_PULLUP);
 
-  // ★ BUG FIX #1 — ISR Duplicate:
-  //   Mỗi lần gọi do_line_setup() (route mới / RESUME) phải detach trước,
-  //   nếu không ESP32 tích lũy nhiều ISR → encoder đếm bội → mọi góc xoay sai.
   detachInterrupt(digitalPinToInterrupt(ENC_L));
   detachInterrupt(digitalPinToInterrupt(ENC_R));
   attachInterrupt(digitalPinToInterrupt(ENC_L), encL_isr, RISING);
@@ -411,19 +372,14 @@ void do_line_setup() {
 
   g_line_enabled = true; seen_line_ever = false;
   vL_ema = 0.0f; vR_ema = 0.0f; pwmL_prev = 0; pwmR_prev = 0;
-  // ★ BUG FIX m1: us_last_ms = millis() (không phải 0) để tránh sonar block 30ms
-  //   ngay vòng đầu tiên của do_line_loop() sau khi nhận route mới.
   us_last_ms = millis(); us_dist_cm = 999.0f; obs_hit = 0; obs_latched = false;
   pidL.i_term = 0; pidL.prev_err = 0; pidR.i_term = 0; pidR.prev_err = 0;
   last_intersection_time = 0;
   last_seen = NONE; recovering = false;
-  lastConfirmedNodeIdx = 0;  // ★ Reset về đầu route
-  needs_initial_turn = true; // ★ Đánh dấu cần xoay hướng khi loop bắt đầu
+  recov_phase = RECOV_SWEEP; recov_sweep_count = 0;
+  lastConfirmedNodeIdx = 0;
+  needs_initial_turn = true;
 
-  // ★ BUG FIX #2 — Stale t_prev / bad_t:
-  //   t_prev và bad_t phải được reset tại đây (là file-scope statics).
-  //   Nếu không, khoảng cách millis() tính từ lần chạy trước sẽ >> 1000ms
-  //   → do_line_loop() tưởng robot mất line quá 1s và dừng ngay lập tức.
   t_prev = millis();
   bad_t  = millis();
 
@@ -434,13 +390,7 @@ void do_line_setup() {
 void do_line_loop() {
   if (!g_line_enabled) { motorsStop(); return; }
 
-  // ★★★ INITIAL TURN: Xoay xe chuẩn hướng khi nhận route mới ★★★
-  // Xử lý TRƯỚC khi đọc sensor, áp dụng cho:
-  // - Xuất phát lần đầu
-  // - Về kho (hướng ngược)
-  // - Tiếp tục (resume route)
-  // - Dynamic reroute (sau vật cản)
-  // - Multi-target (đã giao xong 1 điểm, quay đi điểm tiếp)
+  // ===== INITIAL TURN: Xoay xe chuan huong khi nhan route moi =====
   if (needs_initial_turn) {
     needs_initial_turn = false;
 
@@ -451,7 +401,7 @@ void do_line_loop() {
       int nxtNode = currentPath[currentPathIndex + 1];
       int targetDir = getTargetDirection(curNode, nxtNode);
 
-      Serial.printf("[INIT_TURN] node%d→node%d, dir %d→%d\n",
+      Serial.printf("[INIT_TURN] node%d->node%d, dir %d->%d\n",
                     curNode, nxtNode, currentDir, targetDir);
 
       if (targetDir != -1 && targetDir != currentDir) {
@@ -459,7 +409,6 @@ void do_line_loop() {
         const int TURN_PWM = 160;
         bool turnOk = true;
 
-        // ★ Dừng hẳn trước khi quay để xoay chính xác
         motorsStop(); delay(300);
 
         if (diff == 1) {
@@ -473,11 +422,10 @@ void do_line_loop() {
           Serial.println("  >> INIT U-TURN");
         }
 
-        // ★ Dừng hẳn sau khi quay xong
         motorsStop(); delay(200);
 
         if (!turnOk) {
-          Serial.println("  ❗ INIT TURN FAILED — dừng route");
+          Serial.println("  INIT TURN FAILED");
           motorsStop();
           extern void wsBroadcast(const char*);
           String msg = "{\"type\":\"OBSTACLE_DETECTED\","
@@ -490,46 +438,42 @@ void do_line_loop() {
           line_mode = false; do_line_abort(); return;
         }
 
-      // ★ BUG FIX #1 — Initial turn: currentPathIndex++ trước khi confirm bắt được line.
-      //   Nếu move_forward_distance_until_line() trả về false (không tìm thấy line sau 10cm),
-      //   index vẫn bị tăng → lần giao lộ tiếp theo xử lý sai node.
-      //   Fix: dùng biến lineFound — chỉ tăng nếu thấy line (turn case)
-      //         hoặc luôn tăng nếu đi thẳng (straight case: đã ở trên track rồi).
-      bool lineFoundAfterTurn = true;  // default true cho case STRAIGHT
-      if (targetDir != -1 && targetDir != currentDir) {
-        // [TURN case] đã quay xong, bây giờ check xem có bắt được line không
-        lineFoundAfterTurn = move_forward_distance_until_line(0.10, 90);
+        // Tim line sau khi quay
+        bool lineFoundAfterTurn = move_forward_distance_until_line(0.10, 90);
         if (!lineFoundAfterTurn) {
-          Serial.println("  ⚠️ INIT: line not found after turn — giữ index, recovery sẽ xử lý");
+          Serial.println("  INIT: line not found after turn");
         }
-      }
-      // [STRAIGHT case] lineFoundAfterTurn = true (không cần tìm: xe đã trên line)
 
-      if (lineFoundAfterTurn) currentPathIndex++;
-      last_intersection_time = millis();  // Chống trigger lại intersection
-      seen_line_ever = true;              // Đã trên track → không cần auto-search
+        currentDir = targetDir;
+        if (lineFoundAfterTurn) currentPathIndex++;
+        last_intersection_time = millis();
+        seen_line_ever = true;
+        return;
+      }
+
+      // STRAIGHT case: targetDir == currentDir, khong can xoay
+      currentPathIndex++;
+      last_intersection_time = millis();
+      seen_line_ever = true;
       return;
     }
-  }
+  }  // ===== END INITIAL TURN =====
 
-  // t_prev và bad_t là file-scope statics — được reset trong do_line_setup()
-  // (không khai báo lại tại đây)
-
+  // ===== Doc cam bien =====
   bool L2 = onLine(L2_SENSOR), L1 = onLine(L1_SENSOR);
   bool M  = onLine(M_SENSOR);
   bool R1 = onLine(R1_SENSOR), R2 = onLine(R2_SENSOR);
 
   if (L2 || L1 || M || R1 || R2) seen_line_ever = true;
 
-  // ★ Mất line hoàn toàn (5 mắt OFF) → xử lý recovery thay vì dừng cứng
+  // ===== Mat line hoan toan -> recovery =====
   bool lost_all = !L2 && !L1 && !M && !R1 && !R2;
   if (lost_all) {
     if (!seen_line_ever && is_auto_running) {
-      // Đang bò tìm line → KHÔNG dừng, để code ở dưới xử lý
-      bad_t = millis();  // Reset timeout
+      bad_t = millis();  // Dang bo tim line, reset timeout
     } else if (!recovering && seen_line_ever && millis() - bad_t > 300) {
-      // ★ Mất line > 300ms (giảm từ 1s): vào recovery ngay thay vì chờ quá lâu
-      Serial.println("[LINE] Lost >300ms → entering RECOVERY");
+      // Mat line > 300ms -> vao recovery
+      Serial.println("[LINE] Lost >300ms -> entering RECOVERY");
       recovering = true;
       rec_t0 = millis();
       recov_phase = RECOV_SWEEP;
@@ -537,24 +481,21 @@ void do_line_loop() {
       motorsStop();
       return;
     }
-    // Nếu đang recovering, bad_t không reset → recovery handler bên dưới xử lý
+    // Neu dang recovering, bad_t khong reset -> recovery handler ben duoi xu ly
   } else {
     bad_t = millis();
-    // ★ Nếu đang recovering mà tìm lại được line → thoát recovery ngay
     if (recovering) {
       recovering = false;
-      Serial.println("[LINE] Recovery SUCCESS — line found!");
+      Serial.println("[LINE] Recovery SUCCESS - line found!");
     }
   }
 
   updateObstacleState();
 
-  // ===== AI Route: vật cản → dừng, báo Web =====
+  // ===== AI Route: vat can -> dung, bao Web =====
   if (currentMode == MODE_AI_ROUTE && obs_latched && !avoiding) {
     motorsStop();
-    obs_latched = false;  // ★ Xóa cờ ngay để không rớ vào lần sau
-    // ★ Dùng lastConfirmedNodeIdx: node xe đứng thực tế
-    //   currentPathIndex = lastConfirmedNodeIdx + 1 (node đang tiến tới, cũng là node bị chặn)
+    obs_latched = false;
     int robotNode    = (lastConfirmedNodeIdx < pathLength) ? currentPath[lastConfirmedNodeIdx] : 0;
     int obstacleNode = (currentPathIndex    < pathLength) ? currentPath[currentPathIndex]    : robotNode;
     extern void wsBroadcast(const char*);
@@ -571,7 +512,7 @@ void do_line_loop() {
     line_mode = false; do_line_abort(); return;
   }
 
-  // ===== Các mode khác: tránh vật cản vật lý =====
+  // ===== Cac mode khac: tranh vat can vat ly =====
   if (obs_latched && !avoiding && currentMode != MODE_AI_ROUTE) {
     avoiding = true; motorsStop();
     noInterrupts(); encL_count = 0; encR_count = 0; interrupts();
@@ -584,16 +525,13 @@ void do_line_loop() {
   float vL_tgt = 0, vR_tgt = 0;
 
   // ============================================================
-  // ★ GIAO LỘ: Cả L2 VÀ R2 đều thấy vạch ngang (chống nhận nhầm khi xe lệch)
+  // GIAO LO: Ca L2 VA R2 deu thay vach ngang
   // ============================================================
-  // ★ BUG FIX #3 — Intersection false positive:
-  //   (L2 && R2) đố được khi xe chéo qua vạch ngang (L2/R2 cắt vạch nhưng tâm xe không trên track)
-  //   Thêm guard (L1 || M || R1): chỉ có giao lộ thật khi ít nhất 1 cảm biến giữa cũng thấy vạch.
   bool at_intersection = (L2 && R2 && (L1 || M || R1));
 
   if (at_intersection) {
 
-    // --- MODE_LINE_ONLY: đi thẳng qua giao lộ ---
+    // --- MODE_LINE_ONLY: di thang qua giao lo ---
     if (currentMode == MODE_LINE_ONLY) {
       if (millis() - last_intersection_time > INTERSECTION_DEBOUNCE_MS) {
         last_intersection_time = millis();
@@ -614,15 +552,14 @@ void do_line_loop() {
       vL_tgt = v_base * 0.8f; vR_tgt = v_base * 0.8f;
     }
 
-    // --- MODE_DELIVERY / MODE_AI_ROUTE: xử lý node ---
+    // --- MODE_DELIVERY / MODE_AI_ROUTE: xu ly node ---
     else if (currentMode == MODE_DELIVERY || currentMode == MODE_AI_ROUTE) {
       if (millis() - last_intersection_time > INTERSECTION_DEBOUNCE_MS) {
         last_intersection_time = millis();
 
         if (pathLength > 0) {
-          // ★ Kiểm tra đã đến đích chưa
+          // Kiem tra da den dich chua
           if (currentPathIndex >= pathLength - 1) {
-            // ★ Nhích thêm 2cm để tâm xe đến đúng tâm node đích
             move_forward_distance(0.02, 90);
             motorsStop(); delay(200);
             Serial.printf("[AI_ROUTE] ARRIVED at node %d\n", currentPath[pathLength-1]);
@@ -630,7 +567,7 @@ void do_line_loop() {
             if (currentMode == MODE_DELIVERY) {
               gripOpen(); delay(1500); gripClose();
             } else {
-              Serial.println("[AI_ROUTE] DESTINATION REACHED — COMPLETED");
+              Serial.println("[AI_ROUTE] DESTINATION REACHED - COMPLETED");
               extern void wsBroadcast(const char*);
               String msg = "{\"type\":\"COMPLETED\",\"robotNode\":" + String(currentPath[pathLength-1]) +
                            ",\"robotDir\":" + String(currentDir) + "}";
@@ -642,7 +579,7 @@ void do_line_loop() {
             line_mode = false; do_line_abort(); return;
           }
 
-          // ★ Tính hướng rẽ
+          // Tinh huong re
           int curNode = currentPath[currentPathIndex];
           int nxtNode = currentPath[currentPathIndex + 1];
           int targetDir = getTargetDirection(curNode, nxtNode);
@@ -651,15 +588,14 @@ void do_line_loop() {
                         currentPathIndex, curNode, nxtNode, currentDir, targetDir, diff);
 
           if (diff == 0) {
-            // ★ ĐI THẲNG: KHÔNG dừng, chỉ tiến centering nhỏ rồi tiếp tục PID bình thường
-            lastConfirmedNodeIdx = currentPathIndex;  // ★ Lưu node hiện tại TRƯỚC khi tăng
+            // DI THANG
+            lastConfirmedNodeIdx = currentPathIndex;
             currentPathIndex++;
             currentDir = targetDir;
             move_forward_distance(0.03, 100);
             last_seen = NONE;
-            // Không return → tiếp tục vòng lặp bình thường, PID dò line
           } else {
-            // ★ RẼ / U-TURN: Dừng hẳn, centering, xoay, tìm line
+            // RE / U-TURN
             move_forward_distance(0.03, 100);
             motorsStop(); delay(300);
 
@@ -672,7 +608,7 @@ void do_line_loop() {
             motorsStop(); delay(200);
 
             if (!turnOk) {
-              Serial.println("  ❗ TURN FAILED — dừng route, báo Web");
+              Serial.println("  TURN FAILED");
               motorsStop();
               extern void wsBroadcast(const char*);
               int robotNode = currentPath[currentPathIndex];
@@ -691,12 +627,9 @@ void do_line_loop() {
             bool lineFound = move_forward_distance_until_line(0.10, 90);
             currentPathIndex++;
             if (!lineFound) {
-              // ★ Không tìm được line sau khi rẻ/U-turn
-              // Chuẩn hướng: quét rộng hơn (200ms trái + 200ms phải x2)
-              Serial.println("  ⚠️ Line not found after turn — wide scan");
+              Serial.println("  Line not found after turn - wide scan");
               bool foundWide = false;
               for (int sweep = 0; sweep < 2 && !foundWide; sweep++) {
-                // Quét trái 200ms
                 motorWriteLR_signed(-90, 90);
                 unsigned long ts = millis();
                 while (millis() - ts < 200) {
@@ -708,7 +641,6 @@ void do_line_loop() {
                 }
                 if (foundWide) break;
                 motorsStop(); delay(50);
-                // Quét phải 200ms
                 motorWriteLR_signed(90, -90);
                 ts = millis();
                 while (millis() - ts < 200) {
@@ -721,36 +653,34 @@ void do_line_loop() {
                 motorsStop(); delay(50);
               }
               if (!foundWide) {
-                // Vẫn không thấy → vào recovering
                 recovering = true; rec_t0 = millis();
+                recov_phase = RECOV_SWEEP; recov_sweep_count = 0;
               }
             }
           }
         }
         return;
       }
-      // Debounce: trong thời gian debounce → chạy thẳng bình thường
       last_seen = NONE;
       vL_tgt = v_base * 0.8f; vR_tgt = v_base * 0.8f;
     }
 
-    // --- Các mode khác ---
+    // --- Cac mode khac ---
     else {
       vL_tgt = v_base * 0.8f; vR_tgt = v_base * 0.8f;
     }
   }
 
   // ============================================================
-  // ★ DÒ LINE: CHỈ dùng 3 mắt giữa L1, M, R1
+  // RECOVERY: xe mat line, dang tim lai
   // ============================================================
   else if (recovering) {
-    // ★ Dừng recovering khi BẤT KỲ cảm biến nào thấy line (kể cả L2/R2)
+    // Tim thay line -> thoat recovery
     if (L2 || L1 || M || R1 || R2) {
       recovering = false;
       motorsStop();
       Serial.println("[RECOV] Line found during recovery!");
       bad_t = millis();
-      // Reset PID state để tránh jerk khi resume
       vL_ema = 0; vR_ema = 0;
       pwmL_prev = 0; pwmR_prev = 0;
       pidL.i_term = 0; pidL.prev_err = 0;
@@ -760,18 +690,17 @@ void do_line_loop() {
       return;
     }
 
-    // ★ Timeout recovery → lùi về node + báo Web
+    // Timeout recovery -> lui ve node + bao Web
     if (millis() - rec_t0 >= RECOV_TIME_MS) {
       recovering = false; motorsStop();
-      Serial.println("[RECOV] TIMEOUT — all recovery failed");
+      Serial.println("[RECOV] TIMEOUT - all recovery failed");
 
-      // ★ AI_ROUTE/DELIVERY: lùi thẳng về node đã xác nhận, báo Web từ đúng node đó
       if ((currentMode == MODE_AI_ROUTE || currentMode == MODE_DELIVERY) && is_auto_running) {
-        Serial.printf("[RECOV] Lùi về node[%d]=%d\n",
+        Serial.printf("[RECOV] Lui ve node[%d]=%d\n",
                       lastConfirmedNodeIdx, currentPath[lastConfirmedNodeIdx]);
         {
           const int REV_PWM = 90;
-          const long revTarget = countsForDistance(0.35);  // ★ Lùi xa hơn (35cm)
+          const long revTarget = countsForDistance(0.35);
           long sL, sR; noInterrupts(); sL = encL_total; sR = encR_total; interrupts();
           motorWriteLR_signed(-REV_PWM, -REV_PWM);
           while (true) {
@@ -803,46 +732,29 @@ void do_line_loop() {
       t_prev = millis(); return;
     }
 
-    // =============================================
-    // ★★★ CHIẾN THUẬT RECOVERY 2 PHA ★★★
-    // Phase 1 (RECOV_SWEEP): Xoay tại chỗ quét trái-phải tìm line
-    //   - Ưu tiên quét về phía last_seen trước
-    //   - Mỗi sweep 400ms, tăng dần thời gian sweep
-    //   - Tối đa RECOV_MAX_SWEEPS lần
-    // Phase 2 (RECOV_REVERSE): Lùi có điều hướng về phía line
-    //   - Lùi mạnh hơn, vòng rộng hơn
-    // =============================================
-
+    // ===== CHIEN THUAT RECOVERY 2 PHA =====
+    // Phase 1: Xoay tai cho quet trai-phai tim line
+    // Phase 2: Lui co dieu huong ve phia line
     if (recov_phase == RECOV_SWEEP) {
-      // ★ Sweep scan: xoay tại chỗ tìm line
       unsigned long elapsed = millis() - rec_t0;
-      // Mỗi sweep kéo dài (300 + sweep_count*100) ms
-      unsigned long sweep_duration = 300 + recov_sweep_count * 100;
-      // Tổng thời gian cho sweep phase = tổng các sweep_duration
-      // Xác định đang ở sweep nào và hướng nào
 
-      // Tính hướng sweep: nếu biết last_seen, quét về phía đó trước
       bool sweepToLeft;
       if (last_seen == LEFT) {
-        sweepToLeft = (recov_sweep_count % 2 == 0);  // Trái trước
+        sweepToLeft = (recov_sweep_count % 2 == 0);
       } else if (last_seen == RIGHT) {
-        sweepToLeft = (recov_sweep_count % 2 != 0);  // Phải trước
+        sweepToLeft = (recov_sweep_count % 2 != 0);
       } else {
-        sweepToLeft = (recov_sweep_count % 2 == 0);  // Mặc định trái trước
+        sweepToLeft = (recov_sweep_count % 2 == 0);
       }
 
-      // PWM cho sweep: xoay tại chỗ với tốc độ vừa phải
-      const int SWEEP_PWM = 120;
       if (sweepToLeft) {
-        vL_tgt = -v_base * 0.6f;  // bánh trái lùi
-        vR_tgt =  v_base * 0.6f;  // bánh phải tiến → xoay trái
+        vL_tgt = -v_base * 0.6f;
+        vR_tgt =  v_base * 0.6f;
       } else {
-        vL_tgt =  v_base * 0.6f;  // bánh trái tiến
-        vR_tgt = -v_base * 0.6f;  // bánh phải lùi → xoay phải
+        vL_tgt =  v_base * 0.6f;
+        vR_tgt = -v_base * 0.6f;
       }
 
-      // Kiểm tra khi nào chuyển sang sweep tiếp theo
-      // Tính tổng thời gian sweep đã dùng
       unsigned long total_sweep_time = 0;
       for (int i = 0; i <= recov_sweep_count && i < RECOV_MAX_SWEEPS; i++) {
         total_sweep_time += 300 + i * 100;
@@ -850,28 +762,22 @@ void do_line_loop() {
       if (elapsed > total_sweep_time) {
         recov_sweep_count++;
         if (recov_sweep_count >= RECOV_MAX_SWEEPS) {
-          // ★ Đã sweep đủ → chuyển sang phase lùi
           recov_phase = RECOV_REVERSE;
-          Serial.println("[RECOV] Sweep exhausted → switching to REVERSE");
+          Serial.println("[RECOV] Sweep exhausted -> switching to REVERSE");
         } else {
           Serial.printf("[RECOV] Sweep #%d\n", recov_sweep_count);
         }
       }
     }
     else if (recov_phase == RECOV_REVERSE) {
-      // ★ Phase 2: Lùi mạnh có điều hướng
-      //   last_seen==LEFT : line ở bên trái → lùi vòng qua trái
-      //   last_seen==RIGHT: line ở bên phải → lùi vòng qua phải
-      //   last_seen==NONE : đổi chiều lùi mỗi 500ms
-      const float v_rev = v_base * 0.8f;  // ★ Lùi mạnh hơn (80% thay vì 50%)
+      const float v_rev = v_base * 0.8f;
       if (last_seen == LEFT) {
-        vL_tgt = -v_rev;           // bánh trái lùi mạnh
-        vR_tgt = -v_rev * 0.3f;   // bánh phải lùi yếu → đuôi vòng trái
+        vL_tgt = -v_rev;
+        vR_tgt = -v_rev * 0.3f;
       } else if (last_seen == RIGHT) {
-        vL_tgt = -v_rev * 0.3f;   // bánh trái lùi yếu
-        vR_tgt = -v_rev;           // bánh phải lùi mạnh → đuôi vòng phải
+        vL_tgt = -v_rev * 0.3f;
+        vR_tgt = -v_rev;
       } else {
-        // NONE: đổi hướng vòng mỗi 500ms để quét cả hai phía
         unsigned long rev_elapsed = millis() - rec_t0;
         bool scanLeft = (rev_elapsed / 500) % 2 == 0;
         vL_tgt = scanLeft ? -v_rev       : -v_rev * 0.3f;
@@ -879,37 +785,38 @@ void do_line_loop() {
       }
     }
   }
+
+  // ============================================================
+  // DO LINE: PID dung 3 mat giua L1, M, R1
+  // ============================================================
   else {
-   // ★ PID dò line: ưu tiên từ giữa → ngoài, mất hoàn toàn khi TẤT CẢ 5 mắt tắt
-    // Mức 1: Thẳng hoàn toàn
+    // Muc 1: Thang hoan toan
     if      ( M && !L1 && !R1)              { last_seen = NONE;  vL_tgt = v_base;           vR_tgt = v_base; }
-    // Mức 2: Lệch nhẹ (M + L1 hoặc M + R1)
+    // Muc 2: Lech nhe
     else if ( M &&  L1 && !R1)              { last_seen = LEFT;  vL_tgt = v_base - v_boost; vR_tgt = v_base + v_boost; }
     else if ( M &&  R1 && !L1)              { last_seen = RIGHT; vL_tgt = v_base + v_boost; vR_tgt = v_base - v_boost; }
-    // Mức 3: Lệch vừa (L1 hoặc R1 không có M)
+    // Muc 3: Lech vua
     else if ( L1 && !M)                     { last_seen = LEFT;  vL_tgt = v_base - v_hard;  vR_tgt = v_base + v_hard; }
     else if ( R1 && !M)                     { last_seen = RIGHT; vL_tgt = v_base + v_hard;  vR_tgt = v_base - v_hard; }
-    // Mức 4: Lệch mạnh (chỉ L2 hoặc R2, không có L1/M/R1) → dùng v_hard như có sẵn
+    // Muc 4: Lech manh (chi L2 hoac R2)
     else if ( L2 && !L1 && !M && !R1 && !R2) { last_seen = LEFT;  vL_tgt = v_base - v_hard;  vR_tgt = v_base + v_hard; }
     else if ( R2 && !L1 && !M && !R1 && !L2) { last_seen = RIGHT; vL_tgt = v_base + v_hard;  vR_tgt = v_base - v_hard; }
-    // Mức 5: Mất HOÀN TOÀN (cả 5 mắt đều tắt)
+    // Muc 5: Mat HOAN TOAN (ca 5 mat tat)
     else if (!L2 && !L1 && !M && !R1 && !R2) {
       if (!seen_line_ever && is_auto_running) {
-        // Xe đặt trước line → bò chậm tới khi tìm thấy
         vL_tgt = v_search; vR_tgt = v_search;
       }
       else if (!seen_line_ever) { vL_tgt = 0; vR_tgt = 0; }
       else {
-        // ★ Mất line hoàn toàn → recovery sẽ được kích hoạt bởi bad_t timeout (300ms)
-        //   Trong khi chờ timeout, tiếp tục chạy hướng cuối cùng (braking nhẹ)
+        // Mat line -> giam toc + lech ve huong cuoi cung, cho bad_t timeout kich hoat recovery
         if (last_seen == LEFT) {
-          vL_tgt = v_base * 0.3f;  // Giảm tốc + lệch trái tìm line
+          vL_tgt = v_base * 0.3f;
           vR_tgt = v_base * 0.5f;
         } else if (last_seen == RIGHT) {
-          vL_tgt = v_base * 0.5f;  // Giảm tốc + lệch phải tìm line
+          vL_tgt = v_base * 0.5f;
           vR_tgt = v_base * 0.3f;
         } else {
-          vL_tgt = v_base * 0.3f;  // Giảm tốc chạy chậm
+          vL_tgt = v_base * 0.3f;
           vR_tgt = v_base * 0.3f;
         }
       }
