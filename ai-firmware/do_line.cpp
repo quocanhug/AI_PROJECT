@@ -106,13 +106,12 @@ bool avoiding = false;
 static volatile bool g_line_enabled = true;
 bool recovering = false;
 unsigned long rec_t0 = 0;
-const unsigned long RECOV_TIME_MS = 5000;  // 5s cho xe tim line
+const unsigned long RECOV_TIME_MS = 3000;  // 3s timeout (luoi nho 35x25cm)
 
-// Recovery phase tracking
-enum RecovPhase { RECOV_SWEEP, RECOV_REVERSE };
-RecovPhase recov_phase = RECOV_SWEEP;
+// Recovery: chi sweep trai/phai, KHONG lui sau
 int recov_sweep_count = 0;
-const int RECOV_MAX_SWEEPS = 4;
+const int RECOV_MAX_SWEEPS = 6;  // 6 sweep (trai-phai luan phien)
+bool recov_did_backup = false;   // da lui nhe 1 lan chua
 
 int lastConfirmedNodeIdx = 0;
 
@@ -476,8 +475,8 @@ void do_line_loop() {
       Serial.println("[LINE] Lost >300ms -> entering RECOVERY");
       recovering = true;
       rec_t0 = millis();
-      recov_phase = RECOV_SWEEP;
       recov_sweep_count = 0;
+      recov_did_backup = false;
       motorsStop();
       return;
     }
@@ -653,7 +652,7 @@ void do_line_loop() {
               }
               if (!foundWide) {
                 recovering = true; rec_t0 = millis();
-                recov_phase = RECOV_SWEEP; recov_sweep_count = 0;
+                recov_sweep_count = 0; recov_did_backup = false;
               }
             }
           }
@@ -698,8 +697,8 @@ void do_line_loop() {
         Serial.printf("[RECOV] Lui ve node[%d]=%d\n",
                       lastConfirmedNodeIdx, currentPath[lastConfirmedNodeIdx]);
         {
-          const int REV_PWM = 90;
-          const long revTarget = countsForDistance(0.35);
+          const int REV_PWM = 80;
+          const long revTarget = countsForDistance(0.08);  // Chi lui 8cm, tranh qua node khac (luoi 25cm)
           long sL, sR; noInterrupts(); sL = encL_total; sR = encR_total; interrupts();
           motorWriteLR_signed(-REV_PWM, -REV_PWM);
           while (true) {
@@ -731,12 +730,38 @@ void do_line_loop() {
       t_prev = millis(); return;
     }
 
-    // ===== CHIEN THUAT RECOVERY 2 PHA =====
-    // Phase 1 (RECOV_SWEEP): Xoay tai cho quet trai-phai tim line
-    // Phase 2 (RECOV_REVERSE): Lui co dieu huong ve phia line
-    if (recov_phase == RECOV_SWEEP) {
+    // ===== RECOVERY: CHI SWEEP TRAI/PHAI TAI CHO =====
+    // Luoi nho 35x25cm -> KHONG lui sau, chi quay tai cho tim line
+    // Sau 3 sweep dau, lui nhe 5cm roi sweep tiep
+    {
       unsigned long elapsed = millis() - rec_t0;
 
+      // Sau 3 sweep ma chua thay -> lui nhe 5cm 1 lan duy nhat
+      if (recov_sweep_count >= 3 && !recov_did_backup) {
+        recov_did_backup = true;
+        Serial.println("[RECOV] Lui nhe 5cm");
+        motorWriteLR_signed(-80, -80);
+        unsigned long bk = millis();
+        while (millis() - bk < 300) {  // ~5cm voi PWM 80
+          if (!g_line_enabled) { motorsStop(); return; }
+          if (digitalRead(L2_SENSOR)==LOW || digitalRead(L1_SENSOR)==LOW ||
+              digitalRead(M_SENSOR)==LOW  || digitalRead(R1_SENSOR)==LOW ||
+              digitalRead(R2_SENSOR)==LOW) {
+            motorsStop();
+            recovering = false;
+            Serial.println("[RECOV] Line found while backing!");
+            bad_t = millis(); t_prev = millis();
+            return;
+          }
+          delay(5);
+        }
+        motorsStop(); delay(100);
+        rec_t0 = millis();  // Reset timer sau khi lui
+        recov_sweep_count = 0;  // Sweep lai tu dau
+        return;
+      }
+
+      // Huong sweep: uu tien ve phia last_seen
       bool sweepToLeft;
       if (last_seen == LEFT) {
         sweepToLeft = (recov_sweep_count % 2 == 0);
@@ -746,41 +771,28 @@ void do_line_loop() {
         sweepToLeft = (recov_sweep_count % 2 == 0);
       }
 
+      // Xoay tai cho tim line
       if (sweepToLeft) {
-        vL_tgt = -v_base * 0.6f;
-        vR_tgt =  v_base * 0.6f;
+        vL_tgt = -v_base * 0.5f;  // Xoay cham hon cho luoi nho
+        vR_tgt =  v_base * 0.5f;
       } else {
-        vL_tgt =  v_base * 0.6f;
-        vR_tgt = -v_base * 0.6f;
+        vL_tgt =  v_base * 0.5f;
+        vR_tgt = -v_base * 0.5f;
       }
 
+      // Chuyen sweep tiep theo
       unsigned long total_sweep_time = 0;
       for (int i = 0; i <= recov_sweep_count && i < RECOV_MAX_SWEEPS; i++) {
-        total_sweep_time += 300 + i * 100;
+        total_sweep_time += 250 + i * 80;  // Sweep ngan hon cho luoi nho
       }
       if (elapsed > total_sweep_time) {
         recov_sweep_count++;
         if (recov_sweep_count >= RECOV_MAX_SWEEPS) {
-          recov_phase = RECOV_REVERSE;
-          Serial.println("[RECOV] Sweep exhausted -> switching to REVERSE");
+          Serial.println("[RECOV] All sweeps exhausted");
+          // Khong chuyen sang REVERSE, de timeout xu ly
         } else {
           Serial.printf("[RECOV] Sweep #%d\n", recov_sweep_count);
         }
-      }
-    }
-    else if (recov_phase == RECOV_REVERSE) {
-      const float v_rev = v_base * 0.8f;
-      if (last_seen == LEFT) {
-        vL_tgt = -v_rev;
-        vR_tgt = -v_rev * 0.3f;
-      } else if (last_seen == RIGHT) {
-        vL_tgt = -v_rev * 0.3f;
-        vR_tgt = -v_rev;
-      } else {
-        unsigned long rev_elapsed = millis() - rec_t0;
-        bool scanLeft = (rev_elapsed / 500) % 2 == 0;
-        vL_tgt = scanLeft ? -v_rev       : -v_rev * 0.3f;
-        vR_tgt = scanLeft ? -v_rev*0.3f  : -v_rev;
       }
     }
   }
@@ -807,13 +819,13 @@ void do_line_loop() {
       }
       else if (!seen_line_ever) { vL_tgt = 0; vR_tgt = 0; }
       else {
-        // Mat line -> giam toc + lech ve huong cuoi, cho bad_t timeout kich hoat recovery
+        // Mat line -> giam toc manh, lech ve huong cuoi (luoi nho, khong di xa)
         if (last_seen == LEFT) {
-          vL_tgt = v_base * 0.3f;
-          vR_tgt = v_base * 0.5f;
+          vL_tgt = v_base * 0.15f;  // Rat cham, tranh vuot qua line
+          vR_tgt = v_base * 0.35f;
         } else if (last_seen == RIGHT) {
-          vL_tgt = v_base * 0.5f;
-          vR_tgt = v_base * 0.3f;
+          vL_tgt = v_base * 0.35f;
+          vR_tgt = v_base * 0.15f;
         } else {
           vL_tgt = v_base * 0.3f;
           vR_tgt = v_base * 0.3f;
