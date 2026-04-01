@@ -14,7 +14,6 @@ extern volatile UIMode currentMode;
 extern void gripOpen();
 extern void gripClose();
 
-// ================= Tọa độ node trên bản đồ (dùng tính hướng rẽ)
 // ================= Grid thuc te: 4x2 o (5 cot x 3 hang) = 15 node (0-14)
 // Moi o: 25cm rong x 35cm cao,
 const int NODE_COUNT = 15;
