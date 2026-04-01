@@ -3,7 +3,7 @@
 
 // ================= Extern từ main.ino (dùng cho MODE_DELIVERY & MODE_AI_ROUTE)
 // =================
-extern int currentPath[20];
+extern int currentPath[15];
 extern int pathLength;
 extern int currentPathIndex;
 extern int currentDir;
@@ -15,13 +15,13 @@ extern void gripOpen();
 extern void gripClose();
 
 // ================= Tọa độ node trên bản đồ (dùng tính hướng rẽ)
-// ================= Grid 4x5 = 20 node (0-19)
-const int NODE_COUNT = 20;
-const int node_coords[20][2] = {{30, 30},   {100, 30},  {170, 30},  {240, 30},
+// ================= Grid thuc te: 4x2 o (5 cot x 3 hang) = 15 node (0-14)
+// Moi o: 25cm rong x 35cm cao, xe 22cm
+const int NODE_COUNT = 15;
+const int node_coords[15][2] = {{30, 30},   {100, 30},  {170, 30},  {240, 30},
                                 {310, 30},  {30, 100},  {100, 100}, {170, 100},
                                 {240, 100}, {310, 100}, {30, 170},  {100, 170},
-                                {170, 170}, {240, 170}, {310, 170}, {30, 240},
-                                {100, 240}, {170, 240}, {240, 240}, {310, 240}};
+                                {170, 170}, {240, 170}, {310, 170}};
 
 int getTargetDirection(int nodeA, int nodeB) {
   // ★ FIX C3: Validate node index to prevent OOB access
@@ -81,7 +81,7 @@ const unsigned long US_PERIOD_MS = 25;
 
 // ================= Thong so co khi =================
 const float WHEEL_RADIUS_M = 0.0325f;
-extern const float CIRC = 2.0f * 3.1415926f * WHEEL_RADIUS_M;
+const float CIRC = 2.0f * 3.1415926f * WHEEL_RADIUS_M;
 const float TRACK_WIDTH_M = 0.1150f;
 
 // ================= Tham so dieu khien =================
@@ -512,6 +512,11 @@ void do_line_resume() {
   seen_line_ever = true;
   recovering = false;
   avoiding = false;
+  recov_did_backup = false;
+  recov_did_second_backup = false;
+  recov_sweep_count = 0;
+  obs_latched = false;
+  obs_hit = 0;
 
   vL_ema = 0.0f;
   vR_ema = 0.0f;
@@ -669,8 +674,8 @@ void do_line_loop() {
           return;
         }
 
-        // Tim line sau khi quay - tien 12cm
-        bool lineFoundAfterTurn = move_forward_distance_until_line(0.12, 90);
+        // Tim line sau khi quay - tien 8cm (luoi nho 25cm, tranh overshoot)
+        bool lineFoundAfterTurn = move_forward_distance_until_line(0.08, 90);
         if (!lineFoundAfterTurn) {
           Serial.println("  INIT: line not found after fwd, trying sweep");
           // Quet trai/phai tim line (giong intersection turn)
@@ -761,7 +766,7 @@ void do_line_loop() {
   updateObstacleState();
 
   // ===== AI Route: vat can -> dung, bao Web =====
-  if (currentMode == MODE_AI_ROUTE && obs_latched && !avoiding) {
+  if ((currentMode == MODE_AI_ROUTE || currentMode == MODE_DELIVERY) && obs_latched && !avoiding) {
     motorsStop();
     obs_latched = false;
     obs_hit = 0;  // ★ FIX L1: Reset hit counter to prevent immediate re-latch
@@ -953,7 +958,7 @@ void do_line_loop() {
 
             currentDir = targetDir;
             lastConfirmedNodeIdx = currentPathIndex;
-            bool lineFound = move_forward_distance_until_line(0.12, 90);
+            bool lineFound = move_forward_distance_until_line(0.08, 90);
             currentPathIndex++;
             if (!lineFound) {
               Serial.println("  Line not found after turn - wide scan");

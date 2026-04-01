@@ -38,7 +38,7 @@ volatile UIMode currentMode = MODE_MANUAL;
 bool line_mode = false;
 bool is_auto_running = false;
 
-int currentPath[20];  // ★ FIX C2: Grid 4x5 = 20 nodes, path can be up to 20
+int currentPath[15];  // Grid thuc te 4x2 o = 15 node (0-14)
 int pathLength = 0;
 int currentTargetNode = -1;
 int currentPathIndex = 0;
@@ -112,15 +112,16 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
     JsonArray pathArr = doc["path"].as<JsonArray>();
     pathLength = 0;
     for (JsonVariant v : pathArr) {
-      // ★ FIX C2: Node validation range [0,19] for 4x5 grid (20 nodes)
+      // Grid thuc te 4x2 = 15 node (0-14)
       int node = v.as<int>();
-      if (node >= 0 && node < 20 && pathLength < 20) currentPath[pathLength++] = node;
+      if (node >= 0 && node < 15 && pathLength < 15) currentPath[pathLength++] = node;
     }
     currentPathIndex = 0;
     
     // Tính hướng ban đầu từ 2 node đầu tiên
     if (doc.containsKey("initialDir")) {
-      currentDir = doc["initialDir"] | 0;
+      int dir = doc["initialDir"] | 0;
+      currentDir = (dir >= 0 && dir <= 3) ? dir : 0;  // Validate [0,3]
     } else if (pathLength >= 2) {
       // Tự tính từ node_coords trong do_line.cpp
       extern int getTargetDirection(int, int);
@@ -279,15 +280,15 @@ void setup() {
       String pathStr = r->getParam("path")->value();
       pathLength = 0;
       int startIdx = 0; int commaIdx = pathStr.indexOf(',');
-      while (commaIdx != -1 && pathLength < 20) {
-        // ★ FIX M9: Validate node range [0,19] for 4x5 grid
+      while (commaIdx != -1 && pathLength < 15) {
+        // Grid thuc te 4x2 = 15 node, validate [0,14]
         int node = pathStr.substring(startIdx, commaIdx).toInt();
-        if (node >= 0 && node < 20) currentPath[pathLength++] = node;
+        if (node >= 0 && node < 15) currentPath[pathLength++] = node;
         startIdx = commaIdx + 1; commaIdx = pathStr.indexOf(',', startIdx);
       }
-      if (startIdx < (int)pathStr.length() && pathLength < 20) {
+      if (startIdx < (int)pathStr.length() && pathLength < 15) {
         int node = pathStr.substring(startIdx).toInt();
-        if (node >= 0 && node < 20) currentPath[pathLength++] = node;
+        if (node >= 0 && node < 15) currentPath[pathLength++] = node;
       }
       if(pathLength > 1) currentTargetNode = currentPath[1];
     }
