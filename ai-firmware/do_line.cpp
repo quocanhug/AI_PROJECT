@@ -629,14 +629,14 @@ void do_line_loop() {
   // ★ DÒ LINE: CHỈ dùng 3 mắt giữa L1, M, R1
   // ============================================================
   else if (recovering) {
-    if (L1 || M || R1) { recovering = false; motorsStop(); }
+    // ★ Dừng recovering khi BẤT KỲ cảm biến nào thấy line (kể cả L2/R2)
+    if (L2 || L1 || M || R1 || R2) { recovering = false; motorsStop(); }
     else if (millis() - rec_t0 >= RECOV_TIME_MS) {
       recovering = false; motorsStop();
       // ★ AI_ROUTE: lùi thẳng về node đã xác nhận, báo Web từ đúng node đó
       if ((currentMode == MODE_AI_ROUTE || currentMode == MODE_DELIVERY) && is_auto_running) {
         Serial.printf("[RECOV] Timeout! Lùi về node[%d]=%d\n",
                       lastConfirmedNodeIdx, currentPath[lastConfirmedNodeIdx]);
-        // Lùi thẳng PWM chậm, tối đa 30cm, dừng khi bất kỳ mắt nào bắt line
         {
           const int REV_PWM = 80;
           const long revTarget = countsForDistance(0.30);
@@ -644,7 +644,6 @@ void do_line_loop() {
           motorWriteLR_signed(-REV_PWM, -REV_PWM);
           while (true) {
             if (!g_line_enabled) { motorsStop(); break; }
-            // Dừng khi bất kỳ cảm biến nào thấy line (cả L2/R2)
             if (digitalRead(L2_SENSOR)==LOW || digitalRead(L1_SENSOR)==LOW ||
                 digitalRead(M_SENSOR)==LOW  || digitalRead(R1_SENSOR)==LOW ||
                 digitalRead(R2_SENSOR)==LOW) { motorsStop(); break; }
@@ -654,20 +653,16 @@ void do_line_loop() {
           }
         }
         motorsStop(); delay(200);
-        // Hướng xe sau khi lùi: vẫn giữ hướng cũ, vì lùi không xoay
-        // Reset index về node đã xác nhận
         currentPathIndex = lastConfirmedNodeIdx;
-        // Báo Web từ đúng node đã xác nhận
         extern void wsBroadcast(const char*);
         int robotNode = currentPath[lastConfirmedNodeIdx];
-        // Hướng xe sau khi lùi = ngược lại hướng đang đi (vì mặt trước đang hướng ngược)
         int reportDir = (currentDir + 2) % 4;
         String msg = "{\"type\":\"OBSTACLE_DETECTED\","
                      "\"robotNode\":" + String(robotNode) + ","
                      "\"robotDir\":" + String(reportDir) + ","
                      "\"reason\":\"LINE_LOST\"}";
         wsBroadcast(msg.c_str());
-        currentDir = reportDir;  // Cập nhật hướng thực tế (mặt trước đang hướng về node cũ)
+        currentDir = reportDir;
         currentMode = MODE_MANUAL;
         is_auto_running = false;
         line_mode = false; do_line_abort(); return;
@@ -675,13 +670,23 @@ void do_line_loop() {
       noInterrupts(); encL_count = 0; encR_count = 0; interrupts();
       t_prev = millis(); return;
     } else {
-      // ★ Lùi có điều hướng theo last_seen (không quay tại chỗ)
-      // last_seen==LEFT: xe lệch phải, line ă cạnh trái → lùi + điều hướng đuôi xe sang trái
-      // last_seen==RIGHT: xe lệch trái, line ă cạnh phải → lùi + điều hướng đuôi xe sang phải
-      // (điều hướng khi lùi: NGƯỢC với tiến)
-      if      (last_seen == LEFT)  { vL_tgt = -v_base + v_boost; vR_tgt = -v_base - v_boost; }
-      else if (last_seen == RIGHT) { vL_tgt = -v_base - v_boost; vR_tgt = -v_base + v_boost; }
-      else                         { vL_tgt = -v_base * 0.7f;    vR_tgt = -v_base * 0.7f; }
+      // ★ Lùi vào điều hướng mạnh:
+      //   last_seen==LEFT : đuôi xe cần vừa hướng về line (bên trái)
+      //     → bánh trái lùi mạnh, bánh phải lùi chậm → đuôi vòng sang trái
+      //   last_seen==RIGHT: ngược lại
+      //   last_seen==NONE : đảo chiều scan theo 500ms tránh chỉ dao động tại chỗ
+      if (last_seen == LEFT) {
+        vL_tgt = -vF;          // bánh trái lùi mạnh
+        vR_tgt = -vF * 0.2f;   // bánh phải lùi yếu → đuôi vòng trái bắt line
+      } else if (last_seen == RIGHT) {
+        vL_tgt = -vF * 0.2f;   // bánh trái lùi yếu
+        vR_tgt = -vF;          // bánh phải lùi mạnh → đuôi vòng phải bắt line
+      } else {
+        // NONE: đổi hướng vòng mỗi 600ms để quét cả hai phía
+        bool scanLeft = ((millis() - rec_t0) / 600) % 2 == 0;
+        vL_tgt = scanLeft ? -vF        : -vF * 0.2f;
+        vR_tgt = scanLeft ? -vF * 0.2f : -vF;
+      }
     }
   }
   else {
