@@ -55,6 +55,7 @@ void forward(); void backward(); void left(); void right(); void stopCar();
 void forwardLeft(); void forwardRight(); void backwardLeft(); void backwardRight();
 void gripOpen(); void gripClose();
 void applyCurrentMotion();
+void handleWsMessage(AsyncWebSocketClient* client, char* msg);  // Forward decl — tránh lỗi compile khi gọi trước khi định nghĩa
 
 // ================= WebSocket Broadcast =================
 void wsBroadcast(const char* msg) {
@@ -75,8 +76,14 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
     case WS_EVT_DATA: {
       AwsFrameInfo *info = (AwsFrameInfo*)arg;
       if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
-        data[len] = 0;
-        handleWsMessage(client, (char*)data);
+        // ★ BUG FIX #1 — WS buffer overflow:
+        //   data[len]=0 có thể OOB vì buffer có đúng 'len' byte (không có room cho null).
+        //   Dùng stack buffer cố định 512B — đủ chứa mọi message trong protocol này.
+        char msgBuf[512];
+        size_t copyLen = (len < 511) ? len : 511;
+        memcpy(msgBuf, data, copyLen);
+        msgBuf[copyLen] = '\0';
+        handleWsMessage(client, msgBuf);
       }
       break;
     }
@@ -104,7 +111,9 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
     JsonArray pathArr = doc["path"].as<JsonArray>();
     pathLength = 0;
     for (JsonVariant v : pathArr) {
-      if (pathLength < 15) currentPath[pathLength++] = v.as<int>();
+      // ★ BUG FIX #8 — Node validation: chặn node ngoài range [0,14] để tránh OOB access
+      int node = v.as<int>();
+      if (node >= 0 && node < 15 && pathLength < 15) currentPath[pathLength++] = node;
     }
     currentPathIndex = 0;
     
@@ -133,11 +142,24 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
     currentMode = MODE_MANUAL;
     line_mode = false;
     is_auto_running = false;
+    // ★ BUG FIX #9 — ESTOP xóa path hẳn (không cho resume sau emergency stop)
+    //   STOP thường giữ path để có thể resume. ESTOP là khẩn cấp → xóa sạch.
+    if (strcmp(type, "ESTOP") == 0) {
+      pathLength = 0;
+      currentPathIndex = 0;
+    }
     client->text("{\"type\":\"ACK\",\"action\":\"STOPPED\"}");
   }
   else if (strcmp(type, "RESUME") == 0) {
-    if (currentMode == MODE_AI_ROUTE) {
-      do_line_setup();
+    // ★ BUG FIX #7 — RESUME logic sai:
+    //   Check cũ: (currentMode == MODE_AI_ROUTE) → false sau STOP vì mode đã về MANUAL!
+    //   Check mới: (pathLength > 0) — có route là có thể resume, bất kể mode hiện tại.
+    // ★ BUG FIX #2 — RESUME reset route:
+    //   Gọi do_line_resume() thay vì do_line_setup() — giữ nguyên lastConfirmedNodeIdx
+    //   và currentDir, chỉ bật lại motor/PID và căn chỉnh hướng.
+    if (pathLength > 0) {
+      do_line_resume();
+      currentMode = MODE_AI_ROUTE;
       line_mode = true;
       is_auto_running = true;
       client->text("{\"type\":\"ACK\",\"action\":\"RESUMED\"}");
@@ -164,7 +186,10 @@ extern volatile long encL_total, encR_total;  // ★ Dùng tính quãng đườn
 void sendTelemetry() {
   if (ws.count() == 0) return;
   if (currentMode == MODE_AI_ROUTE && is_auto_running) {
-    int robotNode = (currentPathIndex < pathLength) ? currentPath[currentPathIndex] : currentPath[pathLength-1];
+    // ★ BUG FIX M1: currentPathIndex trỏ vào node ĐANG TIẾN TỚI, không phải node đang đứng.
+    //   Dùng lastConfirmedNodeIdx để lấy node robot thực sự đang đứng trên.
+    extern int lastConfirmedNodeIdx;
+    int robotNode = (lastConfirmedNodeIdx < pathLength) ? currentPath[lastConfirmedNodeIdx] : currentPath[pathLength-1];
     
     // ★ Đọc cảm biến line (LOW = trên vạch)
     int s0 = digitalRead(TELE_L2) == LOW ? 1 : 0;
@@ -173,8 +198,11 @@ void sendTelemetry() {
     int s3 = digitalRead(TELE_R1) == LOW ? 1 : 0;
     int s4 = digitalRead(TELE_R2) == LOW ? 1 : 0;
     
-    // ★ Tính quãng đường từ encoder tổng: PPR_EFFECTIVE=60, CIRC=0.2042m → cm
-    float dist_cm = ((float)(encL_total + encR_total) / 2.0f) / 60.0f * 20.42f;
+    // ★ BUG FIX #5 — Distance hardcoded:
+    //   20.42f = CIRC*100, 60 = PPR_EFFECTIVE (macro trong do_line.cpp, không extern được)
+    //   extern CIRC để tự động đúng khi thay bánh / cậu encoder.
+    extern const float CIRC;  // = 2*pi*WHEEL_RADIUS_M, định nghĩa trong do_line.cpp
+    float dist_cm = ((float)(encL_total + encR_total) / 2.0f) / 60.0f * CIRC * 100.0f;
 
     String json = "{\"type\":\"TELEMETRY\",\"state\":\"FOLLOWING_LINE\"";
     json += ",\"step\":" + String(currentPathIndex);
@@ -274,15 +302,16 @@ void setup() {
   });
 
   server.on("/resume", HTTP_GET, [](AsyncWebServerRequest *r){
-    if (currentMode == MODE_AI_ROUTE || pathLength > 0) {
-      // Re-enable route execution from current position
-      do_line_setup();
+    // ★ BUG FIX #7 — Chỉ cần pathLength > 0 (sau STOP mode là MANUAL, không phải AI_ROUTE)
+    // ★ BUG FIX #2 — Dùng do_line_resume() thành do_line_setup() để giữ route state
+    if (pathLength > 0) {
+      do_line_resume();
       currentMode = MODE_AI_ROUTE;
       line_mode = true;
       is_auto_running = true;
-      Serial.printf("[RESUME] Resuming from pathIndex=%d, dir=%d\n", currentPathIndex, currentDir);
-      r->send(200, "application/json", 
-        "{\"status\":\"RESUMED\",\"pathIndex\":" + String(currentPathIndex) + 
+      Serial.printf("[RESUME] Resuming from node %d, dir=%d\n", currentPath[currentPathIndex], currentDir);
+      r->send(200, "application/json",
+        "{\"status\":\"RESUMED\",\"pathIndex\":" + String(currentPathIndex) +
         ",\"robotDir\":" + String(currentDir) + "}");
     } else {
       r->send(200, "application/json", "{\"status\":\"NO_ROUTE\"}");

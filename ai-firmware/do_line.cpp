@@ -57,7 +57,10 @@ int getTargetDirection(int nodeA, int nodeB) {
 #define ECHO_PIN 19
 
 const float OBSTACLE_TH_CM = 25.0f;  // ★ Tăng từ 20→25cm: thêm khoảng cách phanh
-const unsigned long US_TIMEOUT = 8000;
+// ★ BUG FIX #2 — Sonar blocking:
+//   US_TIMEOUT=8000µs → 3×pulseIn + 2×delay(2) = ~26ms block mỗi lần poll.
+//   Gảm xuống 3000µs: đủ detect vật cản 0–51cm, block tối đa 3ms.
+const unsigned long US_TIMEOUT = 3000;
 
 static unsigned long us_last_ms = 0;
 float us_dist_cm = 999.0f;  // ★ non-static: extern bởi main.ino cho telemetry
@@ -67,7 +70,9 @@ static bool obs_latched = false;
 
 const float OBSTACLE_ON_CM  = OBSTACLE_TH_CM;
 const float OBSTACLE_OFF_CM = 30.0f;  // ★ Hysteresis: phải > 30cm mới xóa cờ vật cản
-const uint8_t OBS_HIT_N = 2;
+// ★ BUG FIX #2: Tăng lên 3 để bù cho việc bỏ median filter (của lần đọc đơn).
+//   Với US_PERIOD_MS=25ms: cần 3 chu kỳ liên tiếp (~75ms) mới latched → ít false positive.
+const uint8_t OBS_HIT_N = 3;
 const unsigned long US_PERIOD_MS = 25;
 
 // ================= Thông số cơ khí =================
@@ -95,6 +100,12 @@ const float EMA_B = 0.7f;   // ★ Tăng từ 0.5: lọc mượt hơn, ít giậ
 const int PWM_MIN_RUN = 75;
 const int PWM_SLEW    = 15;  // ★ Giảm từ 30: motor thay đổi từ từ hơn, xe chạy mượt
 static int pwmL_prev=0, pwmR_prev=0;
+
+// ★ BUG FIX: t_prev và bad_t phải là file-scope static để
+//   do_line_setup() có thể reset chúng — nếu là local-static
+//   bên trong do_line_loop() thì chỉ init 1 lần, sẽ sai từ route thứ 2.
+static unsigned long t_prev = 0;
+static unsigned long bad_t  = 0;
 
 enum Side {NONE, LEFT, RIGHT};
 Side last_seen = NONE;
@@ -168,6 +179,8 @@ void motorsStop(){
 float ticksToVel(long ticks, float dt_s){ return ((float)ticks / (float)PPR_EFFECTIVE * CIRC) / dt_s; }
 
 int pidStep(PID &pid, float v_target, float v_meas, float dt_s){
+  // ★ BUG FIX C2: Guard dt_s để tránh D-term blow up khi timing glitch (dt_s ≈ 0)
+  if (dt_s < 0.001f) dt_s = 0.001f;
   float err = v_target - v_meas;
   pid.i_term += pid.Ki * err * dt_s;
   pid.i_term = clampf(pid.i_term, pid.out_min, pid.out_max);
@@ -187,18 +200,13 @@ float readDistanceCM(){
   return dur * 0.0343f / 2.0f;
 }
 
+// ★ BUG FIX #2 — Sonar blocking:
+//   3×readDistanceCM() median filter = ~26ms block mỗi lần, phá PID timing.
+//   Thay bằng 1 lần đọc (3ms max). OBS_HIT_N=3 đảm bảo đủ debounce.
 static float readDistanceCM_filtered(){
-  float a[3];
-  for (int i = 0; i < 3; i++){
-    float d = readDistanceCM();
-    if (d < 2.0f || d > 200.0f) d = 999.0f;
-    a[i] = d;
-    delay(2);
-  }
-  if (a[1] < a[0]) { float t=a[0]; a[0]=a[1]; a[1]=t; }
-  if (a[2] < a[1]) { float t=a[1]; a[1]=a[2]; a[2]=t; }
-  if (a[1] < a[0]) { float t=a[0]; a[0]=a[1]; a[1]=t; }
-  return a[1];
+  float d = readDistanceCM();
+  if (d < 2.0f || d > 200.0f) d = 999.0f;
+  return d;
 }
 
 static inline void updateObstacleState(){
@@ -335,6 +343,36 @@ bool move_forward_distance_until_line(double dist_m, int pwmAbs){
 
 void do_line_abort(){ g_line_enabled = false; motorsStop(); }
 
+// ★ BUG FIX #2 — RESUME resets route:
+//   do_line_setup() xóa hết state (lastConfirmedNodeIdx=0, currentPathIndex reset về 0)
+//   → robot tưởng mình đang ở node đầu → quay sai hướng khi resume.
+//
+//   do_line_resume() chỉ tái kích hoạt mà KHÔNG đụng vào route state.
+//   Nó reset currentPathIndex về lastConfirmedNodeIdx để needs_initial_turn
+//   tính đúng hướng từ node robot đang đứng thực tế.
+void do_line_resume() {
+  g_line_enabled = true;
+  seen_line_ever = true;   // Đừng trigger auto-search từ đầu
+  recovering = false;
+  avoiding = false;
+
+  // Reset PID + motor state KHÔNG reset route state
+  vL_ema = 0.0f; vR_ema = 0.0f;
+  pwmL_prev = 0; pwmR_prev = 0;
+  pidL.i_term = 0; pidL.prev_err = 0;
+  pidR.i_term = 0; pidR.prev_err = 0;
+
+  // Tránh "lost line > 1s" ngay khi vừa resume
+  t_prev = millis();
+  bad_t  = millis();
+
+  // ★ QUAN TRỌNG: currentPathIndex phải trỏ về lastConfirmedNodeIdx
+  //   để needs_initial_turn đọc đúng "curNode = currentPath[currentPathIndex]"
+  //   (node robot đang đứng, không phải node đang tiến tới)
+  currentPathIndex = lastConfirmedNodeIdx;
+  needs_initial_turn = true;  // Re-align hướng trước khi chạy tiếp
+}
+
 void avoidObstacle(){
   const int TURN_PWM = 150;
   const int FWD_PWM  = 100;
@@ -354,18 +392,35 @@ void do_line_setup() {
   pinMode(L2_SENSOR, INPUT); pinMode(L1_SENSOR, INPUT);
   pinMode(M_SENSOR,  INPUT); pinMode(R1_SENSOR, INPUT); pinMode(R2_SENSOR, INPUT);
   pinMode(ENC_L, INPUT_PULLUP); pinMode(ENC_R, INPUT_PULLUP);
+
+  // ★ BUG FIX #1 — ISR Duplicate:
+  //   Mỗi lần gọi do_line_setup() (route mới / RESUME) phải detach trước,
+  //   nếu không ESP32 tích lũy nhiều ISR → encoder đếm bội → mọi góc xoay sai.
+  detachInterrupt(digitalPinToInterrupt(ENC_L));
+  detachInterrupt(digitalPinToInterrupt(ENC_R));
   attachInterrupt(digitalPinToInterrupt(ENC_L), encL_isr, RISING);
   attachInterrupt(digitalPinToInterrupt(ENC_R), encR_isr, RISING);
+
   pinMode(TRIG_PIN, OUTPUT); pinMode(ECHO_PIN, INPUT);
 
   g_line_enabled = true; seen_line_ever = false;
   vL_ema = 0.0f; vR_ema = 0.0f; pwmL_prev = 0; pwmR_prev = 0;
-  us_last_ms = 0; us_dist_cm = 999.0f; obs_hit = 0; obs_latched = false;
+  // ★ BUG FIX m1: us_last_ms = millis() (không phải 0) để tránh sonar block 30ms
+  //   ngay vòng đầu tiên của do_line_loop() sau khi nhận route mới.
+  us_last_ms = millis(); us_dist_cm = 999.0f; obs_hit = 0; obs_latched = false;
   pidL.i_term = 0; pidL.prev_err = 0; pidR.i_term = 0; pidR.prev_err = 0;
   last_intersection_time = 0;
   last_seen = NONE; recovering = false;
   lastConfirmedNodeIdx = 0;  // ★ Reset về đầu route
-  needs_initial_turn = true;   // ★ Đánh dấu cần xoay hướng khi loop bắt đầu
+  needs_initial_turn = true; // ★ Đánh dấu cần xoay hướng khi loop bắt đầu
+
+  // ★ BUG FIX #2 — Stale t_prev / bad_t:
+  //   t_prev và bad_t phải được reset tại đây (là file-scope statics).
+  //   Nếu không, khoảng cách millis() tính từ lần chạy trước sẽ >> 1000ms
+  //   → do_line_loop() tưởng robot mất line quá 1s và dừng ngay lập tức.
+  t_prev = millis();
+  bad_t  = millis();
+
   motorsStop();
 }
 
@@ -429,24 +484,30 @@ void do_line_loop() {
           line_mode = false; do_line_abort(); return;
         }
 
-        currentDir = targetDir;
-
-        // Sau khi xoay xong, tiến tìm line
-        move_forward_distance_until_line(0.10, 90);  // ★ PWM giảm 120→90: chậm hơn, dễ bắt line
-      } else {
-        Serial.println("  >> INIT STRAIGHT (hướng đã chuẩn)");
+      // ★ BUG FIX #1 — Initial turn: currentPathIndex++ trước khi confirm bắt được line.
+      //   Nếu move_forward_distance_until_line() trả về false (không tìm thấy line sau 10cm),
+      //   index vẫn bị tăng → lần giao lộ tiếp theo xử lý sai node.
+      //   Fix: dùng biến lineFound — chỉ tăng nếu thấy line (turn case)
+      //         hoặc luôn tăng nếu đi thẳng (straight case: đã ở trên track rồi).
+      bool lineFoundAfterTurn = true;  // default true cho case STRAIGHT
+      if (targetDir != -1 && targetDir != currentDir) {
+        // [TURN case] đã quay xong, bây giờ check xem có bắt được line không
+        lineFoundAfterTurn = move_forward_distance_until_line(0.10, 90);
+        if (!lineFoundAfterTurn) {
+          Serial.println("  ⚠️ INIT: line not found after turn — giữ index, recovery sẽ xử lý");
+        }
       }
+      // [STRAIGHT case] lineFoundAfterTurn = true (không cần tìm: xe đã trên line)
 
-      // Đã xử lý node đầu → tiến sang đoạn tiếp theo
-      currentPathIndex++;
+      if (lineFoundAfterTurn) currentPathIndex++;
       last_intersection_time = millis();  // Chống trigger lại intersection
       seen_line_ever = true;              // Đã trên track → không cần auto-search
       return;
     }
   }
 
-  static unsigned long t_prev = millis();
-  static unsigned long bad_t = millis();
+  // t_prev và bad_t là file-scope statics — được reset trong do_line_setup()
+  // (không khai báo lại tại đây)
 
   bool L2 = onLine(L2_SENSOR), L1 = onLine(L1_SENSOR);
   bool M  = onLine(M_SENSOR);
@@ -507,7 +568,10 @@ void do_line_loop() {
   // ============================================================
   // ★ GIAO LỘ: Cả L2 VÀ R2 đều thấy vạch ngang (chống nhận nhầm khi xe lệch)
   // ============================================================
-  bool at_intersection = (L2 && R2);
+  // ★ BUG FIX #3 — Intersection false positive:
+  //   (L2 && R2) đố được khi xe chéo qua vạch ngang (L2/R2 cắt vạch nhưng tâm xe không trên track)
+  //   Thêm guard (L1 || M || R1): chỉ có giao lộ thật khi ít nhất 1 cảm biến giữa cũng thấy vạch.
+  bool at_intersection = (L2 && R2 && (L1 || M || R1));
 
   if (at_intersection) {
 

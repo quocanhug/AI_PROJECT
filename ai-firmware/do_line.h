@@ -13,4 +13,5 @@ extern bool is_auto_running;
 void do_line_setup();
 void do_line_loop();
 void do_line_abort();
+void do_line_resume();  // Resume mà không reset route state (dùng cho RESUME command)
 void motorsStop();
