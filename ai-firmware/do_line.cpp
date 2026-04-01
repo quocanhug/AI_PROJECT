@@ -685,31 +685,31 @@ void do_line_loop() {
     }
   }
   else {
-   // ★ PID dò line: 3 mắt giữa + L2/R2 hỗ trợ khi lệch nặng
-    if      ( M && !L1 && !R1) { last_seen = NONE;  vL_tgt = v_base;           vR_tgt = v_base; }
-    else if ( L1 &&  M && !R1) { last_seen = LEFT;  vL_tgt = v_base - v_boost; vR_tgt = v_base + v_boost; }
-    else if ( L1 && !M       ) { last_seen = LEFT;  vL_tgt = v_base - v_hard;  vR_tgt = v_base + v_hard; }
-    else if ( R1 &&  M && !L1) { last_seen = RIGHT; vL_tgt = v_base + v_boost; vR_tgt = v_base - v_boost; }
-    else if ( R1 && !M       ) { last_seen = RIGHT; vL_tgt = v_base + v_hard;  vR_tgt = v_base - v_hard; }
-    // ★ L2/R2 nhận line riêng lẻ (xe lệch rất nặng) → lùi nhẹ tìm lại line chính
-    else if ( L2 && !L1 && !M && !R1 && !R2) { last_seen = LEFT;  vL_tgt = -v_base * 0.5f; vR_tgt = -v_base * 0.5f; } // Lùi
-    else if ( R2 && !L1 && !M && !R1 && !L2) { last_seen = RIGHT; vL_tgt = -v_base * 0.5f; vR_tgt = -v_base * 0.5f; } // Lùi
-    else if (!L1 && !M && !R1) {
-      // Mất line 3 mắt giữa (L2/R2 cũng không có)
+   // ★ PID dò line: ưu tiên từ giữa → ngoài, mất hoàn toàn khi TẤT CẢ 5 mắt tắt
+    // Mức 1: Thẳng hoàn toàn
+    if      ( M && !L1 && !R1)              { last_seen = NONE;  vL_tgt = v_base;           vR_tgt = v_base; }
+    // Mức 2: Lệch nhẹ (M + L1 hoặc M + R1)
+    else if ( M &&  L1 && !R1)              { last_seen = LEFT;  vL_tgt = v_base - v_boost; vR_tgt = v_base + v_boost; }
+    else if ( M &&  R1 && !L1)              { last_seen = RIGHT; vL_tgt = v_base + v_boost; vR_tgt = v_base - v_boost; }
+    // Mức 3: Lệch vừa (L1 hoặc R1 không có M)
+    else if ( L1 && !M)                     { last_seen = LEFT;  vL_tgt = v_base - v_hard;  vR_tgt = v_base + v_hard; }
+    else if ( R1 && !M)                     { last_seen = RIGHT; vL_tgt = v_base + v_hard;  vR_tgt = v_base - v_hard; }
+    // Mức 4: Lệch mạnh (chỉ L2 hoặc R2, không có L1/M/R1) → dùng v_hard như có sẵn
+    else if ( L2 && !L1 && !M && !R1 && !R2) { last_seen = LEFT;  vL_tgt = v_base - v_hard;  vR_tgt = v_base + v_hard; }
+    else if ( R2 && !L1 && !M && !R1 && !L2) { last_seen = RIGHT; vL_tgt = v_base + v_hard;  vR_tgt = v_base - v_hard; }
+    // Mức 5: Mất HOÀN TOÀN (cả 5 mắt đều tắt)
+    else if (!L2 && !L1 && !M && !R1 && !R2) {
       if (!seen_line_ever && is_auto_running) {
-        // ★ FIX: Xe đặt trước line → bò chậm tới khi tìm thấy
+        // Xe đặt trước line → bò chậm tới khi tìm thấy
         vL_tgt = v_search; vR_tgt = v_search;
       }
       else if (!seen_line_ever) { vL_tgt = 0; vR_tgt = 0; }
       else {
+        // ★ Mất line hoàn toàn → vào recovering, lùi có điều hướng
         recovering = true; rec_t0 = millis();
-        if (last_seen == LEFT)       { vL_tgt = -vF; vR_tgt =  vF; }
-        else if (last_seen == RIGHT) { vL_tgt =  vF; vR_tgt = -vF; }
-        else {
-          // ★ FIX: last_seen==NONE (chưa biết lệch bên nào) → quay nhẹ sang trái tìm line
-          // thay vì chạy thẳng vô nghĩa
-          vL_tgt = -vF * 0.4f; vR_tgt = vF * 0.4f;
-        }
+        if      (last_seen == LEFT)  { vL_tgt = -v_base + v_boost; vR_tgt = -v_base - v_boost; }
+        else if (last_seen == RIGHT) { vL_tgt = -v_base - v_boost; vR_tgt = -v_base + v_boost; }
+        else                         { vL_tgt = -v_base * 0.7f;    vR_tgt = -v_base * 0.7f; }
       }
     }
     else { vL_tgt = v_base; vR_tgt = v_base; }
