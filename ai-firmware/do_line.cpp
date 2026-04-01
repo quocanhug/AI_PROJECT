@@ -625,30 +625,42 @@ void do_line_loop() {
     if (L1 || M || R1) { recovering = false; motorsStop(); }
     else if (millis() - rec_t0 >= RECOV_TIME_MS) {
       recovering = false; motorsStop();
-      // ★ AI_ROUTE: quay về node đã xác nhận trước, báo Web từ đúng node đó
+      // ★ AI_ROUTE: lùi thẳng về node đã xác nhận, báo Web từ đúng node đó
       if ((currentMode == MODE_AI_ROUTE || currentMode == MODE_DELIVERY) && is_auto_running) {
-        Serial.printf("[RECOV] Timeout! Đang ở khoảng node%d→node%d, quay lại node%d\n",
-                      currentPath[lastConfirmedNodeIdx],
-                      (lastConfirmedNodeIdx+1 < pathLength ? currentPath[lastConfirmedNodeIdx+1] : -1),
-                      currentPath[lastConfirmedNodeIdx]);
-        // Quay 180° về hướng node đã xác nhận
-        spin_right_deg(125.0, 160);
+        Serial.printf("[RECOV] Timeout! Lùi về node[%d]=%d\n",
+                      lastConfirmedNodeIdx, currentPath[lastConfirmedNodeIdx]);
+        // Lùi thẳng PWM chậm, tối đa 30cm, dừng khi bất kỳ mắt nào bắt line
+        {
+          const int REV_PWM = 80;
+          const long revTarget = countsForDistance(0.30);
+          long sL, sR; noInterrupts(); sL = encL_total; sR = encR_total; interrupts();
+          motorWriteLR_signed(-REV_PWM, -REV_PWM);
+          while (true) {
+            if (!g_line_enabled) { motorsStop(); break; }
+            // Dừng khi bất kỳ cảm biến nào thấy line (cả L2/R2)
+            if (digitalRead(L2_SENSOR)==LOW || digitalRead(L1_SENSOR)==LOW ||
+                digitalRead(M_SENSOR)==LOW  || digitalRead(R1_SENSOR)==LOW ||
+                digitalRead(R2_SENSOR)==LOW) { motorsStop(); break; }
+            long cL, cR; noInterrupts(); cL = encL_total; cR = encR_total; interrupts();
+            if (labs(cL-sL) >= revTarget && labs(cR-sR) >= revTarget) { motorsStop(); break; }
+            delay(5);
+          }
+        }
         motorsStop(); delay(200);
-        // Bò chậm tìm giao lộ node cũ (tối đa 30cm)
-        move_forward_distance_until_line(0.30, 80);
-        motorsStop(); delay(200);
-        // Đặt lại currentPathIndex về node đã xác nhận (xóa tiến trình sai)
+        // Hướng xe sau khi lùi: vẫn giữ hướng cũ, vì lùi không xoay
+        // Reset index về node đã xác nhận
         currentPathIndex = lastConfirmedNodeIdx;
-        // Hướng hiện tại đã quay ngược 180° so với hướng lúc rời node đó
-        currentDir = (currentDir + 2) % 4;
         // Báo Web từ đúng node đã xác nhận
         extern void wsBroadcast(const char*);
         int robotNode = currentPath[lastConfirmedNodeIdx];
+        // Hướng xe sau khi lùi = ngược lại hướng đang đi (vì mặt trước đang hướng ngược)
+        int reportDir = (currentDir + 2) % 4;
         String msg = "{\"type\":\"OBSTACLE_DETECTED\","
                      "\"robotNode\":" + String(robotNode) + ","
-                     "\"robotDir\":" + String(currentDir) + ","
+                     "\"robotDir\":" + String(reportDir) + ","
                      "\"reason\":\"LINE_LOST\"}";
         wsBroadcast(msg.c_str());
+        currentDir = reportDir;  // Cập nhật hướng thực tế (mặt trước đang hướng về node cũ)
         currentMode = MODE_MANUAL;
         is_auto_running = false;
         line_mode = false; do_line_abort(); return;
@@ -656,9 +668,8 @@ void do_line_loop() {
       noInterrupts(); encL_count = 0; encR_count = 0; interrupts();
       t_prev = millis(); return;
     } else {
-      if (last_seen == LEFT)       { vL_tgt = -vF; vR_tgt =  vF; }
-      else if (last_seen == RIGHT) { vL_tgt =  vF; vR_tgt = -vF; }
-      else                         { vL_tgt = -vF * 0.4f; vR_tgt = vF * 0.4f; } // ★ FIX: Quay nhẹ tìm line thay vì chạy thẳng vô định
+      // ★ Lùi thẳng trong khi đợi timeout — không quay trái phải
+      vL_tgt = -v_base * 0.7f; vR_tgt = -v_base * 0.7f;
     }
   }
   else {
@@ -668,9 +679,9 @@ void do_line_loop() {
     else if ( L1 && !M       ) { last_seen = LEFT;  vL_tgt = v_base - v_hard;  vR_tgt = v_base + v_hard; }
     else if ( R1 &&  M && !L1) { last_seen = RIGHT; vL_tgt = v_base + v_boost; vR_tgt = v_base - v_boost; }
     else if ( R1 && !M       ) { last_seen = RIGHT; vL_tgt = v_base + v_hard;  vR_tgt = v_base - v_hard; }
-    // ★ FIX: L2 hoặc R2 nhận line riêng lẻ (xe lệch rất nặng) → sửa mạnh
-    else if ( L2 && !L1 && !M && !R1 && !R2) { last_seen = LEFT;  vL_tgt = -vF * 0.5f; vR_tgt = vF * 0.5f; }  // Quay phải tìm line
-    else if ( R2 && !L1 && !M && !R1 && !L2) { last_seen = RIGHT; vL_tgt = vF * 0.5f;  vR_tgt = -vF * 0.5f; } // Quay trái tìm line
+    // ★ L2/R2 nhận line riêng lẻ (xe lệch rất nặng) → lùi nhẹ tìm lại line chính
+    else if ( L2 && !L1 && !M && !R1 && !R2) { last_seen = LEFT;  vL_tgt = -v_base * 0.5f; vR_tgt = -v_base * 0.5f; } // Lùi
+    else if ( R2 && !L1 && !M && !R1 && !L2) { last_seen = RIGHT; vL_tgt = -v_base * 0.5f; vR_tgt = -v_base * 0.5f; } // Lùi
     else if (!L1 && !M && !R1) {
       // Mất line 3 mắt giữa (L2/R2 cũng không có)
       if (!seen_line_ever && is_auto_running) {
