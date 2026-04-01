@@ -879,28 +879,10 @@ function calculateOverallPath() {
   }
 }
 
-// ==================== Path to Commands ====================
-function pathToCommands(path, initialDir) {
-  let dir = parseInt(initialDir || 1);
-  const cmds = [];
-  const dd = [{ dx: 0, dy: -1 }, { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }];
-  for (let i = 0; i < path.length - 1; i++) {
-    const dx = Math.sign(coords[path[i + 1]][0] - coords[path[i]][0]);
-    const dy = Math.sign(coords[path[i + 1]][1] - coords[path[i]][1]);
-    let td = -1;
-    for (let d = 0; d < 4; d++) if (dd[d].dx === dx && dd[d].dy === dy) { td = d; break; }
-    if (td === -1) { cmds.push("F"); continue; }
-    const diff = (td - dir + 4) % 4;
-    if (diff === 1) cmds.push("R"); else if (diff === 3) cmds.push("L"); else if (diff === 2) { cmds.push("R"); cmds.push("R"); } else cmds.push("F");
-    dir = td;
-  }
-  return cmds;
-}
 
 // ==================== Deliver Button ====================
 document.getElementById("deliverBtn").addEventListener("click", async () => {
   if (finalCalculatedPath.length < 2) return showToast("Lộ trình không hợp lệ!", "error");
-  const cmds = pathToCommands(finalCalculatedPath, robotInitialDir);
   const algo = document.getElementById("algoSel").value;
   const btn = document.getElementById("deliverBtn");
   btn.innerHTML = '⏳ ĐANG TRUYỀN...';
@@ -913,7 +895,7 @@ document.getElementById("deliverBtn").addEventListener("click", async () => {
   icon.textContent = '🚚'; icon.className = 'text-lg text-amber-600 animate-pulse';
   text.textContent = `🚚 Đang giao hàng... (Dự kiến: ~${deliveryExpectedTime}s)`; text.className = 'text-sm font-bold text-amber-700';
   if (ws && ws.readyState === WebSocket.OPEN) {
-    wsSend({ type: "ROUTE", commands: cmds, total_steps: cmds.length, algorithm: algo, path: finalCalculatedPath, startNode: parseInt(document.getElementById("startNode").value), initialDir: JS_TO_CPP_DIR[robotInitialDir] });
+    wsSend({ type: "ROUTE", path: finalCalculatedPath, initialDir: JS_TO_CPP_DIR[robotInitialDir], algorithm: algo });
   } else { try { const cppDir = JS_TO_CPP_DIR[robotInitialDir]; await fetch(`/deliver?dir=${cppDir}&path=${finalCalculatedPath.join(",")}`); } catch (e) { } }
   setTimeout(() => {
     btn.innerHTML = '✅ ĐÃ NẠP!';

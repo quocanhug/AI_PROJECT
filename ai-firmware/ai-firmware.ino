@@ -149,9 +149,10 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
 static unsigned long lastTelemetryMs = 0;
 const unsigned long TELEMETRY_INTERVAL_MS = 200;
 
-// ★ Extern sensor/speed data từ do_line.cpp để gửi telemetry đầy đủ
+// ★ Extern sensor/speed/encoder data từ do_line.cpp để gửi telemetry đầy đủ
 extern float us_dist_cm;
 extern float vL_ema, vR_ema;
+extern volatile long encL_total, encR_total;  // ★ Dùng tính quãng đường (cm)
 
 // Sensor pins (dùng đọc trạng thái cho telemetry)
 #define TELE_L2 34
@@ -172,6 +173,9 @@ void sendTelemetry() {
     int s3 = digitalRead(TELE_R1) == LOW ? 1 : 0;
     int s4 = digitalRead(TELE_R2) == LOW ? 1 : 0;
     
+    // ★ Tính quãng đường từ encoder tổng: PPR_EFFECTIVE=60, CIRC=0.2042m → cm
+    float dist_cm = ((float)(encL_total + encR_total) / 2.0f) / 60.0f * 20.42f;
+
     String json = "{\"type\":\"TELEMETRY\",\"state\":\"FOLLOWING_LINE\"";
     json += ",\"step\":" + String(currentPathIndex);
     json += ",\"total\":" + String(pathLength);
@@ -179,6 +183,7 @@ void sendTelemetry() {
     json += ",\"robotDir\":" + String(currentDir);
     json += ",\"speedL\":" + String(vL_ema, 3);
     json += ",\"speedR\":" + String(vR_ema, 3);
+    json += ",\"distance\":" + String(dist_cm, 1);
     json += ",\"obstacle\":" + String(us_dist_cm, 1);
     json += ",\"sensors\":[" + String(s0) + "," + String(s1) + "," + String(s2) + "," + String(s3) + "," + String(s4) + "]}";
     ws.textAll(json);

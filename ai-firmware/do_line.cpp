@@ -105,11 +105,14 @@ bool recovering = false;
 unsigned long rec_t0 = 0;
 const unsigned long RECOV_TIME_MS = 6000;
 
-// ★ Debounce giao lộ: 500ms (tính: v_base=0.4m/s, node~25cm → 625ms giữa 2 node)
-const unsigned long INTERSECTION_DEBOUNCE_MS = 500;
-unsigned long last_intersection_time = 0;  // ★ Non-static để do_line_setup() reset được
+// ★ Node cúôi cùng xe đứng trên giao lộ (trước khi tăng currentPathIndex)
+int lastConfirmedNodeIdx = 0;
 
-// ★ Initial turn: xoay xe chuẩn hướng khi nhận route mới (trước khi dò line)
+// ★ Debounce giao lộ: 500ms
+const unsigned long INTERSECTION_DEBOUNCE_MS = 500;
+unsigned long last_intersection_time = 0;
+
+// ★ Initial turn: xoay xe chuẩn hướng khi nhận route mới
 bool needs_initial_turn = false;
 
 // ================= ISR encoder =================
@@ -359,8 +362,9 @@ void do_line_setup() {
   vL_ema = 0.0f; vR_ema = 0.0f; pwmL_prev = 0; pwmR_prev = 0;
   us_last_ms = 0; us_dist_cm = 999.0f; obs_hit = 0; obs_latched = false;
   pidL.i_term = 0; pidL.prev_err = 0; pidR.i_term = 0; pidR.prev_err = 0;
-  last_intersection_time = 0;  // ★ Reset debounce để “Về kho” xử lý intersection ngay
+  last_intersection_time = 0;
   last_seen = NONE; recovering = false;
+  lastConfirmedNodeIdx = 0;  // ★ Reset về đầu route
   needs_initial_turn = true;   // ★ Đánh dấu cần xoay hướng khi loop bắt đầu
   motorsStop();
 }
@@ -561,9 +565,10 @@ void do_line_loop() {
 
           if (diff == 0) {
             // ★ ĐI THẲNG: KHÔNG dừng, chỉ tiến centering nhỏ rồi tiếp tục PID bình thường
+            lastConfirmedNodeIdx = currentPathIndex;  // ★ Lưu node hiện tại TRƯỚC khi tăng
             currentPathIndex++;
             currentDir = targetDir;
-            move_forward_distance(0.03, 100);  // centering nhẹ vào tâm giao lộ
+            move_forward_distance(0.03, 100);
             last_seen = NONE;
             // Không return → tiếp tục vòng lặp bình thường, PID dò line
           } else {
@@ -595,6 +600,7 @@ void do_line_loop() {
             }
 
             currentDir = targetDir;
+            lastConfirmedNodeIdx = currentPathIndex;  // ★ Lưu node TRƯỚC khi tăng
             currentPathIndex++;
             move_forward_distance_until_line(0.10, 90);
           }
@@ -619,6 +625,34 @@ void do_line_loop() {
     if (L1 || M || R1) { recovering = false; motorsStop(); }
     else if (millis() - rec_t0 >= RECOV_TIME_MS) {
       recovering = false; motorsStop();
+      // ★ AI_ROUTE: quay về node đã xác nhận trước, báo Web từ đúng node đó
+      if ((currentMode == MODE_AI_ROUTE || currentMode == MODE_DELIVERY) && is_auto_running) {
+        Serial.printf("[RECOV] Timeout! Đang ở khoảng node%d→node%d, quay lại node%d\n",
+                      currentPath[lastConfirmedNodeIdx],
+                      (lastConfirmedNodeIdx+1 < pathLength ? currentPath[lastConfirmedNodeIdx+1] : -1),
+                      currentPath[lastConfirmedNodeIdx]);
+        // Quay 180° về hướng node đã xác nhận
+        spin_right_deg(125.0, 160);
+        motorsStop(); delay(200);
+        // Bò chậm tìm giao lộ node cũ (tối đa 30cm)
+        move_forward_distance_until_line(0.30, 80);
+        motorsStop(); delay(200);
+        // Đặt lại currentPathIndex về node đã xác nhận (xóa tiến trình sai)
+        currentPathIndex = lastConfirmedNodeIdx;
+        // Hướng hiện tại đã quay ngược 180° so với hướng lúc rời node đó
+        currentDir = (currentDir + 2) % 4;
+        // Báo Web từ đúng node đã xác nhận
+        extern void wsBroadcast(const char*);
+        int robotNode = currentPath[lastConfirmedNodeIdx];
+        String msg = "{\"type\":\"OBSTACLE_DETECTED\","
+                     "\"robotNode\":" + String(robotNode) + ","
+                     "\"robotDir\":" + String(currentDir) + ","
+                     "\"reason\":\"LINE_LOST\"}";
+        wsBroadcast(msg.c_str());
+        currentMode = MODE_MANUAL;
+        is_auto_running = false;
+        line_mode = false; do_line_abort(); return;
+      }
       noInterrupts(); encL_count = 0; encR_count = 0; interrupts();
       t_prev = millis(); return;
     } else {
