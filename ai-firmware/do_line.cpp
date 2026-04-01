@@ -113,10 +113,11 @@ bool recovering = false;
 unsigned long rec_t0 = 0;
 const unsigned long RECOV_TIME_MS = 3000; // 3s timeout (luoi nho 35x25cm)
 
-// Recovery: chi sweep trai/phai, KHONG lui sau
+// Recovery: LUI + QUET NHE trai/phai, KHONG quay dau
 int recov_sweep_count = 0;
-const int RECOV_MAX_SWEEPS = 6; // 6 sweep (trai-phai luan phien)
-bool recov_did_backup = false;  // da lui nhe 1 lan chua
+const int RECOV_MAX_SWEEPS = 8; // 8 sweep (trai-phai luan phien)
+bool recov_did_backup = false;   // da lui lan 1 chua
+bool recov_did_second_backup = false; // da lui lan 2 chua
 
 int lastConfirmedNodeIdx = 0;
 
@@ -445,8 +446,10 @@ bool move_forward_distance_until_line(double dist_m, int pwmAbs) {
     cL = encL_total;
     cR = encR_total;
     interrupts();
+    // Kiem tra CA 5 mat cam bien (L2, L1, M, R1, R2)
     if (digitalRead(M_SENSOR) == LOW || digitalRead(L1_SENSOR) == LOW ||
-        digitalRead(R1_SENSOR) == LOW) {
+        digitalRead(R1_SENSOR) == LOW || digitalRead(L2_SENSOR) == LOW ||
+        digitalRead(R2_SENSOR) == LOW) {
       motorsStop();
       return true;
     }
@@ -558,6 +561,7 @@ void do_line_setup() {
   recovering = false;
   recov_sweep_count = 0;
   recov_did_backup = false;
+  recov_did_second_backup = false;
   lastConfirmedNodeIdx = 0;
   needs_initial_turn = true;
 
@@ -597,13 +601,13 @@ void do_line_loop() {
         delay(300);
 
         if (diff == 1) {
-          turnOk = spin_left_deg(62.0, TURN_PWM);
+          turnOk = spin_left_deg(60.0, TURN_PWM);  // 60*1.5=90 do chinh xac
           Serial.println("  >> INIT LEFT");
         } else if (diff == 3) {
-          turnOk = spin_right_deg(62.0, TURN_PWM);
+          turnOk = spin_right_deg(60.0, TURN_PWM); // 60*1.5=90 do chinh xac
           Serial.println("  >> INIT RIGHT");
         } else if (diff == 2) {
-          turnOk = spin_right_deg(115.0, TURN_PWM);
+          turnOk = spin_right_deg(120.0, TURN_PWM); // 120*1.5=180 do chinh xac
           Serial.println("  >> INIT U-TURN");
         }
 
@@ -630,10 +634,45 @@ void do_line_loop() {
           return;
         }
 
-        // Tim line sau khi quay
-        bool lineFoundAfterTurn = move_forward_distance_until_line(0.10, 90);
+        // Tim line sau khi quay - tien 12cm
+        bool lineFoundAfterTurn = move_forward_distance_until_line(0.12, 90);
         if (!lineFoundAfterTurn) {
-          Serial.println("  INIT: line not found after turn");
+          Serial.println("  INIT: line not found after fwd, trying sweep");
+          // Quet trai/phai tim line (giong intersection turn)
+          bool foundWide = false;
+          for (int sweep = 0; sweep < 3 && !foundWide; sweep++) {
+            // Quet trai
+            motorWriteLR_signed(-90, 90);
+            unsigned long ts = millis();
+            while (millis() - ts < 250) {
+              if (!g_line_enabled) { motorsStop(); return; }
+              if (digitalRead(L2_SENSOR) == LOW || digitalRead(L1_SENSOR) == LOW ||
+                  digitalRead(M_SENSOR) == LOW || digitalRead(R1_SENSOR) == LOW ||
+                  digitalRead(R2_SENSOR) == LOW) {
+                motorsStop(); foundWide = true; break;
+              }
+              delay(5);
+            }
+            if (foundWide) break;
+            motorsStop(); delay(50);
+            // Quet phai
+            motorWriteLR_signed(90, -90);
+            ts = millis();
+            while (millis() - ts < 250) {
+              if (!g_line_enabled) { motorsStop(); return; }
+              if (digitalRead(L2_SENSOR) == LOW || digitalRead(L1_SENSOR) == LOW ||
+                  digitalRead(M_SENSOR) == LOW || digitalRead(R1_SENSOR) == LOW ||
+                  digitalRead(R2_SENSOR) == LOW) {
+                motorsStop(); foundWide = true; break;
+              }
+              delay(5);
+            }
+            motorsStop(); delay(50);
+          }
+          lineFoundAfterTurn = foundWide;
+          if (!foundWide) {
+            Serial.println("  INIT: sweep failed too!");
+          }
         }
 
         currentDir = targetDir;
@@ -665,13 +704,14 @@ void do_line_loop() {
   if (lost_all) {
     if (!seen_line_ever && is_auto_running) {
       bad_t = millis(); // Dang bo tim line, reset timeout
-    } else if (!recovering && seen_line_ever && millis() - bad_t > 300) {
-      // Mat line > 300ms -> vao recovery
-      Serial.println("[LINE] Lost >300ms -> entering RECOVERY");
+    } else if (!recovering && seen_line_ever && millis() - bad_t > 150) {
+      // Mat line >150ms -> vao recovery (luoi nho, phan ung nhanh)
+      Serial.println("[LINE] Lost >150ms -> entering RECOVERY");
       recovering = true;
       rec_t0 = millis();
       recov_sweep_count = 0;
       recov_did_backup = false;
+      recov_did_second_backup = false;
       motorsStop();
       return;
     }
@@ -836,13 +876,13 @@ void do_line_loop() {
             const int TURN_PWM = 160;
             bool turnOk = true;
             if (diff == 1) {
-              turnOk = spin_left_deg(62.0, TURN_PWM);
+              turnOk = spin_left_deg(60.0, TURN_PWM);  // 60*1.5=90 do
               Serial.println("  >> LEFT");
             } else if (diff == 3) {
-              turnOk = spin_right_deg(62.0, TURN_PWM);
+              turnOk = spin_right_deg(60.0, TURN_PWM); // 60*1.5=90 do
               Serial.println("  >> RIGHT");
             } else if (diff == 2) {
-              turnOk = spin_right_deg(125.0, TURN_PWM);
+              turnOk = spin_right_deg(120.0, TURN_PWM); // 120*1.5=180 do
               Serial.println("  >> U-TURN");
             }
 
@@ -872,7 +912,7 @@ void do_line_loop() {
 
             currentDir = targetDir;
             lastConfirmedNodeIdx = currentPathIndex;
-            bool lineFound = move_forward_distance_until_line(0.10, 90);
+            bool lineFound = move_forward_distance_until_line(0.12, 90);
             currentPathIndex++;
             if (!lineFound) {
               Serial.println("  Line not found after turn - wide scan");
@@ -945,7 +985,8 @@ void do_line_loop() {
   }
 
   // ============================================================
-  // RECOVERY: xe mat line, dang tim lai
+  // RECOVERY: LUI NHE + QUET NHE TRAI/PHAI de tim lai line
+  // Luoi nho 35x25cm -> lui ngan, quet nhe, TUYET DOI KHONG quay dau
   // ============================================================
   else if (recovering) {
     // Tim thay line -> thoat recovery
@@ -970,66 +1011,27 @@ void do_line_loop() {
       return;
     }
 
-    // Timeout recovery -> lui ve node + bao Web
+    // Timeout recovery -> dung han, bao Web (KHONG dao huong)
     if (millis() - rec_t0 >= RECOV_TIME_MS) {
       recovering = false;
       motorsStop();
-      Serial.println("[RECOV] TIMEOUT - all recovery failed");
+      Serial.println("[RECOV] TIMEOUT - recovery failed");
 
       if ((currentMode == MODE_AI_ROUTE || currentMode == MODE_DELIVERY) &&
           is_auto_running) {
-        Serial.printf("[RECOV] Lui ve node[%d]=%d\n", lastConfirmedNodeIdx,
-                      currentPath[lastConfirmedNodeIdx]);
-        {
-          const int REV_PWM = 80;
-          const long revTarget = countsForDistance(
-              0.08); // Chi lui 8cm, tranh qua node khac (luoi 25cm)
-          long sL, sR;
-          noInterrupts();
-          sL = encL_total;
-          sR = encR_total;
-          interrupts();
-          motorWriteLR_signed(-REV_PWM, -REV_PWM);
-          while (true) {
-            if (!g_line_enabled) {
-              motorsStop();
-              break;
-            }
-            if (digitalRead(L2_SENSOR) == LOW ||
-                digitalRead(L1_SENSOR) == LOW || digitalRead(M_SENSOR) == LOW ||
-                digitalRead(R1_SENSOR) == LOW ||
-                digitalRead(R2_SENSOR) == LOW) {
-              motorsStop();
-              break;
-            }
-            long cL, cR;
-            noInterrupts();
-            cL = encL_total;
-            cR = encR_total;
-            interrupts();
-            if (labs(cL - sL) >= revTarget && labs(cR - sR) >= revTarget) {
-              motorsStop();
-              break;
-            }
-            delay(5);
-          }
-        }
-        motorsStop();
-        delay(200);
         currentPathIndex = lastConfirmedNodeIdx;
         extern void wsBroadcast(const char *);
         int robotNode = currentPath[lastConfirmedNodeIdx];
-        int reportDir = (currentDir + 2) % 4;
+        // GIU NGUYEN huong hien tai, KHONG dao 180 do
         String msg = "{\"type\":\"OBSTACLE_DETECTED\","
                      "\"robotNode\":" +
                      String(robotNode) +
                      ","
                      "\"robotDir\":" +
-                     String(reportDir) +
+                     String(currentDir) +
                      ","
                      "\"reason\":\"LINE_LOST\"}";
         wsBroadcast(msg.c_str());
-        currentDir = reportDir;
         currentMode = MODE_MANUAL;
         is_auto_running = false;
         line_mode = false;
@@ -1044,23 +1046,28 @@ void do_line_loop() {
       return;
     }
 
-    // ===== RECOVERY: CHI SWEEP TRAI/PHAI TAI CHO =====
-    // Luoi nho 35x25cm -> KHONG lui sau, chi quay tai cho tim line
-    // Sau 3 sweep dau, lui nhe 5cm roi sweep tiep
+    // ===== RECOVERY: LUI TRUOC, ROI QUET NHE TRAI/PHAI =====
+    // Buoc 1: Lui nhe 2cm (tim line phia sau)
+    // Buoc 2: Quet nhe trai/phai (goc nho, toc do thap)
+    // Buoc 3: Lui them 2cm (sau 4 sweep dau)
+    // Buoc 4: Quet tiep, rong hon mot chut
+    // KHONG BAO GIO quay dau (U-turn)
     {
-      unsigned long elapsed = millis() - rec_t0;
-
-      // Sau 3 sweep ma chua thay -> lui nhe 5cm 1 lan duy nhat
-      if (recov_sweep_count >= 3 && !recov_did_backup) {
+      // === BUOC 1: Lui nhe 2cm (lan dau) ===
+      if (!recov_did_backup) {
         recov_did_backup = true;
-        Serial.println("[RECOV] Lui nhe 5cm");
-        motorWriteLR_signed(-80, -80);
+        Serial.println("[RECOV] Buoc 1: Lui 2cm");
+        const int REV_PWM = 70;
+        const long revTarget = countsForDistance(0.02);
+        long sL, sR;
+        noInterrupts();
+        sL = encL_total;
+        sR = encR_total;
+        interrupts();
+        motorWriteLR_signed(-REV_PWM, -REV_PWM);
         unsigned long bk = millis();
-        while (millis() - bk < 300) { // ~5cm voi PWM 80
-          if (!g_line_enabled) {
-            motorsStop();
-            return;
-          }
+        while (millis() - bk < 500) {
+          if (!g_line_enabled) { motorsStop(); return; }
           if (digitalRead(L2_SENSOR) == LOW || digitalRead(L1_SENSOR) == LOW ||
               digitalRead(M_SENSOR) == LOW || digitalRead(R1_SENSOR) == LOW ||
               digitalRead(R2_SENSOR) == LOW) {
@@ -1071,46 +1078,97 @@ void do_line_loop() {
             t_prev = millis();
             return;
           }
+          long cL, cR;
+          noInterrupts();
+          cL = encL_total;
+          cR = encR_total;
+          interrupts();
+          if (labs(cL - sL) >= revTarget && labs(cR - sR) >= revTarget) break;
           delay(5);
         }
         motorsStop();
         delay(100);
-        rec_t0 = millis();     // Reset timer sau khi lui
+        rec_t0 = millis();     // Reset timer cho sweep phase
+        recov_sweep_count = 0;
+        return;
+      }
+
+      // === BUOC 3: Lui them 2cm (sau 4 sweep dau) ===
+      if (recov_sweep_count >= 4 && !recov_did_second_backup) {
+        recov_did_second_backup = true;
+        Serial.println("[RECOV] Buoc 3: Lui them 2cm");
+        const int REV_PWM = 70;
+        const long revTarget = countsForDistance(0.02);
+        long sL, sR;
+        noInterrupts();
+        sL = encL_total;
+        sR = encR_total;
+        interrupts();
+        motorWriteLR_signed(-REV_PWM, -REV_PWM);
+        unsigned long bk = millis();
+        while (millis() - bk < 500) {
+          if (!g_line_enabled) { motorsStop(); return; }
+          if (digitalRead(L2_SENSOR) == LOW || digitalRead(L1_SENSOR) == LOW ||
+              digitalRead(M_SENSOR) == LOW || digitalRead(R1_SENSOR) == LOW ||
+              digitalRead(R2_SENSOR) == LOW) {
+            motorsStop();
+            recovering = false;
+            Serial.println("[RECOV] Line found while backing (2)!");
+            bad_t = millis();
+            t_prev = millis();
+            return;
+          }
+          long cL, cR;
+          noInterrupts();
+          cL = encL_total;
+          cR = encR_total;
+          interrupts();
+          if (labs(cL - sL) >= revTarget && labs(cR - sR) >= revTarget) break;
+          delay(5);
+        }
+        motorsStop();
+        delay(100);
+        rec_t0 = millis();     // Reset timer cho sweep tiep
         recov_sweep_count = 0; // Sweep lai tu dau
         return;
       }
 
-      // Huong sweep: uu tien ve phia last_seen
+      // === BUOC 2 & 4: Quet nhe trai/phai ===
+      // Uu tien huong last_seen (huong cuoi cung thay line)
+      // Toc do thap, goc nho -> KHONG quay dau
+      unsigned long elapsed = millis() - rec_t0;
+
       bool sweepToLeft;
       if (last_seen == LEFT) {
-        sweepToLeft = (recov_sweep_count % 2 == 0);
+        sweepToLeft = (recov_sweep_count % 2 == 0); // Trai truoc
       } else if (last_seen == RIGHT) {
-        sweepToLeft = (recov_sweep_count % 2 != 0);
+        sweepToLeft = (recov_sweep_count % 2 != 0); // Phai truoc
       } else {
         sweepToLeft = (recov_sweep_count % 2 == 0);
       }
 
-      // Xoay tai cho tim line
+      // Quet NHE: toc do thap (0.3 * v_base), tranh quay qua manh
+      const float SWEEP_V = v_base * 0.3f;
       if (sweepToLeft) {
-        vL_tgt = -v_base * 0.5f; // Xoay cham hon cho luoi nho
-        vR_tgt = v_base * 0.5f;
+        vL_tgt = -SWEEP_V;
+        vR_tgt = SWEEP_V;
       } else {
-        vL_tgt = v_base * 0.5f;
-        vR_tgt = -v_base * 0.5f;
+        vL_tgt = SWEEP_V;
+        vR_tgt = -SWEEP_V;
       }
 
-      // Chuyen sweep tiep theo
+      // Chuyen sweep tiep theo (duration tang dan)
       unsigned long total_sweep_time = 0;
       for (int i = 0; i <= recov_sweep_count && i < RECOV_MAX_SWEEPS; i++) {
-        total_sweep_time += 250 + i * 80; // Sweep ngan hon cho luoi nho
+        total_sweep_time += 180 + i * 50; // 180ms, 230ms, 280ms, ...
       }
       if (elapsed > total_sweep_time) {
         recov_sweep_count++;
         if (recov_sweep_count >= RECOV_MAX_SWEEPS) {
-          Serial.println("[RECOV] All sweeps exhausted");
-          // Khong chuyen sang REVERSE, de timeout xu ly
+          Serial.println("[RECOV] All sweeps exhausted, waiting timeout");
         } else {
-          Serial.printf("[RECOV] Sweep #%d\n", recov_sweep_count);
+          Serial.printf("[RECOV] Sweep #%d (%s)\n", recov_sweep_count,
+                        sweepToLeft ? "LEFT" : "RIGHT");
         }
       }
     }
@@ -1165,17 +1223,10 @@ void do_line_loop() {
         vL_tgt = 0;
         vR_tgt = 0;
       } else {
-        // Mat line -> giam toc manh, lech ve huong cuoi (luoi nho, khong di xa)
-        if (last_seen == LEFT) {
-          vL_tgt = v_base * 0.15f; // Rat cham, tranh vuot qua line
-          vR_tgt = v_base * 0.35f;
-        } else if (last_seen == RIGHT) {
-          vL_tgt = v_base * 0.35f;
-          vR_tgt = v_base * 0.15f;
-        } else {
-          vL_tgt = v_base * 0.3f;
-          vR_tgt = v_base * 0.3f;
-        }
+        // Mat line -> DUNG NGAY, cho recovery xu ly
+        // KHONG bo tien de tranh lech xa hon tren luoi nho 35x25cm
+        vL_tgt = 0;
+        vR_tgt = 0;
       }
     } else {
       vL_tgt = v_base;
