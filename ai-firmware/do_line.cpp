@@ -3,7 +3,7 @@
 
 // ================= Extern từ main.ino (dùng cho MODE_DELIVERY & MODE_AI_ROUTE)
 // =================
-extern int currentPath[15];
+extern int currentPath[20];
 extern int pathLength;
 extern int currentPathIndex;
 extern int currentDir;
@@ -15,13 +15,17 @@ extern void gripOpen();
 extern void gripClose();
 
 // ================= Tọa độ node trên bản đồ (dùng tính hướng rẽ)
-// =================
-const int node_coords[15][2] = {{30, 30},   {100, 30},  {170, 30},  {240, 30},
+// ================= Grid 4x5 = 20 node (0-19)
+const int NODE_COUNT = 20;
+const int node_coords[20][2] = {{30, 30},   {100, 30},  {170, 30},  {240, 30},
                                 {310, 30},  {30, 100},  {100, 100}, {170, 100},
                                 {240, 100}, {310, 100}, {30, 170},  {100, 170},
-                                {170, 170}, {240, 170}, {310, 170}};
+                                {170, 170}, {240, 170}, {310, 170}, {30, 240},
+                                {100, 240}, {170, 240}, {240, 240}, {310, 240}};
 
 int getTargetDirection(int nodeA, int nodeB) {
+  // ★ FIX C3: Validate node index to prevent OOB access
+  if (nodeA < 0 || nodeA >= NODE_COUNT || nodeB < 0 || nodeB >= NODE_COUNT) return -1;
   int dx = node_coords[nodeB][0] - node_coords[nodeA][0];
   int dy = node_coords[nodeB][1] - node_coords[nodeA][1];
   if (dy > 0)
@@ -85,7 +89,7 @@ float v_base = 0.4f;
 float v_boost = 0.15f;
 float v_hard = 0.20f;
 float v_search = 0.2f;
-float vF = v_base * 0.90f;
+// ★ FIX M6: Removed dead variable vF (was never used)
 
 // PID
 PID pidL{300.0f, 8.0f, 0.00f, 0, 0, 0, 255};
@@ -146,11 +150,14 @@ void IRAM_ATTR encR_isr() {
 
 // ================= Utils =================
 inline int clamp255(int v) { return v < 0 ? 0 : (v > 255 ? 255 : v); }
+// ★ FIX M4: Signed clamp [-255, 255] for PWM that can be negative (recovery sweep)
+inline int clampSigned255(int v) { return v < -255 ? -255 : (v > 255 ? 255 : v); }
 inline float clampf(float v, float lo, float hi) {
   return v < lo ? lo : (v > hi ? hi : v);
 }
 inline bool onLine(int pin) { return digitalRead(pin) == LOW; }
 
+// ★ FIX M4: shape_pwm now preserves sign for negative PWM (recovery sweep)
 static inline int shape_pwm(int target, int prev) {
   int s = target;
   if (s > 0 && s < PWM_MIN_RUN)
@@ -162,7 +169,7 @@ static inline int shape_pwm(int target, int prev) {
     s = prev + PWM_SLEW;
   if (d < -PWM_SLEW)
     s = prev - PWM_SLEW;
-  return clamp255(s);
+  return clampSigned255(s);
 }
 
 // ================= Motor control =================
@@ -205,16 +212,17 @@ float ticksToVel(long ticks, float dt_s) {
   return ((float)ticks / (float)PPR_EFFECTIVE * CIRC) / dt_s;
 }
 
+// ★ FIX M4: pidStep now returns signed value for bidirectional control
 int pidStep(PID &pid, float v_target, float v_meas, float dt_s) {
   if (dt_s < 0.001f)
     dt_s = 0.001f;
   float err = v_target - v_meas;
   pid.i_term += pid.Ki * err * dt_s;
-  pid.i_term = clampf(pid.i_term, pid.out_min, pid.out_max);
+  pid.i_term = clampf(pid.i_term, -pid.out_max, pid.out_max);
   float d = (err - pid.prev_err) / dt_s;
   float u = pid.Kp * err + pid.i_term + pid.Kd * d;
   pid.prev_err = err;
-  return clamp255((int)u);
+  return clampSigned255((int)u);
 }
 
 // ================= HC-SR04 =================
@@ -230,8 +238,18 @@ float readDistanceCM() {
   return dur * 0.0343f / 2.0f;
 }
 
+// ★ FIX M1: Median-of-3 filter for HC-SR04 noise reduction
 static float readDistanceCM_filtered() {
-  float d = readDistanceCM();
+  float samples[3];
+  for (int i = 0; i < 3; i++) {
+    samples[i] = readDistanceCM();
+    if (i < 2) delayMicroseconds(500);
+  }
+  // Sort 3 values to get median
+  if (samples[0] > samples[1]) { float t = samples[0]; samples[0] = samples[1]; samples[1] = t; }
+  if (samples[1] > samples[2]) { float t = samples[1]; samples[1] = samples[2]; samples[2] = t; }
+  if (samples[0] > samples[1]) { float t = samples[0]; samples[0] = samples[1]; samples[1] = t; }
+  float d = samples[1]; // median
   if (d < 2.0f || d > 200.0f)
     d = 999.0f;
   return d;
@@ -397,6 +415,7 @@ bool spin_right_deg(double deg, int pwmMax) {
 }
 
 // ================= Tien theo quang duong =================
+// ★ FIX M3: Added 5s timeout to prevent infinite blocking if encoder fails
 void move_forward_distance(double dist_m, int pwmAbs) {
   long target = countsForDistance(dist_m);
   long sL, sR;
@@ -404,11 +423,16 @@ void move_forward_distance(double dist_m, int pwmAbs) {
   sL = encL_total;
   sR = encR_total;
   interrupts();
+  unsigned long t0 = millis();
   motorWriteLR_signed(+pwmAbs, +pwmAbs);
   while (true) {
     if (!g_line_enabled) {
       motorsStop();
       return;
+    }
+    if (millis() - t0 > 5000) {
+      Serial.println("[FWD] TIMEOUT!");
+      break;
     }
     long cL, cR;
     noInterrupts();
@@ -428,6 +452,7 @@ void move_forward_distance(double dist_m, int pwmAbs) {
   motorsStop();
 }
 
+// ★ FIX M3: Added 5s timeout
 bool move_forward_distance_until_line(double dist_m, int pwmAbs) {
   long target = countsForDistance(dist_m);
   long sL, sR;
@@ -435,11 +460,16 @@ bool move_forward_distance_until_line(double dist_m, int pwmAbs) {
   sL = encL_total;
   sR = encR_total;
   interrupts();
+  unsigned long t0 = millis();
   motorWriteLR_signed(+pwmAbs, +pwmAbs);
   while (true) {
     if (!g_line_enabled) {
       motorsStop();
       return false;
+    }
+    if (millis() - t0 > 5000) {
+      Serial.println("[FWD_LINE] TIMEOUT!");
+      break;
     }
     long cL, cR;
     noInterrupts();
@@ -467,9 +497,14 @@ bool move_forward_distance_until_line(double dist_m, int pwmAbs) {
   return false;
 }
 
+// ★ FIX M7: Reset avoiding/obs state to prevent stale flags blocking next run
 void do_line_abort() {
   g_line_enabled = false;
   motorsStop();
+  avoiding = false;
+  obs_latched = false;
+  obs_hit = 0;
+  recovering = false;
 }
 
 void do_line_resume() {
@@ -729,6 +764,7 @@ void do_line_loop() {
   if (currentMode == MODE_AI_ROUTE && obs_latched && !avoiding) {
     motorsStop();
     obs_latched = false;
+    obs_hit = 0;  // ★ FIX L1: Reset hit counter to prevent immediate re-latch
     int robotNode = (lastConfirmedNodeIdx < pathLength)
                         ? currentPath[lastConfirmedNodeIdx]
                         : 0;
@@ -803,6 +839,7 @@ void do_line_loop() {
           motorWriteLR_signed(130, -130);
           unsigned long t0 = millis();
           while (millis() - t0 < 3500) {
+            if (!g_line_enabled) { motorsStop(); return; }  // ★ FIX L3: ESTOP check
             if (onLine(M_SENSOR) || onLine(L1_SENSOR) || onLine(R1_SENSOR))
               break;
             delay(5);
@@ -872,6 +909,10 @@ void do_line_loop() {
             move_forward_distance(0.03, 100);
             motorsStop();
             delay(300);
+
+            // ★ FIX M5: Reset PID i_term before turn to prevent motor jerk
+            pidL.i_term = 0; pidL.prev_err = 0;
+            pidR.i_term = 0; pidR.prev_err = 0;
 
             const int TURN_PWM = 160;
             bool turnOk = true;
@@ -1254,15 +1295,12 @@ void do_line_loop() {
     vR_tgt = clampf(vR_tgt, -V_MAX, V_MAX);
     int pwmL = pidStep(pidL, vL_tgt, vL_ema, dt_s);
     int pwmR = pidStep(pidR, vR_tgt, vR_ema, dt_s);
-    int pwmL_cmd = shape_pwm((int)(1.0f * pwmL), pwmL_prev);
-    int pwmR_cmd = shape_pwm((int)(1.0f * pwmR), pwmR_prev);
+    int pwmL_cmd = shape_pwm(pwmL, pwmL_prev);
+    int pwmR_cmd = shape_pwm(pwmR, pwmR_prev);
     pwmL_prev = pwmL_cmd;
     pwmR_prev = pwmR_cmd;
-    if (vL_tgt >= 0 && vR_tgt < 0) {
-      pwmR_cmd = pwmL_cmd;
-    } else if (vL_tgt < 0 && vR_tgt >= 0) {
-      pwmL_cmd = pwmR_cmd;
-    }
+    // ★ FIX C4: Removed PWM override that broke recovery sweep
+    //   Each wheel now gets its own PID-controlled PWM (signed)
     driveWheelLeft(vL_tgt, pwmL_cmd);
     driveWheelRight(vR_tgt, pwmR_cmd);
   }

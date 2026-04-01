@@ -38,7 +38,7 @@ volatile UIMode currentMode = MODE_MANUAL;
 bool line_mode = false;
 bool is_auto_running = false;
 
-int currentPath[15]; 
+int currentPath[20];  // ★ FIX C2: Grid 4x5 = 20 nodes, path can be up to 20
 int pathLength = 0;
 int currentTargetNode = -1;
 int currentPathIndex = 0;
@@ -68,7 +68,8 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
   switch(type) {
     case WS_EVT_CONNECT:
       Serial.printf("WS client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
-      client->text("{\"type\":\"WELCOME\",\"mode\":\"" + String(currentMode) + "\"}");
+      // ★ FIX L2: Send mode as int (JS handles numeric comparison)
+      client->text("{\"type\":\"WELCOME\",\"mode\":" + String(currentMode) + "}");
       break;
     case WS_EVT_DISCONNECT:
       Serial.printf("WS client #%u disconnected\n", client->id());
@@ -111,9 +112,9 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
     JsonArray pathArr = doc["path"].as<JsonArray>();
     pathLength = 0;
     for (JsonVariant v : pathArr) {
-      // ★ BUG FIX #8 — Node validation: chặn node ngoài range [0,14] để tránh OOB access
+      // ★ FIX C2: Node validation range [0,19] for 4x5 grid (20 nodes)
       int node = v.as<int>();
-      if (node >= 0 && node < 15 && pathLength < 15) currentPath[pathLength++] = node;
+      if (node >= 0 && node < 20 && pathLength < 20) currentPath[pathLength++] = node;
     }
     currentPathIndex = 0;
     
@@ -278,11 +279,16 @@ void setup() {
       String pathStr = r->getParam("path")->value();
       pathLength = 0;
       int startIdx = 0; int commaIdx = pathStr.indexOf(',');
-      while (commaIdx != -1 && pathLength < 15) {
-        currentPath[pathLength++] = pathStr.substring(startIdx, commaIdx).toInt();
+      while (commaIdx != -1 && pathLength < 20) {
+        // ★ FIX M9: Validate node range [0,19] for 4x5 grid
+        int node = pathStr.substring(startIdx, commaIdx).toInt();
+        if (node >= 0 && node < 20) currentPath[pathLength++] = node;
         startIdx = commaIdx + 1; commaIdx = pathStr.indexOf(',', startIdx);
       }
-      if (startIdx < pathStr.length() && pathLength < 15) currentPath[pathLength++] = pathStr.substring(startIdx).toInt();
+      if (startIdx < (int)pathStr.length() && pathLength < 20) {
+        int node = pathStr.substring(startIdx).toInt();
+        if (node >= 0 && node < 20) currentPath[pathLength++] = node;
+      }
       if(pathLength > 1) currentTargetNode = currentPath[1];
     }
     
@@ -321,7 +327,9 @@ void setup() {
   server.on("/return_home", HTTP_GET, [](AsyncWebServerRequest *r){
     // Dừng robot và trả vị trí hiện tại để web tính đường về
     stopCar(); do_line_abort();
-    int robotNode = (currentPathIndex < pathLength) ? currentPath[currentPathIndex] : 0;
+    // ★ FIX M8: Use lastConfirmedNodeIdx (actual position) instead of currentPathIndex (next target)
+    extern int lastConfirmedNodeIdx;
+    int robotNode = (lastConfirmedNodeIdx < pathLength) ? currentPath[lastConfirmedNodeIdx] : 0;
     currentMode = MODE_MANUAL;
     line_mode = false;
     is_auto_running = false;
