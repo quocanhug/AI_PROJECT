@@ -128,6 +128,10 @@ const unsigned long INTERSECTION_LATCH_MS = 100; // cua so 100ms
 
 bool needs_initial_turn = false;
 
+// ★ FIX L3: Timeout khi search line ban đầu
+unsigned long search_start_ms = 0;
+const unsigned long SEARCH_TIMEOUT_MS = 10000;
+
 // ★ NEW: Encoder distance tracking from last confirmed node
 // Used by recovery to limit reverse distance
 long enc_at_last_node_L = 0, enc_at_last_node_R = 0;
@@ -220,18 +224,22 @@ float readDistanceCM() {
   return dur * 0.0343f / 2.0f;
 }
 
+// ★ FIX C3: Single-shot non-blocking — 1 lần pulseIn mỗi call (~3ms thay vì ~10ms)
+// Dùng circular buffer 3 mẫu + lấy median để giảm blocking từ 40% CPU xuống ~12%
+static float us_ring[3] = {999.0f, 999.0f, 999.0f};
+static uint8_t us_ring_idx = 0;
+
 static float readDistanceCM_filtered() {
-  float samples[3];
-  for (int i = 0; i < 3; i++) {
-    samples[i] = readDistanceCM();
-    if (i < 2) delayMicroseconds(500);
-  }
-  if (samples[0] > samples[1]) { float t = samples[0]; samples[0] = samples[1]; samples[1] = t; }
-  if (samples[1] > samples[2]) { float t = samples[1]; samples[1] = samples[2]; samples[2] = t; }
-  if (samples[0] > samples[1]) { float t = samples[0]; samples[0] = samples[1]; samples[1] = t; }
-  float d = samples[1];
+  float d = readDistanceCM();
   if (d < 2.0f || d > 200.0f) d = 999.0f;
-  return d;
+  us_ring[us_ring_idx] = d;
+  us_ring_idx = (us_ring_idx + 1) % 3;
+  // Median of 3
+  float a = us_ring[0], b = us_ring[1], c = us_ring[2];
+  if (a > b) { float t = a; a = b; b = t; }
+  if (b > c) { float t = b; b = c; c = t; }
+  if (a > b) { float t = a; a = b; b = t; }
+  return b;
 }
 
 static inline void updateObstacleState() {
@@ -640,6 +648,7 @@ void do_line_setup() {
   recov_did_backup = false;
   lastConfirmedNodeIdx = 0;
   needs_initial_turn = true;
+  search_start_ms = 0;  // ★ FIX L3: Reset search timeout
   saveNodeEncoderRef();
 
   t_prev = millis();
@@ -743,6 +752,20 @@ void do_line_loop() {
   bool lost_all = !L2 && !L1 && !M && !R1 && !R2;
   if (lost_all) {
     if (!seen_line_ever && is_auto_running) {
+      // ★ FIX L3: Search timeout — dừng sau 10s nếu không tìm thấy line
+      if (search_start_ms == 0) search_start_ms = millis();
+      if (millis() - search_start_ms > SEARCH_TIMEOUT_MS) {
+        Serial.println("[LINE] Search timeout (10s) — stopping");
+        motorsStop();
+        currentMode = MODE_MANUAL;
+        is_auto_running = false;
+        line_mode = false;
+        extern void wsBroadcast(const char *);
+        wsBroadcast("{\"type\":\"OBSTACLE_DETECTED\",\"reason\":\"SEARCH_TIMEOUT\"}");
+        do_line_abort();
+        search_start_ms = 0;
+        return;
+      }
       bad_t = millis();
     } else if (!recovering && seen_line_ever && millis() - bad_t > 150) {
       Serial.println("[LINE] Lost >150ms -> entering RECOVERY");
@@ -811,7 +834,9 @@ void do_line_loop() {
   // ★ FIX: GIAO LO dung latch — L2 va R2 khong can trigger CUNG LUC
   // Chi can ca 2 da thay trong vong 100ms + it nhat 1 sensor giua
   // ============================================================
-  bool at_intersection = (l2_latched && r2_latched && (L1 || M || R1));
+  // ★ FIX C2+M1: Skip intersection khi recovering (tránh nhảy node sai);
+  //   Bỏ yêu cầu (L1||M||R1) — L2+R2 latch 100ms đã đủ detect intersection
+  bool at_intersection = !recovering && l2_latched && r2_latched;
 
   if (at_intersection) {
 
@@ -856,7 +881,7 @@ void do_line_loop() {
           int fromNode = currentPath[currentPathIndex];
           int toNode = currentPath[min(currentPathIndex + 1, pathLength - 1)];
           float expected = expectedDistM(fromNode, toNode);
-          float minDist = expected * 0.35f; // Toi thieu 35% quang duong ky vong
+          float minDist = expected * 0.55f; // ★ FIX M4: 55% thay vì 35% — tránh false intersection
           if (traveled < minDist) {
             Serial.printf("[NODE] FALSE intersection! dist=%.1fcm < min=%.1fcm (exp=%.1fcm) — SKIP\n",
                           traveled * 100, minDist * 100, expected * 100);
@@ -879,7 +904,15 @@ void do_line_loop() {
                           currentPath[currentPathIndex], currentPathIndex);
 
             if (currentMode == MODE_DELIVERY) {
-              gripOpen(); delay(1500); gripClose();
+              // ★ FIX M3: Non-blocking wait — kiểm tra g_line_enabled trong delay
+              gripOpen();
+              { unsigned long gt0 = millis();
+                while (millis() - gt0 < 1500) {
+                  if (!g_line_enabled) { gripClose(); return; }
+                  delay(10);
+                }
+              }
+              gripClose();
             } else {
               Serial.println("[AI_ROUTE] DESTINATION REACHED - COMPLETED");
               extern void wsBroadcast(const char *);
@@ -1181,6 +1214,14 @@ void do_line_loop() {
     interrupts();
     float vL_meas_inst = ticksToVel(cL, dt_s) * (vL_tgt >= 0 ? 1.0f : -1.0f);
     float vR_meas_inst = ticksToVel(cR, dt_s) * (vR_tgt >= 0 ? 1.0f : -1.0f);
+    // ★ FIX M2: Reset PID integral khi target đổi chiều — tránh windup
+    {
+      static float prev_vL_sign = 1.0f, prev_vR_sign = 1.0f;
+      float sL = (vL_tgt >= 0) ? 1.0f : -1.0f;
+      float sR = (vR_tgt >= 0) ? 1.0f : -1.0f;
+      if (sL != prev_vL_sign) { pidL.i_term = 0; prev_vL_sign = sL; }
+      if (sR != prev_vR_sign) { pidR.i_term = 0; prev_vR_sign = sR; }
+    }
     vL_ema = EMA_B * vL_ema + (1 - EMA_B) * vL_meas_inst;
     vR_ema = EMA_B * vR_ema + (1 - EMA_B) * vR_meas_inst;
     const float V_MAX = 1.5f;

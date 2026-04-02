@@ -91,7 +91,7 @@ Servo:        Pin=18 (gripper: Open=120°, Close=175°)
 ### Dynamic Re-routing (vật cản bất ngờ)
 
 ```
-1. HC-SR04 phát hiện vật cản < 25cm (latched sau 2 lần liên tiếp)
+1. HC-SR04 phát hiện vật cản < 25cm (latched sau 3 lần liên tiếp)
 2. Robot dừng → gửi OBSTACLE_DETECTED { robotNode, obstacleNode, robotDir }
 3. Web nhận → thêm node vào obstacles set → tính đường mới
 4. Web gửi ROUTE mới { path: [...], initialDir: ... }
@@ -110,11 +110,11 @@ Servo:        Pin=18 (gripper: Open=120°, Close=175°)
 ### Intersection Detection & Turn
 - Trigger: `L2 && R2` (cả 2 mắt ngoài thấy line ngang)
 - Debounce: 500ms
-- Flow: Dừng → Tiến 3cm centering → Tính hướng → Spin (60° × 1.5 ≈ 90°) → Tìm line (tiến max 10cm) → PID
+- Flow: Dừng → center_on_intersection() → Tính hướng → Spin (90° thực) → seek_line_after_turn → PID
 
 ### Obstacle Handling
 - HC-SR04 median filter (3 lần), polling mỗi 25ms
-- Hysteresis: ON < 25cm, OFF > 30cm, cần 2 lần liên tiếp
+- Hysteresis: ON < 25cm, OFF > 30cm, cần 3 lần liên tiếp (OBS_HIT_N = 3)
 - MODE_AI_ROUTE: dừng + báo web (web re-route)
 - Các mode khác: physical avoidance (spin + forward sequence)
 
@@ -155,9 +155,9 @@ Servo:        Pin=18 (gripper: Open=120°, Close=175°)
 1. **Không có Internet**: ESP32 chạy AP mode, web load từ LittleFS. KHÔNG dùng CDN.
 2. **tailwind.min.js quá lớn (451KB)**: Tổng web files ~762KB trên ~1MB LittleFS.
 3. **Motor pins trùng**: `ai-firmware.ino` và `do_line.cpp` đều define IN1-IN4/ENA/ENB. Sửa pin phải sửa CẢ HAI.
-4. **Hệ số 1.5x trong spin**: `spin_left_deg(deg)` quay `deg × 1.5` do target calculation.
+4. **Hệ số 1.5x trong spin**: ĐÃ LOẠI BỎ. `spin_left_deg(deg)` quay đúng `deg` (góc thực).
 5. **Encoders debounce**: MIN_EDGE_US = 1500μs.
-6. **Sonar blocking**: `readDistanceCM_filtered()` block ~30ms (3× pulseIn + delay).
+6. **Sonar non-blocking**: `readDistanceCM_filtered()` chỉ đọc 1 lần mỗi call (~3ms), dùng circular buffer 3 mẫu + median.
 
 ---
 

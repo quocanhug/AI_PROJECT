@@ -44,6 +44,13 @@ int currentTargetNode = -1;
 int currentPathIndex = 0;
 int currentDir = 1; 
 
+// ★ FIX C1: Double-buffer — WS task ghi vào pending*, loop() copy sang current*
+// Tránh race condition khi WS task và loop() chạy trên 2 core khác nhau
+static int pendingPath[15];
+static int pendingPathLength = 0;
+static int pendingDir = 0;
+static volatile bool route_pending = false;
+
 volatile int delivered_count = 0;
 volatile float avg_time_sec = 0.0;
 volatile int robot_efficiency = 100;
@@ -105,38 +112,34 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
     client->text("{\"type\":\"PONG\"}");
   }
   else if (strcmp(type, "ROUTE") == 0) {
-    // Nạp path node trực tiếp vào currentPath[] — dùng do_line_loop() đã ổn định
+    // ★ FIX C1: Ghi vào pending buffer — loop() sẽ copy sang currentPath[] an toàn
+    // WS handler chạy trên core khác với loop(), không được ghi trực tiếp currentPath[]
     stopCar();
+    do_line_abort();  // Dừng do_line_loop() ngay lập tức (g_line_enabled = false)
     
-    // Parse path array từ JSON: [0, 1, 6, 7, 12, ...]
+    // Parse path array vào pending buffer
     JsonArray pathArr = doc["path"].as<JsonArray>();
-    pathLength = 0;
+    pendingPathLength = 0;
     for (JsonVariant v : pathArr) {
-      // Grid thuc te 4x2 = 15 node (0-14)
       int node = v.as<int>();
-      if (node >= 0 && node < 15 && pathLength < 15) currentPath[pathLength++] = node;
+      if (node >= 0 && node < 15 && pendingPathLength < 15)
+        pendingPath[pendingPathLength++] = node;
     }
-    currentPathIndex = 0;
     
-    // Tính hướng ban đầu từ 2 node đầu tiên
+    // Tính hướng ban đầu
     if (doc.containsKey("initialDir")) {
       int dir = doc["initialDir"] | 0;
-      currentDir = (dir >= 0 && dir <= 3) ? dir : 0;  // Validate [0,3]
-    } else if (pathLength >= 2) {
-      // Tự tính từ node_coords trong do_line.cpp
+      pendingDir = (dir >= 0 && dir <= 3) ? dir : 0;
+    } else if (pendingPathLength >= 2) {
       extern int getTargetDirection(int, int);
-      currentDir = getTargetDirection(currentPath[0], currentPath[1]);
+      pendingDir = getTargetDirection(pendingPath[0], pendingPath[1]);
     }
     
-    do_line_setup();
-    currentMode = MODE_AI_ROUTE;
-    line_mode = true;
-    is_auto_running = true;
+    route_pending = true;  // Signal loop() to pick up
     
-    // Gửi ACK về Web
-    String ack = "{\"type\":\"ROUTE_ACK\",\"commands\":" + String(pathLength) + "}";
+    String ack = "{\"type\":\"ROUTE_ACK\",\"commands\":" + String(pendingPathLength) + "}";
     ws.textAll(ack);
-    Serial.printf("AI Route: %d nodes loaded, dir=%d\n", pathLength, currentDir);
+    Serial.printf("AI Route: %d nodes pending, dir=%d\n", pendingPathLength, pendingDir);
   }
   else if (strcmp(type, "STOP") == 0 || strcmp(type, "ESTOP") == 0) {
     stopCar();
@@ -373,6 +376,20 @@ void loop() {
   // Cleanup disconnected WS clients periodically
   static unsigned long lastCleanup = 0;
   if (millis() - lastCleanup > 1000) { ws.cleanupClients(); lastCleanup = millis(); }
+
+  // ★ FIX C1: Apply pending route safely trên cùng core với do_line_loop()
+  if (route_pending) {
+    route_pending = false;
+    for (int i = 0; i < pendingPathLength; i++) currentPath[i] = pendingPath[i];
+    pathLength = pendingPathLength;
+    currentPathIndex = 0;
+    currentDir = pendingDir;
+    do_line_setup();
+    currentMode = MODE_AI_ROUTE;
+    line_mode = true;
+    is_auto_running = true;
+    Serial.printf("AI Route ACTIVE: %d nodes, dir=%d\n", pathLength, currentDir);
+  }
 
   if ((currentMode == MODE_LINE_ONLY || currentMode == MODE_DELIVERY || currentMode == MODE_AI_ROUTE) && is_auto_running) {
     do_line_loop();
