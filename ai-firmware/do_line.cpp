@@ -652,6 +652,10 @@ void do_line_loop() {
   if (!g_line_enabled) { motorsStop(); return; }
 
   // ===== INITIAL TURN: Xoay xe chuan huong khi nhan route moi =====
+  // ★ FIX CRITICAL: Xe dang dung TAI path[0] (node xuat phat).
+  // Chi CAN xoay huong, KHONG tang currentPathIndex.
+  // currentPathIndex = 0 nghia la xe dang o path[0], chua di den path[1].
+  // Khi xe di den intersection DAU TIEN, do la path[1].
   if (needs_initial_turn) {
     needs_initial_turn = false;
 
@@ -673,7 +677,6 @@ void do_line_loop() {
         motorsStop();
         delay(300);
 
-        // ★ FIX: Goc thuc te — 90° va 180° (khong nhan 1.5)
         if (diff == 1) {
           turnOk = spin_left_deg(90.0, TURN_PWM);
           Serial.println("  >> INIT LEFT 90deg");
@@ -704,19 +707,14 @@ void do_line_loop() {
           return;
         }
 
-        // ★ FIX: Dung seek_line_after_turn thay vi tim line bat ky
-        bool lineFoundAfterTurn = seek_line_after_turn(diff == 1);
-
+        seek_line_after_turn(diff == 1);
         currentDir = targetDir;
-        if (lineFoundAfterTurn) currentPathIndex++;
-        last_intersection_time = millis();
-        seen_line_ever = true;
-        saveNodeEncoderRef();
-        return;
       }
 
-      // STRAIGHT case: targetDir == currentDir, khong can xoay
-      currentPathIndex++;
+      // ★ FIX: KHONG tang currentPathIndex!
+      // Xe van o path[0]. Intersection DAU TIEN se la path[1].
+      Serial.printf("[INIT_TURN] Done. pathIdx=%d, dir=%d → ready to go to path[1]=node%d\n",
+                    currentPathIndex, currentDir, currentPath[min(currentPathIndex + 1, pathLength - 1)]);
       last_intersection_time = millis();
       seen_line_ever = true;
       saveNodeEncoderRef();
@@ -851,30 +849,34 @@ void do_line_loop() {
 
         if (pathLength > 0) {
           // ★ FIX: Distance validation — reject false intersections
-          // Xe phai di DU quang duong giua 2 node truoc khi chap nhan intersection
-          if (currentPathIndex > 0) {
-            float traveled = getDistFromLastNode();
-            int prevNode = currentPath[currentPathIndex - 1];
-            int curExpectedNode = currentPath[min(currentPathIndex, pathLength - 1)];
-            float expected = expectedDistM(prevNode, curExpectedNode);
-            float minDist = expected * 0.5f; // Toi thieu 50% quang duong ky vong
-            if (traveled < minDist) {
-              Serial.printf("[NODE] FALSE intersection! dist=%.1fcm < min=%.1fcm (exp=%.1fcm) — SKIP\n",
-                            traveled * 100, minDist * 100, expected * 100);
-              // Bo qua intersection gia — tien qua va tiep tuc do line
-              move_forward_distance(0.04, 100);
-              last_intersection_time = millis();
-              return;
-            }
-            Serial.printf("[NODE] Distance OK: %.1fcm (exp=%.1fcm)\n", traveled * 100, expected * 100);
+          // pathIdx=0 nghia la xe dang o START.
+          // Node dau tien xe gap la path[1] (vi path[0] la start).
+          // Kiem tra khoang cach: xe phai di DU tu path[currentPathIndex] den path[currentPathIndex+1]
+          float traveled = getDistFromLastNode();
+          int fromNode = currentPath[currentPathIndex];
+          int toNode = currentPath[min(currentPathIndex + 1, pathLength - 1)];
+          float expected = expectedDistM(fromNode, toNode);
+          float minDist = expected * 0.35f; // Toi thieu 35% quang duong ky vong
+          if (traveled < minDist) {
+            Serial.printf("[NODE] FALSE intersection! dist=%.1fcm < min=%.1fcm (exp=%.1fcm) — SKIP\n",
+                          traveled * 100, minDist * 100, expected * 100);
+            move_forward_distance(0.04, 100);
+            last_intersection_time = millis();
+            return;
           }
+          Serial.printf("[NODE] Distance OK: %.1fcm (exp=%.1fcm) pathIdx=%d\n",
+                        traveled * 100, expected * 100, currentPathIndex);
+
+          // ★ FIX: Tang pathIndex TRUOC — xe vua den node path[currentPathIndex+1]
+          currentPathIndex++;
+          lastConfirmedNodeIdx = currentPathIndex;
 
           // Kiem tra da den dich chua
           if (currentPathIndex >= pathLength - 1) {
             move_forward_distance(0.02, 90);
             motorsStop(); delay(200);
-            Serial.printf("[AI_ROUTE] ARRIVED at node %d\n",
-                          currentPath[pathLength - 1]);
+            Serial.printf("[AI_ROUTE] ARRIVED at node %d (pathIdx=%d)\n",
+                          currentPath[currentPathIndex], currentPathIndex);
 
             if (currentMode == MODE_DELIVERY) {
               gripOpen(); delay(1500); gripClose();
@@ -882,7 +884,7 @@ void do_line_loop() {
               Serial.println("[AI_ROUTE] DESTINATION REACHED - COMPLETED");
               extern void wsBroadcast(const char *);
               String msg = "{\"type\":\"COMPLETED\",\"robotNode\":" +
-                           String(currentPath[pathLength - 1]) +
+                           String(currentPath[currentPathIndex]) +
                            ",\"robotDir\":" + String(currentDir) + "}";
               wsBroadcast(msg.c_str());
             }
@@ -894,18 +896,16 @@ void do_line_loop() {
             return;
           }
 
-          // Tinh huong re
+          // Tinh huong re: tu node hien tai den node ke tiep
           int curNode = currentPath[currentPathIndex];
           int nxtNode = currentPath[currentPathIndex + 1];
           int targetDir = getTargetDirection(curNode, nxtNode);
           int diff = (targetDir != -1) ? (targetDir - currentDir + 4) % 4 : 0;
-          Serial.printf("[NODE] path[%d]=node%d -> node%d, dir %d->%d (diff=%d)\n",
-                        currentPathIndex, curNode, nxtNode, currentDir, targetDir, diff);
+          Serial.printf("[NODE] AT node%d, NEXT node%d, dir %d->%d (diff=%d)\n",
+                        curNode, nxtNode, currentDir, targetDir, diff);
 
           if (diff == 0) {
             // DI THANG — tien qua giao lo
-            lastConfirmedNodeIdx = currentPathIndex;
-            currentPathIndex++;
             currentDir = targetDir;
             move_forward_distance(0.04, 100); // 4cm qua cross-bar
             last_seen = NONE;
@@ -954,11 +954,9 @@ void do_line_loop() {
             }
 
             currentDir = targetDir;
-            lastConfirmedNodeIdx = currentPathIndex;
 
             // ★ FIX: Dung seek_line_after_turn thay vi tim bat ky line
             bool lineFound = seek_line_after_turn(diff == 1);
-            currentPathIndex++;
             saveNodeEncoderRef();
 
             if (!lineFound) {
