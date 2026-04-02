@@ -14,7 +14,6 @@ extern volatile UIMode currentMode;
 extern void gripOpen();
 extern void gripClose();
 
-// ================= Tọa độ node trên bản đồ (dùng tính hướng rẽ)
 // ================= Grid thuc te: 4x2 o (5 cot x 3 hang) = 15 node (0-14)
 // Moi o: 25cm rong x 35cm cao,
 const int NODE_COUNT = 15;
@@ -82,7 +81,7 @@ const unsigned long US_PERIOD_MS = 25;
 
 // ================= Thong so co khi =================
 const float WHEEL_RADIUS_M = 0.0325f;
-extern const float CIRC = 2.0f * 3.1415926f * WHEEL_RADIUS_M;
+const float CIRC = 2.0f * 3.1415926f * WHEEL_RADIUS_M;
 const float TRACK_WIDTH_M = 0.1150f;
 
 // ================= Tham so dieu khien =================
