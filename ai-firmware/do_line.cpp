@@ -74,11 +74,7 @@ const unsigned long US_PERIOD_MS = 25;
 
 // ================= Thong so co khi =================
 const float WHEEL_RADIUS_M = 0.0325f;
-<<<<<<< HEAD
 extern const float CIRC = 2.0f * 3.1415926f * WHEEL_RADIUS_M;
-=======
-const float CIRC = 2.0f * 3.1415926f * WHEEL_RADIUS_M;
->>>>>>> 43a64a617f94445e758c7faa019c2cfe473e3410
 const float TRACK_WIDTH_M = 0.1150f;
 
 // ================= Tham so dieu khien =================
