@@ -50,6 +50,7 @@ static int pendingPath[15];
 static int pendingPathLength = 0;
 static int pendingDir = 0;
 static volatile bool route_pending = false;
+static volatile UIMode pendingMode = MODE_AI_ROUTE;
 
 volatile int delivered_count = 0;
 volatile float avg_time_sec = 0.0;
@@ -135,6 +136,7 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
       pendingDir = getTargetDirection(pendingPath[0], pendingPath[1]);
     }
     
+    pendingMode = MODE_AI_ROUTE;
     route_pending = true;  // Signal loop() to pick up
     
     String ack = "{\"type\":\"ROUTE_ACK\",\"commands\":" + String(pendingPathLength) + "}";
@@ -276,31 +278,38 @@ void setup() {
   });
 
   server.on("/deliver", HTTP_GET, [](AsyncWebServerRequest* r){
-    if (r->hasParam("dir")) currentDir = r->getParam("dir")->value().toInt();
-    currentPathIndex = 0; 
+    // ★ FIX: Dùng pendingPath[] tránh race condition (giống ROUTE handler)
+    stopCar();
+    do_line_abort();
     
+    // Parse path
+    pendingPathLength = 0;
     if (r->hasParam("path")) {
       String pathStr = r->getParam("path")->value();
-      pathLength = 0;
       int startIdx = 0; int commaIdx = pathStr.indexOf(',');
-      while (commaIdx != -1 && pathLength < 15) {
-        // Grid thuc te 4x2 = 15 node, validate [0,14]
+      while (commaIdx != -1 && pendingPathLength < 15) {
         int node = pathStr.substring(startIdx, commaIdx).toInt();
-        if (node >= 0 && node < 15) currentPath[pathLength++] = node;
+        if (node >= 0 && node < 15) pendingPath[pendingPathLength++] = node;
         startIdx = commaIdx + 1; commaIdx = pathStr.indexOf(',', startIdx);
       }
-      if (startIdx < (int)pathStr.length() && pathLength < 15) {
+      if (startIdx < (int)pathStr.length() && pendingPathLength < 15) {
         int node = pathStr.substring(startIdx).toInt();
-        if (node >= 0 && node < 15) currentPath[pathLength++] = node;
+        if (node >= 0 && node < 15) pendingPath[pendingPathLength++] = node;
       }
-      if(pathLength > 1) currentTargetNode = currentPath[1];
     }
     
-    stopCar();
-    do_line_setup();
-    currentMode = MODE_DELIVERY;
-    line_mode = true;
-    is_auto_running = true;
+    // Parse direction
+    pendingDir = currentDir;  // Default: giữ hướng hiện tại
+    if (r->hasParam("dir")) {
+      int dir = r->getParam("dir")->value().toInt();
+      pendingDir = (dir >= 0 && dir <= 3) ? dir : pendingDir;
+    } else if (pendingPathLength >= 2) {
+      extern int getTargetDirection(int, int);
+      pendingDir = getTargetDirection(pendingPath[0], pendingPath[1]);
+    }
+    
+    pendingMode = MODE_DELIVERY;
+    route_pending = true;
     
     r->send(200, "text/plain", "OK");
   });
@@ -385,7 +394,7 @@ void loop() {
     currentPathIndex = 0;
     currentDir = pendingDir;
     do_line_setup();
-    currentMode = MODE_AI_ROUTE;
+    currentMode = pendingMode;
     line_mode = true;
     is_auto_running = true;
     Serial.printf("AI Route ACTIVE: %d nodes, dir=%d\n", pathLength, currentDir);

@@ -433,7 +433,8 @@ void center_on_intersection() {
     long cL, cR;
     noInterrupts(); cL = encL_total; cR = encR_total; interrupts();
     if (labs(cL - sL) >= target1 || labs(cR - sR) >= target1) {
-      Serial.println("[CENTER] Phase1: max dist");
+      Serial.println("[CENTER] Phase1: max dist, forcing Phase2");
+      cross_cleared = true;
       break;
     }
     if (!onLine(L2_SENSOR) && !onLine(R2_SENSOR)) {
@@ -572,7 +573,12 @@ void do_line_abort() {
 
 void do_line_resume() {
   g_line_enabled = true;
-  seen_line_ever = true;
+  // ★ FIX: Kiểm tra sensor thực tế — nếu robot bị di chuyển thủ công, có thể không trên line
+  seen_line_ever = (digitalRead(M_SENSOR) == LOW ||
+                    digitalRead(L1_SENSOR) == LOW ||
+                    digitalRead(R1_SENSOR) == LOW ||
+                    digitalRead(L2_SENSOR) == LOW ||
+                    digitalRead(R2_SENSOR) == LOW);
   recovering = false;
   avoiding = false;
   recov_did_backup = false;
@@ -748,6 +754,9 @@ void do_line_loop() {
   if (now_ms - l2_latch_ms > INTERSECTION_LATCH_MS) l2_latched = false;
   if (now_ms - r2_latch_ms > INTERSECTION_LATCH_MS) r2_latched = false;
 
+  // ★ FIX: Obstacle check TRƯỚC lost-line — tránh bỏ sót vật cản khi recovery
+  updateObstacleState();
+
   // ===== Mat line hoan toan -> recovery =====
   bool lost_all = !L2 && !L1 && !M && !R1 && !R2;
   if (lost_all) {
@@ -784,8 +793,6 @@ void do_line_loop() {
     }
   }
 
-  updateObstacleState();
-
   // ===== AI Route: vat can -> dung, bao Web =====
   if ((currentMode == MODE_AI_ROUTE || currentMode == MODE_DELIVERY) &&
       obs_latched && !avoiding) {
@@ -794,8 +801,9 @@ void do_line_loop() {
     obs_hit = 0;
     int robotNode = (lastConfirmedNodeIdx < pathLength)
                         ? currentPath[lastConfirmedNodeIdx] : 0;
-    int obstacleNode = (currentPathIndex < pathLength)
-                           ? currentPath[currentPathIndex] : robotNode;
+    // ★ FIX: obstacleNode = node tiếp theo (robot đang hướng tới), không phải node đang đứng
+    int obstacleNode = (currentPathIndex + 1 < pathLength)
+                           ? currentPath[currentPathIndex + 1] : robotNode;
     extern void wsBroadcast(const char *);
     String msg = "{\"type\":\"OBSTACLE_DETECTED\","
                  "\"robotNode\":" + String(robotNode) +
@@ -814,7 +822,8 @@ void do_line_loop() {
   }
 
   // ===== Cac mode khac: tranh vat can vat ly =====
-  if (obs_latched && !avoiding && currentMode != MODE_AI_ROUTE) {
+  // ★ FIX: MODE_DELIVERY cũng dùng web re-routing, không physical avoidance
+  if (obs_latched && !avoiding && currentMode != MODE_AI_ROUTE && currentMode != MODE_DELIVERY) {
     avoiding = true;
     motorsStop();
     noInterrupts(); encL_count = 0; encR_count = 0; interrupts();
@@ -839,6 +848,10 @@ void do_line_loop() {
   bool at_intersection = !recovering && l2_latched && r2_latched;
 
   if (at_intersection) {
+
+    // ★ FIX: Refresh latch khi at_intersection nhưng bị debounce block — tránh hết hạn 100ms
+    l2_latch_ms = now_ms;
+    r2_latch_ms = now_ms;
 
     // --- MODE_LINE_ONLY: di thang qua giao lo ---
     if (currentMode == MODE_LINE_ONLY) {
@@ -1001,6 +1014,9 @@ void do_line_loop() {
             }
           }
         }
+        // ★ FIX: Reset PID timing — tránh dt spike sau blocking intersection processing
+        noInterrupts(); encL_count = 0; encR_count = 0; interrupts();
+        t_prev = millis();
         return;
       }
       last_seen = NONE;
