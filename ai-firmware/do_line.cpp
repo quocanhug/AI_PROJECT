@@ -116,8 +116,15 @@ bool recov_did_backup = false;
 
 int lastConfirmedNodeIdx = 0;
 
-const unsigned long INTERSECTION_DEBOUNCE_MS = 500;
+const unsigned long INTERSECTION_DEBOUNCE_MS = 300;
 unsigned long last_intersection_time = 0;
+
+// ★ FIX: Latch L2/R2 trong cua so thoi gian
+// Khi xe hoi lech, L2 va R2 khong trigger CUNG LUC.
+// Latch: nho L2/R2 trong 100ms de khong bo lo node.
+static bool l2_latched = false, r2_latched = false;
+static unsigned long l2_latch_ms = 0, r2_latch_ms = 0;
+const unsigned long INTERSECTION_LATCH_MS = 100; // cua so 100ms
 
 bool needs_initial_turn = false;
 
@@ -572,6 +579,8 @@ void do_line_resume() {
 
   t_prev = millis();
   bad_t = millis();
+  l2_latched = false; r2_latched = false;
+  l2_latch_ms = 0; r2_latch_ms = 0;
 
   currentPathIndex = lastConfirmedNodeIdx;
   needs_initial_turn = true;
@@ -623,6 +632,8 @@ void do_line_setup() {
   pidL.i_term = 0; pidL.prev_err = 0;
   pidR.i_term = 0; pidR.prev_err = 0;
   last_intersection_time = 0;
+  l2_latched = false; r2_latched = false;
+  l2_latch_ms = 0; r2_latch_ms = 0;
   last_seen = NONE;
   recovering = false;
   recov_sweep_count = 0;
@@ -720,6 +731,16 @@ void do_line_loop() {
 
   if (L2 || L1 || M || R1 || R2) seen_line_ever = true;
 
+  // ★ FIX: Latch L2/R2 — nho trang thai trong cua so 100ms
+  // Khi xe lech goc, L2 trigger truoc R2 (hoac nguoc lai) vai ms.
+  // Latch dam bao khong bo lo khi 2 sensor khong dong thoi.
+  unsigned long now_ms = millis();
+  if (L2) { l2_latched = true; l2_latch_ms = now_ms; }
+  if (R2) { r2_latched = true; r2_latch_ms = now_ms; }
+  // Het han latch
+  if (now_ms - l2_latch_ms > INTERSECTION_LATCH_MS) l2_latched = false;
+  if (now_ms - r2_latch_ms > INTERSECTION_LATCH_MS) r2_latched = false;
+
   // ===== Mat line hoan toan -> recovery =====
   bool lost_all = !L2 && !L1 && !M && !R1 && !R2;
   if (lost_all) {
@@ -789,9 +810,10 @@ void do_line_loop() {
   float vL_tgt = 0, vR_tgt = 0;
 
   // ============================================================
-  // GIAO LO: Ca L2 VA R2 deu thay vach ngang
+  // ★ FIX: GIAO LO dung latch — L2 va R2 khong can trigger CUNG LUC
+  // Chi can ca 2 da thay trong vong 100ms + it nhat 1 sensor giua
   // ============================================================
-  bool at_intersection = (L2 && R2 && (L1 || M || R1));
+  bool at_intersection = (l2_latched && r2_latched && (L1 || M || R1));
 
   if (at_intersection) {
 
@@ -799,6 +821,7 @@ void do_line_loop() {
     if (currentMode == MODE_LINE_ONLY) {
       if (millis() - last_intersection_time > INTERSECTION_DEBOUNCE_MS) {
         last_intersection_time = millis();
+        l2_latched = false; r2_latched = false;
         motorsStop(); delay(200);
         move_forward_distance(0.06, 120);
         if (!onLine(M_SENSOR) && !onLine(L1_SENSOR) && !onLine(R1_SENSOR)) {
@@ -823,6 +846,8 @@ void do_line_loop() {
     else if (currentMode == MODE_DELIVERY || currentMode == MODE_AI_ROUTE) {
       if (millis() - last_intersection_time > INTERSECTION_DEBOUNCE_MS) {
         last_intersection_time = millis();
+        // Reset latch sau khi chap nhan intersection
+        l2_latched = false; r2_latched = false;
 
         if (pathLength > 0) {
           // ★ FIX: Distance validation — reject false intersections
