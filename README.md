@@ -1,7 +1,8 @@
 # 🤖 AI Delivery Robot — Xe Robot Giao hàng Tự hành
 
-> **Đồ án môn học: Trí tuệ Nhân tạo**
-> GVHD: PGS. TS Hoàng Văn Dũng
+**Đồ án môn học: Trí tuệ Nhân tạo**
+
+**GVHD: PGS. TS Hoàng Văn Dũng**
 > Xây dựng Hệ thống Xe Robot Giao hàng Tự hành Dò Line Tránh Vật cản
 > Ứng dụng Thuật toán Tìm kiếm AI (BFS / DFS / UCS / A* / Greedy)
 > với Giao diện Web Điều khiển và Mô phỏng Real-time
