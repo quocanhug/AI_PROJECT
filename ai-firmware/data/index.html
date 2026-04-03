@@ -50,7 +50,7 @@
             "inverse-on-surface": "#f0f1f2",
             "inverse-primary": "#aac7ff",
           },
-          fontFamily: { "headline": ["system-ui","sans-serif"], "body": ["system-ui","sans-serif"], "label": ["system-ui","sans-serif"] },
+          fontFamily: { "headline": ["system-ui", "sans-serif"], "body": ["system-ui", "sans-serif"], "label": ["system-ui", "sans-serif"] },
           borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" },
         },
       },
@@ -260,8 +260,7 @@
         <!-- Robot State/Step -->
         <section class="bg-surface-container-lowest p-8 rounded-[2rem] shadow-sm border border-primary/20 flex-1">
           <div class="flex items-center gap-3 mb-6">
-            <div class="bg-primary/10 p-2 rounded-xl"><span
-                class="text-primary">📍</span></div>
+            <div class="bg-primary/10 p-2 rounded-xl"><span class="text-primary">📍</span></div>
             <h3 class="text-lg font-black uppercase tracking-widest text-on-surface">Trạng thái Robot</h3>
           </div>
           <div class="space-y-4">
@@ -385,8 +384,10 @@
               </div>
               <div class="flex items-center gap-3 text-[11px] font-semibold">
                 <span>Step: <b class="text-on-surface" id="animStepNum">0</b>/<b id="animTotalSteps">0</b></span>
-                <span class="flex items-center gap-1"><span class="anim-legend-dot" style="background:#f59e0b"></span> <b class="text-amber-700" id="animExploredCount">0</b></span>
-                <span class="flex items-center gap-1"><span class="anim-legend-dot" style="background:#3b82f6"></span> <b class="text-blue-700" id="animFrontierCount">0</b></span>
+                <span class="flex items-center gap-1"><span class="anim-legend-dot" style="background:#f59e0b"></span>
+                  <b class="text-amber-700" id="animExploredCount">0</b></span>
+                <span class="flex items-center gap-1"><span class="anim-legend-dot" style="background:#3b82f6"></span>
+                  <b class="text-blue-700" id="animFrontierCount">0</b></span>
               </div>
             </div>
           </div>
@@ -434,10 +435,14 @@
               </div>
             </div>
             <div class="pt-2 space-y-2">
-              <button class="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-primary-container text-on-primary px-4 py-3 rounded-xl text-sm font-bold shadow-lg shadow-primary/20 hover:brightness-110 transition-all active:scale-[0.98]" onclick="animStart()">
+              <button
+                class="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-primary-container text-on-primary px-4 py-3 rounded-xl text-sm font-bold shadow-lg shadow-primary/20 hover:brightness-110 transition-all active:scale-[0.98]"
+                onclick="animStart()">
                 ⏯ MÔ PHỎNG THUẬT TOÁN
               </button>
-              <button class="w-full flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-3 rounded-xl text-sm font-bold shadow-lg shadow-green-600/20 hover:bg-green-700 transition-all active:scale-[0.98]" id="deliverBtn2" onclick="document.getElementById('deliverBtn').click()">
+              <button
+                class="w-full flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-3 rounded-xl text-sm font-bold shadow-lg shadow-green-600/20 hover:bg-green-700 transition-all active:scale-[0.98]"
+                id="deliverBtn2" onclick="document.getElementById('deliverBtn').click()">
                 🚀 NẠP LỘ TRÌNH & CHO XE CHẠY
               </button>
             </div>
@@ -447,15 +452,13 @@
             <button
               class="flex flex-col items-center justify-center p-4 bg-white border border-outline-variant/20 rounded-xl hover:bg-slate-50 transition-colors group"
               onclick="sendCommand('/return_home')">
-              <span
-                class="text-primary mb-1 group-active:scale-90 transition-transform text-xl">🏭</span>
+              <span class="text-primary mb-1 group-active:scale-90 transition-transform text-xl">🏭</span>
               <span class="text-xs font-bold text-primary">VỀ KHO</span>
             </button>
             <button
               class="flex flex-col items-center justify-center p-4 bg-white border border-outline-variant/20 rounded-xl hover:bg-slate-50 transition-colors group"
               onclick="sendCommand('/resume')">
-              <span
-                class="text-on-surface-variant mb-1 group-active:scale-90 transition-transform text-xl">⏭</span>
+              <span class="text-on-surface-variant mb-1 group-active:scale-90 transition-transform text-xl">⏭</span>
               <span class="text-xs font-bold text-on-surface-variant">TIẾP TỤC</span>
             </button>
             <button
@@ -591,7 +594,8 @@
             <div class="flex items-center justify-between mb-6">
               <div>
                 <h3 class="text-lg font-bold tracking-tight">📊 So sánh 5 Thuật toán Tìm đường</h3>
-                <p class="text-xs text-on-surface-variant">So sánh Số bước, Node đã duyệt, Thời gian tính toán giữa các thuật toán</p>
+                <p class="text-xs text-on-surface-variant">So sánh Số bước, Node đã duyệt, Thời gian tính toán giữa các
+                  thuật toán</p>
               </div>
               <button
                 class="flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:bg-primary/90 transition-all"
@@ -629,7 +633,8 @@
             </div>
             <div id="algoEvaluationArea">
               <!-- Populated by renderEvaluationCards() when Compare All is clicked -->
-              <p class="text-sm text-on-surface-variant text-center py-6">Nhấn <b>"📊 So Sánh Tất Cả"</b> để xem đánh giá chi tiết</p>
+              <p class="text-sm text-on-surface-variant text-center py-6">Nhấn <b>"📊 So Sánh Tất Cả"</b> để xem đánh
+                giá chi tiết</p>
             </div>
           </div>
 

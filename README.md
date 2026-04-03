@@ -1,6 +1,7 @@
 # 🤖 AI Delivery Robot — Xe Robot Giao hàng Tự hành
 
 > **Đồ án môn học: Trí tuệ Nhân tạo**
+> GVHD: PGS. TS Hoàng Văn Dũng
 > Xây dựng Hệ thống Xe Robot Giao hàng Tự hành Dò Line Tránh Vật cản
 > Ứng dụng Thuật toán Tìm kiếm AI (BFS / DFS / UCS / A* / Greedy)
 > với Giao diện Web Điều khiển và Mô phỏng Real-time
@@ -62,7 +63,7 @@ Hệ thống giao tiếp **hai chiều real-time** qua WebSocket:
 | ✚ **Intersection Detection** | `L2 && R2` = giao lộ; debounce 500ms; centering 3cm trước khi rẽ |
 | 🔄 **Encoder-based Turning** | `spin_left/right_deg()` dùng encoder + góc × 1.5; tìm line tối đa 10cm sau rẽ |
 | 🔃 **Initial Turn** | Xoay chuẩn hướng ngay khi nhận ROUTE mới (trước khi dò line) |
-| 🚧 **Obstacle Sensing** | HC-SR04 median filter (3 lần), hysteresis 25cm ON / 30cm OFF, cần 2 lần liên tiếp |
+| 🚧 **Obstacle Sensing** | HC-SR04 median filter (3 lần), hysteresis 25cm ON / 30cm OFF, cần 3 lần liên tiếp |
 | 🚗 **Recovery Logic** | Mất line → quay về phía `last_seen`; chưa từng thấy line → bò chậm tìm line |
 | 🖐️ **Manual Control** | D-pad 8 hướng + gripper + speed adjust qua HTTP khi `MODE_MANUAL` |
 | 📶 **WebSocket Telemetry** | Gửi sensor/speed/position mỗi 200ms khi `MODE_AI_ROUTE` đang chạy |
@@ -216,9 +217,9 @@ Cấu hình sensor: L2(34) | L1(32) | M(33) | R1(27) | R2(25)
 3. Dừng hẳn (300ms)
 4. Tính diff = (targetDir - currentDir + 4) % 4
    • diff == 0 → THẲNG (chỉ centering nhẹ, tiếp tục PID)
-   • diff == 1 → TRÁI: spin_left_deg(62°)
-   • diff == 3 → PHẢI: spin_right_deg(62°)
-   • diff == 2 → U-TURN: spin_right_deg(125°)
+   • diff == 1 → TRÁI: spin_left_deg(50°)
+   • diff == 3 → PHẢI: spin_right_deg(50°)
+   • diff == 2 → U-TURN: spin_right_deg(105°)
 5. Sau rẽ: tiến tối đa 10cm tìm line
 6. Cập nhật currentDir, currentPathIndex++
 ```
@@ -237,7 +238,7 @@ Khi `do_line_setup()` được gọi (nhận ROUTE mới), `needs_initial_turn =
 ```
 • HC-SR04 polling mỗi 25ms (không blocking trong loop)
 • readDistanceCM_filtered(): median 3 lần (~30ms blocking khi đọc)
-• ON: < 25cm, cần 2 lần liên tiếp (obs_hit >= 2)
+• ON: < 25cm, cần 3 lần liên tiếp (OBS_HIT_N >= 3)
 • OFF: > 30cm (hysteresis)
 • MODE_AI_ROUTE: dừng + gửi OBSTACLE_DETECTED → Web reroute
 • Mode khác: avoidObstacle() vật lý (spin + forward)
@@ -459,4 +460,4 @@ Robot đang chạy MODE_AI_ROUTE      Web Browser
 
 ---
 
-*Đồ án Trí tuệ Nhân tạo — 2026*
+*Đồ án môn học Trí tuệ Nhân tạo — 2026*

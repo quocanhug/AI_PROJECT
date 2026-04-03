@@ -413,14 +413,29 @@
 }
 
 @keyframes nodePulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.15); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.15);
+  }
+
+  100% {
+    transform: scale(1);
+  }
 }
 
 @keyframes edgeSelPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
 }
 
 /* Edge weight labels */
@@ -507,18 +522,21 @@
   stroke-linecap: round;
   pointer-events: none;
 }
+
 .flow-edge.edge-current {
   stroke: #ef4444;
   stroke-width: 4.5;
   opacity: 0.9;
-  filter: drop-shadow(0 0 5px rgba(239,68,68,0.6));
+  filter: drop-shadow(0 0 5px rgba(239, 68, 68, 0.6));
 }
+
 .flow-edge.edge-explored {
   stroke: #f59e0b;
   stroke-width: 3;
   opacity: 0.55;
   filter: none;
 }
+
 .flow-edge.edge-frontier {
   stroke: #60a5fa;
   stroke-width: 2;
@@ -526,6 +544,7 @@
   stroke-dasharray: 5 4 !important;
   stroke-dashoffset: 0 !important;
 }
+
 #flowLayer {
   transition: opacity 0.3s;
 }
@@ -536,11 +555,13 @@
   transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   pointer-events: all;
 }
+
 .robot-glow {
   fill: rgba(22, 163, 74, 0.15);
   stroke: none;
   animation: robotGlow 2s ease-in-out infinite;
 }
+
 .robot-arrow {
   fill: #16a34a;
   stroke: #15803d;
@@ -548,10 +569,19 @@
   stroke-linejoin: round;
   filter: drop-shadow(0 2px 4px rgba(22, 163, 74, 0.5));
 }
+
 .robot-center {
   fill: #15803d;
 }
+
 @keyframes robotGlow {
-  0%, 100% { opacity: 0.3; }
-  50% { opacity: 0.12; }
+
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+
+  50% {
+    opacity: 0.12;
+  }
 }

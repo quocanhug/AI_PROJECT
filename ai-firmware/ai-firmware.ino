@@ -1,3 +1,17 @@
+/**
+ * @file ai-firmware.ino
+ * @brief Firmware chính cho hệ thống xe robot giao hàng tự hành.
+ *
+ * Chức năng:
+ *  - Phát WiFi Access Point (ESP32-Car) để phục vụ Web Dashboard
+ *  - Giao tiếp hai chiều qua WebSocket (telemetry, nạp lộ trình, E-STOP)
+ *  - Cung cấp API HTTP cho điều khiển thủ công (D-Pad 8 hướng)
+ *  - Quản lý chuyển đổi chế độ: Thủ công / Dò line / Giao hàng / AI Route
+ *  - Điều khiển gripper servo cho cơ cấu gắp hàng
+ *
+ * Phần cứng: ESP32-WROOM-32 + L298N + 5×TCRT5000 + HC-SR04 + Encoder + SG90
+ */
+
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
 #include <ESP32Servo.h>
@@ -5,9 +19,15 @@
 #include <ArduinoJson.h>
 #include "do_line.h"
 
+/* ══════════════════════════════════════════════════════════════
+ *  CẤU HÌNH MẠNG
+ * ══════════════════════════════════════════════════════════════ */
 const char* ssid = "ESP32-Car";
 const char* password = "12345678";
 
+/* ══════════════════════════════════════════════════════════════
+ *  CHÂN ĐIỀU KHIỂN ĐỘNG CƠ (L298N)
+ * ══════════════════════════════════════════════════════════════ */
 #define IN1 12
 #define IN2 14
 #define ENA 13
@@ -15,60 +35,79 @@ const char* password = "12345678";
 #define IN4 2
 #define ENB 15
 
-int speed_linear = 130;
-int speed_rot    = 110;
+/* ══════════════════════════════════════════════════════════════
+ *  THAM SỐ TỐC ĐỘ
+ * ══════════════════════════════════════════════════════════════ */
+int speed_linear = 130;                // Tốc độ tiến/lùi (PWM 0–255)
+int speed_rot    = 110;                // Tốc độ xoay tại chỗ (PWM 0–255)
 const int SPEED_MIN  = 60;
 const int SPEED_MAX  = 255;
-const int SPEED_STEP = 10;
-const int DIAG_SCALE = 70; 
+const int SPEED_STEP = 10;             // Bước tăng/giảm mỗi lần nhấn
+const int DIAG_SCALE = 70;             // Tỷ lệ giảm tốc khi chạy chéo (%)
 static inline int diagScale(int v){ return v * DIAG_SCALE / 100; }
 static inline int clamp(int v, int lo, int hi){ return v<lo?lo:(v>hi?hi:v); }
-const bool INVERT_STEER = true; 
+const bool INVERT_STEER = true;        // Đảo chiều lái (tùy nối dây motor)
 
+/* ══════════════════════════════════════════════════════════════
+ *  SERVO GRIPPER (Cơ cấu kẹp hàng)
+ * ══════════════════════════════════════════════════════════════ */
 #define SERVO_PIN 18
-const int OPEN_ANGLE  = 120;
-const int CLOSE_ANGLE = 175;
+const int OPEN_ANGLE  = 120;           // Góc mở gripper (độ)
+const int CLOSE_ANGLE = 175;           // Góc đóng gripper (độ)
 Servo gripper;
 
+/* ══════════════════════════════════════════════════════════════
+ *  WEBSERVER & WEBSOCKET
+ * ══════════════════════════════════════════════════════════════ */
 AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 
-// ================= QUẢN LÝ CHẾ ĐỘ =================
+/* ══════════════════════════════════════════════════════════════
+ *  QUẢN LÝ CHẾ ĐỘ VẬN HÀNH
+ * ══════════════════════════════════════════════════════════════ */
 volatile UIMode currentMode = MODE_MANUAL;
-bool line_mode = false;
-bool is_auto_running = false;
+bool line_mode = false;                // Module dò line đang hoạt động
+bool is_auto_running = false;          // Cờ cho phép robot di chuyển tự động
 
-int currentPath[15];
-int pathLength = 0;
-int currentPathIndex = 0;
-int currentDir = 1;  // C++ direction: 0=down,1=right,2=up,3=left
+/* ── Dữ liệu lộ trình ── */
+int currentPath[15];                   // Mảng node lộ trình (tối đa 15 node: grid 5×3)
+int pathLength = 0;                    // Số node trong lộ trình hiện tại
+int currentTargetNode = -1;            // Node đích đang hướng tới
+int currentPathIndex = 0;             // Chỉ số node tiếp theo trong lộ trình
+int currentDir = 1;                    // Hướng robot: 0=xuống, 1=phải, 2=lên, 3=trái
 
-// Thống kê giao hàng (placeholder — chưa update runtime)
-int delivered_count = 0;
-float avg_time_sec = 0.0f;
-int robot_efficiency = 100;
-
+/* ── Thống kê giao hàng ── */
+volatile int delivered_count = 0;      // Số đơn đã giao thành công
+volatile float avg_time_sec = 0.0;     // Thời gian trung bình mỗi đơn (giây)
+volatile int robot_efficiency = 100;   // Hiệu suất vận hành (%)
+  
+/* ── Trạng thái chuyển động (chế độ thủ công) ── */
 enum Motion { STOPPED, FWD, BWD, LEFT_TURN, RIGHT_TURN, FWD_LEFT, FWD_RIGHT, BACK_LEFT, BACK_RIGHT };
 volatile Motion curMotion = STOPPED;
 
+/* ── Khai báo trước các hàm ── */
 void forward(); void backward(); void left(); void right(); void stopCar();
 void forwardLeft(); void forwardRight(); void backwardLeft(); void backwardRight();
 void gripOpen(); void gripClose();
 void applyCurrentMotion();
-void handleWsMessage(AsyncWebSocketClient* client, char* msg);  // Forward decl — tránh lỗi compile khi gọi trước khi định nghĩa
+void handleWsMessage(AsyncWebSocketClient* client, char* msg);
 
-// ================= WebSocket Broadcast =================
+/* ══════════════════════════════════════════════════════════════
+ *  WEBSOCKET — Gửi tin nhắn broadcast đến tất cả client
+ * ══════════════════════════════════════════════════════════════ */
 void wsBroadcast(const char* msg) {
   ws.textAll(msg);
 }
 
-// ================= WebSocket Event Handler =================
+/* ══════════════════════════════════════════════════════════════
+ *  WEBSOCKET — Xử lý sự kiện kết nối / ngắt / nhận dữ liệu
+ * ══════════════════════════════════════════════════════════════ */
 void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
                AwsEventType type, void *arg, uint8_t *data, size_t len) {
   switch(type) {
     case WS_EVT_CONNECT:
       Serial.printf("WS client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
-      client->text("{\"type\":\"WELCOME\",\"mode\":\"" + String(currentMode) + "\"}");
+      client->text("{\"type\":\"WELCOME\",\"mode\":" + String(currentMode) + "}");
       break;
     case WS_EVT_DISCONNECT:
       Serial.printf("WS client #%u disconnected\n", client->id());
@@ -76,9 +115,7 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
     case WS_EVT_DATA: {
       AwsFrameInfo *info = (AwsFrameInfo*)arg;
       if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
-        // ★ BUG FIX #1 — WS buffer overflow:
-        //   data[len]=0 có thể OOB vì buffer có đúng 'len' byte (không có room cho null).
-        //   Dùng stack buffer cố định 512B — đủ chứa mọi message trong protocol này.
+        // Sao chép dữ liệu vào buffer cố định 512B để tránh tràn bộ nhớ
         char msgBuf[512];
         size_t copyLen = (len < 511) ? len : 511;
         memcpy(msgBuf, data, copyLen);
@@ -93,46 +130,45 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
   }
 }
 
-// Sensor pins (dùng đọc trạng thái cho telemetry + RESUME check)
-#define TELE_L2 34
-#define TELE_L1 32
-#define TELE_M  33
-#define TELE_R1 27
-#define TELE_R2 25
-
+/* ══════════════════════════════════════════════════════════════
+ *  WEBSOCKET — Xử lý tin nhắn JSON từ Web Dashboard
+ *
+ *  Các loại tin nhắn hỗ trợ:
+ *    PING   → Phản hồi PONG (kiểm tra kết nối)
+ *    ROUTE  → Nạp lộ trình AI (mảng node + hướng ban đầu)
+ *    STOP   → Dừng robot, giữ lộ trình để resume
+ *    ESTOP  → Dừng khẩn cấp, xóa hoàn toàn lộ trình
+ *    RESUME → Tiếp tục lộ trình đã dừng
+ * ══════════════════════════════════════════════════════════════ */
 void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
   StaticJsonDocument<1024> doc;
-  DeserializationError jsonErr = deserializeJson(doc, msg);
-  if (jsonErr) {
-    Serial.printf("[WS] JSON parse error: %s\n", jsonErr.c_str());
-    return;
-  }
+  if (deserializeJson(doc, msg)) return;
   
   const char* type = doc["type"];
   if (!type) return;
   
+  /* ── PING: Kiểm tra kết nối ── */
   if (strcmp(type, "PING") == 0) {
     client->text("{\"type\":\"PONG\"}");
   }
+  /* ── ROUTE: Nạp lộ trình từ thuật toán AI ── */
   else if (strcmp(type, "ROUTE") == 0) {
-    // Nạp path node trực tiếp vào currentPath[] — dùng do_line_loop() đã ổn định
     stopCar();
     
-    // Parse path array từ JSON: [0, 1, 6, 7, 12, ...]
+    // Phân tích mảng node từ JSON: [0, 1, 6, 7, 12, ...]
     JsonArray pathArr = doc["path"].as<JsonArray>();
     pathLength = 0;
     for (JsonVariant v : pathArr) {
-      // ★ BUG FIX #8 — Node validation: chặn node ngoài range [0,14] để tránh OOB access
       int node = v.as<int>();
       if (node >= 0 && node < 15 && pathLength < 15) currentPath[pathLength++] = node;
     }
     currentPathIndex = 0;
     
-    // Tính hướng ban đầu từ 2 node đầu tiên
+    // Xác định hướng ban đầu của robot
     if (doc.containsKey("initialDir")) {
-      currentDir = doc["initialDir"] | 0;
+      int dir = doc["initialDir"] | 0;
+      currentDir = (dir >= 0 && dir <= 3) ? dir : 0;
     } else if (pathLength >= 2) {
-      // Tự tính từ node_coords trong do_line.cpp
       extern int getTargetDirection(int, int);
       currentDir = getTargetDirection(currentPath[0], currentPath[1]);
     }
@@ -142,47 +178,30 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
     line_mode = true;
     is_auto_running = true;
     
-    // Gửi ACK về Web — ★ BUG FIX #8: char buffer thay String
-    char ackBuf[64];
-    snprintf(ackBuf, sizeof(ackBuf), "{\"type\":\"ROUTE_ACK\",\"commands\":%d}", pathLength);
-    ws.textAll(ackBuf);
+    // Gửi xác nhận về Web Dashboard
+    String ack = "{\"type\":\"ROUTE_ACK\",\"commands\":" + String(pathLength) + "}";
+    ws.textAll(ack);
     Serial.printf("AI Route: %d nodes loaded, dir=%d\n", pathLength, currentDir);
   }
+  /* ── STOP / ESTOP: Dừng robot ── */
   else if (strcmp(type, "STOP") == 0 || strcmp(type, "ESTOP") == 0) {
     stopCar();
     do_line_abort();
     currentMode = MODE_MANUAL;
     line_mode = false;
     is_auto_running = false;
-    // ★ BUG FIX #9 — ESTOP xóa path hẳn (không cho resume sau emergency stop)
-    //   STOP thường giữ path để có thể resume. ESTOP là khẩn cấp → xóa sạch.
+    // ESTOP xóa hẳn lộ trình (không cho phép resume sau dừng khẩn cấp)
     if (strcmp(type, "ESTOP") == 0) {
       pathLength = 0;
       currentPathIndex = 0;
     }
     client->text("{\"type\":\"ACK\",\"action\":\"STOPPED\"}");
   }
+  /* ── RESUME: Tiếp tục lộ trình đã dừng ── */
   else if (strcmp(type, "RESUME") == 0) {
-    // ★ BUG FIX #7 — RESUME logic sai:
-    //   Check cũ: (currentMode == MODE_AI_ROUTE) → false sau STOP vì mode đã về MANUAL!
-    //   Check mới: (pathLength > 0) — có route là có thể resume, bất kể mode hiện tại.
-    // ★ BUG FIX #2 — RESUME reset route:
-    //   Gọi do_line_resume() thay vì do_line_setup() — giữ nguyên lastConfirmedNodeIdx
-    //   và currentDir, chỉ bật lại motor/PID và căn chỉnh hướng.
-    // ★ BUG FIX #4 — Check sensor trước RESUME:
-    //   Nếu robot bị đẩy lệch khỏi line (người va vào), resume sẽ trigger auto-search
-    //   thay vì chạy PID ngay trên nền trắng → robot loạn.
+    // Kiểm tra pathLength thay vì currentMode (vì mode đã về MANUAL sau STOP)
     if (pathLength > 0) {
-      bool onLineNow = digitalRead(TELE_M)==LOW ||
-                       digitalRead(TELE_L1)==LOW ||
-                       digitalRead(TELE_R1)==LOW;
-      do_line_resume();
-      if (!onLineNow) {
-        // Robot không trên line → trigger search trước khi PID
-        extern bool seen_line_ever;
-        seen_line_ever = false;  // Force auto-search mode
-        Serial.println("[RESUME] Not on line — will search first");
-      }
+      do_line_resume();   // Giữ nguyên trạng thái route, chỉ bật lại motor/PID
       currentMode = MODE_AI_ROUTE;
       line_mode = true;
       is_auto_running = true;
@@ -191,66 +210,71 @@ void handleWsMessage(AsyncWebSocketClient *client, char* msg) {
   }
 }
 
-// ================= Telemetry Timer =================
+/* ══════════════════════════════════════════════════════════════
+ *  TELEMETRY — Gửi dữ liệu cảm biến về Web Dashboard
+ *
+ *  Dữ liệu bao gồm: vận tốc, quãng đường, vị trí node,
+ *  hướng di chuyển, khoảng cách vật cản, trạng thái 5 cảm biến line.
+ *  Chu kỳ gửi: 200ms (5 lần/giây).
+ * ══════════════════════════════════════════════════════════════ */
 static unsigned long lastTelemetryMs = 0;
 const unsigned long TELEMETRY_INTERVAL_MS = 200;
 
-// ★ Extern sensor/speed/encoder data từ do_line.cpp để gửi telemetry đầy đủ
-extern float us_dist_cm;
-extern float vL_ema, vR_ema;
-extern volatile long encL_total, encR_total;  // ★ Dùng tính quãng đường (cm)
+/* Biến extern từ do_line.cpp */
+extern float us_dist_cm;                       // Khoảng cách vật cản (cm)
+extern float vL_ema, vR_ema;                   // Vận tốc EMA bánh trái/phải (m/s)
+extern volatile long encL_total, encR_total;    // Tổng xung encoder (tính quãng đường)
 
+/* Chân cảm biến line (đọc trạng thái cho telemetry) */
+#define TELE_L2 34
+#define TELE_L1 32
+#define TELE_M  33
+#define TELE_R1 27
+#define TELE_R2 25
 
 void sendTelemetry() {
   if (ws.count() == 0) return;
   if (currentMode == MODE_AI_ROUTE && is_auto_running) {
-    // ★ BUG FIX M1: currentPathIndex trỏ vào node ĐANG TIẾN TỚI, không phải node đang đứng.
-    //   Dùng lastConfirmedNodeIdx để lấy node robot thực sự đang đứng trên.
+    // Lấy node robot đang đứng (dùng lastConfirmedNodeIdx thay vì currentPathIndex)
     extern int lastConfirmedNodeIdx;
-
-    // ★ BUG FIX #3 — pathLength=0 crash guard:
-    //   currentPath[pathLength-1] khi pathLength=0 → OOB crash.
-    if (pathLength == 0) return;
     int robotNode = (lastConfirmedNodeIdx < pathLength) ? currentPath[lastConfirmedNodeIdx] : currentPath[pathLength-1];
     
-    // ★ Đọc cảm biến line (LOW = trên vạch)
+    // Đọc trạng thái 5 cảm biến line (LOW = trên vạch đen)
     int s0 = digitalRead(TELE_L2) == LOW ? 1 : 0;
     int s1 = digitalRead(TELE_L1) == LOW ? 1 : 0;
     int s2 = digitalRead(TELE_M)  == LOW ? 1 : 0;
     int s3 = digitalRead(TELE_R1) == LOW ? 1 : 0;
     int s4 = digitalRead(TELE_R2) == LOW ? 1 : 0;
     
-    // ★ BUG FIX #1 — Race condition encoder:
-    //   encL_total/encR_total viết bởi ISR, đọc bởi loop.
-    //   Không có noInterrupts() → ISR chạy giữa 2 lần đọc → sai số distance.
+    // Tính quãng đường từ encoder (cm) — dùng hằng số CIRC từ do_line.cpp
     extern const float CIRC;
-    long encL_snap, encR_snap;
-    noInterrupts();
-    encL_snap = encL_total;
-    encR_snap = encR_total;
-    interrupts();
-    float dist_cm = ((float)(encL_snap + encR_snap) / 2.0f) / 60.0f * CIRC * 100.0f;
+    float dist_cm = ((float)(encL_total + encR_total) / 2.0f) / 60.0f * CIRC * 100.0f;
 
-    // ★ BUG FIX #8 — String fragmentation:
-    //   Dùng char buffer cố định thay vì String concat → tránh heap fragment sau nhiều giờ.
-    char buf[320];
-    snprintf(buf, sizeof(buf),
-      "{\"type\":\"TELEMETRY\",\"state\":\"FOLLOWING_LINE\""
-      ",\"step\":%d,\"total\":%d,\"robotNode\":%d,\"robotDir\":%d"
-      ",\"speedL\":%.3f,\"speedR\":%.3f,\"distance\":%.1f,\"obstacle\":%.1f"
-      ",\"sensors\":[%d,%d,%d,%d,%d]}",
-      currentPathIndex, pathLength, robotNode, currentDir,
-      vL_ema, vR_ema, dist_cm, us_dist_cm,
-      s0, s1, s2, s3, s4);
-    ws.textAll(buf);
+    // Đóng gói JSON và gửi broadcast
+    String json = "{\"type\":\"TELEMETRY\",\"state\":\"FOLLOWING_LINE\"";
+    json += ",\"step\":" + String(currentPathIndex);
+    json += ",\"total\":" + String(pathLength);
+    json += ",\"robotNode\":" + String(robotNode);
+    json += ",\"robotDir\":" + String(currentDir);
+    json += ",\"speedL\":" + String(vL_ema, 3);
+    json += ",\"speedR\":" + String(vR_ema, 3);
+    json += ",\"distance\":" + String(dist_cm, 1);
+    json += ",\"obstacle\":" + String(us_dist_cm, 1);
+    json += ",\"sensors\":[" + String(s0) + "," + String(s1) + "," + String(s2) + "," + String(s3) + "," + String(s4) + "]}";
+    ws.textAll(json);
   }
 }
 
+/* ══════════════════════════════════════════════════════════════
+ *  SETUP — Khởi tạo hệ thống
+ * ══════════════════════════════════════════════════════════════ */
 void setup() {
+  /* Khởi tạo chân điều khiển động cơ */
   pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);
   pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);
   pinMode(ENA, OUTPUT); pinMode(ENB, OUTPUT);
 
+  /* Khởi tạo servo gripper */
   gripper.setPeriodHertz(50);
   gripper.attach(SERVO_PIN, 500, 2500);
   gripClose();
@@ -258,20 +282,24 @@ void setup() {
 
   Serial.begin(115200);
 
+  /* Mount hệ thống file LittleFS (chứa web dashboard) */
   if(!LittleFS.begin(true)){
-    Serial.println("Lỗi Mount LittleFS!");
+    Serial.println("LittleFS mount failed!");
     return;
   }
   
+  /* Khởi tạo WiFi Access Point */
   WiFi.softAP(ssid, password);
   Serial.print("Hotspot IP: "); Serial.println(WiFi.softAPIP());
 
-  // WebSocket setup
+  /* Đăng ký WebSocket handler */
   ws.onEvent(onWsEvent);
   server.addHandler(&ws);
 
+  /* Phục vụ file tĩnh từ LittleFS */
   server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
 
+  /* ── API: Chuyển chế độ vận hành ── */
   server.on("/setMode", HTTP_GET, [](AsyncWebServerRequest* r){
     if (!r->hasParam("m")) { r->send(400,"text/plain","manual"); return; }
     String m = r->getParam("m")->value();
@@ -298,6 +326,7 @@ void setup() {
     r->send(200,"text/plain", m);
   });
 
+  /* ── API: Nạp lộ trình giao hàng qua HTTP ── */
   server.on("/deliver", HTTP_GET, [](AsyncWebServerRequest* r){
     if (r->hasParam("dir")) currentDir = r->getParam("dir")->value().toInt();
     currentPathIndex = 0; 
@@ -307,10 +336,15 @@ void setup() {
       pathLength = 0;
       int startIdx = 0; int commaIdx = pathStr.indexOf(',');
       while (commaIdx != -1 && pathLength < 15) {
-        currentPath[pathLength++] = pathStr.substring(startIdx, commaIdx).toInt();
+        int node = pathStr.substring(startIdx, commaIdx).toInt();
+        if (node >= 0 && node < 15) currentPath[pathLength++] = node;
         startIdx = commaIdx + 1; commaIdx = pathStr.indexOf(',', startIdx);
       }
-      if (startIdx < pathStr.length() && pathLength < 15) currentPath[pathLength++] = pathStr.substring(startIdx).toInt();
+      if (startIdx < (int)pathStr.length() && pathLength < 15) {
+        int node = pathStr.substring(startIdx).toInt();
+        if (node >= 0 && node < 15) currentPath[pathLength++] = node;
+      }
+      if(pathLength > 1) currentTargetNode = currentPath[1];
     }
     
     stopCar();
@@ -322,28 +356,17 @@ void setup() {
     r->send(200, "text/plain", "OK");
   });
 
+  /* ── API: Dừng khẩn cấp (E-STOP) ── */
   server.on("/estop", HTTP_GET, [](AsyncWebServerRequest *r){
     stopCar(); do_line_abort();
     currentMode = MODE_MANUAL; line_mode = false; is_auto_running = false;
-    // ★ FIX F2: HTTP /estop cũng phải clear path (nhất quán với WS ESTOP handler)
-    pathLength = 0; currentPathIndex = 0;
     r->send(200, "text/plain", "E-STOP ACTIVATED");
   });
 
+  /* ── API: Tiếp tục lộ trình đã dừng ── */
   server.on("/resume", HTTP_GET, [](AsyncWebServerRequest *r){
-    // ★ BUG FIX #7 — Chỉ cần pathLength > 0 (sau STOP mode là MANUAL, không phải AI_ROUTE)
-    // ★ BUG FIX #2 — Dùng do_line_resume() thay vì do_line_setup() để giữ route state
-    // ★ BUG FIX #4 — Check sensor trước resume
     if (pathLength > 0) {
-      bool onLineNow = digitalRead(TELE_M)==LOW ||
-                       digitalRead(TELE_L1)==LOW ||
-                       digitalRead(TELE_R1)==LOW;
       do_line_resume();
-      if (!onLineNow) {
-        extern bool seen_line_ever;
-        seen_line_ever = false;  // Force auto-search
-        Serial.println("[RESUME] Not on line — will search first");
-      }
       currentMode = MODE_AI_ROUTE;
       line_mode = true;
       is_auto_running = true;
@@ -356,9 +379,9 @@ void setup() {
     }
   });
 
+  /* ── API: Về kho — Trả vị trí hiện tại để web tính đường về ── */
   server.on("/return_home", HTTP_GET, [](AsyncWebServerRequest *r){
     stopCar(); do_line_abort();
-    // ★ FIX F1: Dùng lastConfirmedNodeIdx (node đang đứng) thay vì currentPathIndex (node đang tiến tới)
     extern int lastConfirmedNodeIdx;
     int robotNode = (lastConfirmedNodeIdx < pathLength) ? currentPath[lastConfirmedNodeIdx] : 0;
     currentMode = MODE_MANUAL;
@@ -370,17 +393,17 @@ void setup() {
       ",\"robotDir\":" + String(currentDir) + "}");
   });
 
+  /* ── API: Thống kê vận hành ── */
   server.on("/api/stats", HTTP_GET, [](AsyncWebServerRequest *r){
-    // ★ BUG FIX #8 — String fragmentation: dùng char buffer
-    char statsBuf[256];
-    snprintf(statsBuf, sizeof(statsBuf),
-      "{\"delivered\":%d,\"avgTime\":%.1f,\"efficiency\":%d,"
-      "\"chart\":{\"labels\":[\"Đơn 1\",\"Đơn 2\",\"Đơn 3\"],"
-      "\"expected\":[30,45,60],\"actual\":[32,42,65]}}",
-      delivered_count, avg_time_sec, robot_efficiency);
-    r->send(200, "application/json", statsBuf);
+    String json = "{";
+    json += "\"delivered\":" + String(delivered_count) + ",";
+    json += "\"avgTime\":" + String(avg_time_sec) + ",";
+    json += "\"efficiency\":" + String(robot_efficiency) + ",";
+    json += "\"chart\":{\"labels\":[\"Đơn 1\",\"Đơn 2\",\"Đơn 3\"],\"expected\":[30, 45, 60],\"actual\":[32, 42, 65]}}";
+    r->send(200, "application/json", json);
   });
 
+  /* ── API: Điều khiển thủ công (D-Pad 8 hướng + Gripper + Tốc độ) ── */
   server.on("/forward",    HTTP_GET, [](AsyncWebServerRequest *r){ curMotion=FWD;        if(currentMode==MODE_MANUAL) forward();      r->send(200,"text/plain","OK"); });
   server.on("/backward",   HTTP_GET, [](AsyncWebServerRequest *r){ curMotion=BWD;        if(currentMode==MODE_MANUAL) backward();     r->send(200,"text/plain","OK"); });
   server.on("/left",       HTTP_GET, [](AsyncWebServerRequest *r){ curMotion=LEFT_TURN;  if(currentMode==MODE_MANUAL) left();         r->send(200,"text/plain","OK"); });
@@ -401,38 +424,33 @@ void setup() {
   Serial.println("Server started. WebSocket on /ws");
 }
 
-// ★ BUG FIX #9 — Watchdog logic:
-//   Nếu loop() bị stuck (sensor lỗi, blocking call vô hạn) quá 5 giây → tự restart ESP32.
-//   5s là đủ dài để spin_left/right_deg() hoàn thành (T_FAIL_MS = 5000ms) nhưng
-//   sẽ bắt được mọi deadlock khác.
-static unsigned long lastLoopTime = 0;
-
+/* ══════════════════════════════════════════════════════════════
+ *  LOOP — Vòng lặp chính
+ * ══════════════════════════════════════════════════════════════ */
 void loop() {
-  // ★ Watchdog: update mỗi vòng loop. Nếu loop trước cách quá 8s → restart.
-  //   Lý do 8s thay vì 5s: spin_left/right có timeout 5s + delay(300+200) centering.
-  if (lastLoopTime > 0 && millis() - lastLoopTime > 8000) {
-    Serial.println("[WATCHDOG] Loop stuck > 8s — restarting ESP32!");
-    ESP.restart();
-  }
-  lastLoopTime = millis();
-
-  // Cleanup disconnected WS clients periodically
+  /* Dọn dẹp client WebSocket đã ngắt kết nối (mỗi 1 giây) */
   static unsigned long lastCleanup = 0;
   if (millis() - lastCleanup > 1000) { ws.cleanupClients(); lastCleanup = millis(); }
 
+  /* Chế độ tự động: gọi vòng lặp dò line + gửi telemetry */
   if ((currentMode == MODE_LINE_ONLY || currentMode == MODE_DELIVERY || currentMode == MODE_AI_ROUTE) && is_auto_running) {
     do_line_loop();
-    // Gửi telemetry cho AI Route
     if (currentMode == MODE_AI_ROUTE && millis() - lastTelemetryMs >= TELEMETRY_INTERVAL_MS) {
       lastTelemetryMs = millis();
       sendTelemetry();
     }
   } else {
+    /* Chế độ thủ công: đảm bảo motor dừng khi thoát tự động */
     if (line_mode) { stopCar(); line_mode = false; }
     delay(5);
   }
 }
 
+/* ══════════════════════════════════════════════════════════════
+ *  HÀM ĐIỀU KHIỂN ĐỘNG CƠ
+ * ══════════════════════════════════════════════════════════════ */
+
+/** Áp dụng lại lệnh di chuyển hiện tại (dùng khi thay đổi tốc độ) */
 void applyCurrentMotion(){
   switch(curMotion){
     case FWD:        forward(); break;
@@ -446,14 +464,20 @@ void applyCurrentMotion(){
     default:         stopCar(); break;
   }
 }
+
+/* ── Các hàm điều khiển cơ bản ── */
 void forward() { digitalWrite(IN1,HIGH); digitalWrite(IN2,LOW); digitalWrite(IN3,HIGH); digitalWrite(IN4,LOW); analogWrite(ENA, speed_linear); analogWrite(ENB, speed_linear); }
 void backward() { digitalWrite(IN1,LOW);  digitalWrite(IN2,HIGH); digitalWrite(IN3,LOW);  digitalWrite(IN4,HIGH); analogWrite(ENA, speed_linear); analogWrite(ENB, speed_linear); }
 void left() { digitalWrite(IN1,LOW);  digitalWrite(IN2,HIGH); digitalWrite(IN3,HIGH); digitalWrite(IN4,LOW); analogWrite(ENA, speed_rot); analogWrite(ENB, speed_rot); }
 void right() { digitalWrite(IN1,HIGH); digitalWrite(IN2,LOW); digitalWrite(IN3,LOW);  digitalWrite(IN4,HIGH); analogWrite(ENA, speed_rot); analogWrite(ENB, speed_rot); }
 void stopCar() { digitalWrite(IN1,LOW); digitalWrite(IN2,LOW); digitalWrite(IN3,LOW); digitalWrite(IN4,LOW); analogWrite(ENA, 0); analogWrite(ENB, 0); }
+
+/* ── Hàm di chuyển chéo (giảm tốc một bên để tạo cung) ── */
 void forwardLeft() { digitalWrite(IN1,HIGH); digitalWrite(IN2,LOW); digitalWrite(IN3,HIGH); digitalWrite(IN4,LOW); if (!INVERT_STEER) { analogWrite(ENA, speed_linear); analogWrite(ENB, diagScale(speed_linear)); } else { analogWrite(ENA, diagScale(speed_linear)); analogWrite(ENB, speed_linear); } }
 void forwardRight() { digitalWrite(IN1,HIGH); digitalWrite(IN2,LOW); digitalWrite(IN3,HIGH); digitalWrite(IN4,LOW); if (!INVERT_STEER) { analogWrite(ENA, diagScale(speed_linear)); analogWrite(ENB, speed_linear); } else { analogWrite(ENA, speed_linear); analogWrite(ENB, diagScale(speed_linear)); } }
 void backwardLeft() { digitalWrite(IN1,LOW);  digitalWrite(IN2,HIGH); digitalWrite(IN3,LOW);  digitalWrite(IN4,HIGH); analogWrite(ENA, diagScale(speed_linear)); analogWrite(ENB, speed_linear); }
 void backwardRight() { digitalWrite(IN1,LOW);  digitalWrite(IN2,HIGH); digitalWrite(IN3,LOW);  digitalWrite(IN4,HIGH); analogWrite(ENA, speed_linear); analogWrite(ENB, diagScale(speed_linear)); }
+
+/* ── Điều khiển gripper ── */
 void gripOpen()  { gripper.write(OPEN_ANGLE); }
 void gripClose() { gripper.write(CLOSE_ANGLE); }
