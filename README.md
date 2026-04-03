@@ -76,13 +76,13 @@ Hệ thống giao tiếp **hai chiều real-time** qua WebSocket:
 ┌──────────────────────────────────────────────────┐
 │              WEB BROWSER (Client)                │
 │                                                  │
-│  ┌────────────┐  ┌──────────────────────────┐   │
+│  ┌────────────┐  ┌───────────────────────────┐   │
 │  │ Map Editor │  │ AI Search Engine          │   │
-│  │ • Start    │  │ • BFS, DFS, UCS, A*,     │   │
+│  │ • Start    │  │ • BFS, DFS, UCS, A*,      │   │
 │  │ • Targets  │  │   Greedy                  │   │
 │  │ • Obstacles│  │ • Animation Engine        │   │
 │  │ • Edges/W  │  │ • Algorithm Comparison    │   │
-│  └────────────┘  └──────────────────────────┘   │
+│  └────────────┘  └───────────────────────────┘   │
 │  ┌────────────────────────────────────────────┐  │
 │  │ Dashboard: Telemetry · D-pad · Gripper     │  │
 │  └────────────────────────────────────────────┘  │
@@ -94,22 +94,22 @@ Hệ thống giao tiếp **hai chiều real-time** qua WebSocket:
 ┌──────────────────────────────────────────────────┐
 │            ESP32-WROOM-32 (Firmware)             │
 │                                                  │
-│  ┌────────────────┐  ┌───────────────────────┐  │
+│  ┌────────────────┐  ┌────────────────────────┐  │
 │  │ ai-firmware.ino│  │ do_line.cpp            │  │
 │  │ • WiFi AP      │  │ • PID line following   │  │
 │  │ • WebSocket    │  │ • Intersection detect  │  │
 │  │ • HTTP routes  │  │ • Encoder turning      │  │
 │  │ • Telemetry    │  │ • Obstacle handling    │  │
 │  │ • Mode control │  │ • Path navigation      │  │
-│  └────────────────┘  └───────────────────────┘  │
+│  └────────────────┘  └────────────────────────┘  │
 └─────────────────────┬────────────────────────────┘
                       │ GPIO / PWM / ISR / pulseIn
                       ▼
 ┌──────────────────────────────────────────────────┐
 │  PHẦN CỨNG                                       │
-│  • 4× DC Motor (L298N)      • 5× TCRT5000       │
+│  • 4× DC Motor (L298N)      • 5× TCRT5000        │
 │  • Servo SG90 (gripper)     • HC-SR04 (sonar)    │
-│  • 2× Encoder (ISR RISING)  • 2× LM2596 (5V/7V) │
+│  • 2× Encoder (ISR RISING)  • 2× LM2596 (5V/7V)  │
 └──────────────────────────────────────────────────┘
 ```
 
