@@ -81,7 +81,7 @@ const unsigned long US_PERIOD_MS = 25;
 
 // ================= Thong so co khi =================
 const float WHEEL_RADIUS_M = 0.0325f;
-const float CIRC = 2.0f * 3.1415926f * WHEEL_RADIUS_M;
+extern const float CIRC = 2.0f * 3.1415926f * WHEEL_RADIUS_M;
 const float TRACK_WIDTH_M = 0.1150f;
 
 // ================= Tham so dieu khien =================
@@ -492,10 +492,10 @@ bool move_forward_distance_until_line(double dist_m, int pwmAbs) {
     cL = encL_total;
     cR = encR_total;
     interrupts();
-    // Kiem tra CA 5 mat cam bien (L2, L1, M, R1, R2)
+    // ★ FIX M6: Chi check 3 mat giua (L1, M, R1) de tranh nham line ngang
+    // sau khi quay. L2/R2 chi dung de phat hien giao lo.
     if (digitalRead(M_SENSOR) == LOW || digitalRead(L1_SENSOR) == LOW ||
-        digitalRead(R1_SENSOR) == LOW || digitalRead(L2_SENSOR) == LOW ||
-        digitalRead(R2_SENSOR) == LOW) {
+        digitalRead(R1_SENSOR) == LOW) {
       motorsStop();
       return true;
     }
@@ -673,7 +673,7 @@ void do_line_loop() {
         if (!turnOk) {
           Serial.println("  INIT TURN FAILED");
           motorsStop();
-          extern void wsBroadcast(const char *);
+
           String msg = "{\"type\":\"OBSTACLE_DETECTED\","
                        "\"robotNode\":" +
                        String(curNode) +
@@ -777,14 +777,19 @@ void do_line_loop() {
   if (lost_all) {
     if (!seen_line_ever && is_auto_running) {
       bad_t = millis(); // Dang bo tim line, reset timeout
-    } else if (!recovering && seen_line_ever && millis() - bad_t > 150) {
-      // Mat line >150ms -> vao recovery (luoi nho, phan ung nhanh)
-      Serial.println("[LINE] Lost >150ms -> entering RECOVERY");
+    } else if (!recovering && seen_line_ever && millis() - bad_t > 80) {
+      // ★ FIX M1: Giam nguong 150ms -> 80ms de phan ung nhanh tren luoi nho
+      Serial.println("[LINE] Lost >80ms -> entering RECOVERY");
       recovering = true;
       rec_t0 = millis();
       recov_sweep_count = 0;
       recov_did_backup = false;
       recov_did_second_backup = false;
+      // ★ FIX M3: Reset PID/EMA khi vao recovery de tranh jerk
+      pidL.i_term = 0; pidL.prev_err = 0;
+      pidR.i_term = 0; pidR.prev_err = 0;
+      vL_ema = 0; vR_ema = 0;
+      pwmL_prev = 0; pwmR_prev = 0;
       motorsStop();
       return;
     }
@@ -916,7 +921,7 @@ void do_line_loop() {
               gripClose();
             } else {
               Serial.println("[AI_ROUTE] DESTINATION REACHED - COMPLETED");
-              extern void wsBroadcast(const char *);
+    
               String msg = "{\"type\":\"COMPLETED\",\"robotNode\":" +
                            String(currentPath[pathLength - 1]) +
                            ",\"robotDir\":" + String(currentDir) + "}";
@@ -962,12 +967,15 @@ void do_line_loop() {
             bool turnOk = true;
             if (diff == 1) {
               turnOk = spin_left_deg(60.0, TURN_PWM); // 60*1.5=90 do
+              last_seen = LEFT;  // ★ FIX M2: Uu tien sweep trai neu mat line sau re trai
               Serial.println("  >> LEFT");
             } else if (diff == 3) {
               turnOk = spin_right_deg(60.0, TURN_PWM); // 60*1.5=90 do
+              last_seen = RIGHT; // ★ FIX M2: Uu tien sweep phai neu mat line sau re phai
               Serial.println("  >> RIGHT");
             } else if (diff == 2) {
               turnOk = spin_right_deg(120.0, TURN_PWM); // 120*1.5=180 do
+              last_seen = NONE;  // ★ FIX M2: U-turn khong biet huong
               Serial.println("  >> U-TURN");
             }
 
@@ -977,7 +985,6 @@ void do_line_loop() {
             if (!turnOk) {
               Serial.println("  TURN FAILED");
               motorsStop();
-              extern void wsBroadcast(const char *);
               int robotNode = currentPath[currentPathIndex];
               String msg = "{\"type\":\"OBSTACLE_DETECTED\","
                            "\"robotNode\":" +
@@ -1258,7 +1265,10 @@ void do_line_loop() {
       if (elapsed > total_sweep_time) {
         recov_sweep_count++;
         if (recov_sweep_count >= RECOV_MAX_SWEEPS) {
-          Serial.println("[RECOV] All sweeps exhausted, waiting timeout");
+          // ★ FIX C5: Dung motor khi het sweep, cho timeout
+          Serial.println("[RECOV] All sweeps exhausted, stopping motor");
+          vL_tgt = 0;
+          vR_tgt = 0;
         } else {
           Serial.printf("[RECOV] Sweep #%d (%s)\n", recov_sweep_count,
                         sweepToLeft ? "LEFT" : "RIGHT");

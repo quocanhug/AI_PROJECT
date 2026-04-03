@@ -15,3 +15,4 @@ void do_line_loop();
 void do_line_abort();
 void do_line_resume();  // Resume mà không reset route state (dùng cho RESUME command)
 void motorsStop();
+void wsBroadcast(const char *msg);  // ★ FIX L3: Khai bao tap trung, tranh extern rai rac
